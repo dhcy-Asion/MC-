@@ -4,6 +4,19 @@
 
 仓库：[dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。当前开发目录为桌面的 `CrimsonMC`。
 
+## 给 AI 的修改要求
+
+使用 AI 修改本项目时，请先阅读本文件和 [AGENTS.md](AGENTS.md)。用户已授权：**每次修改并完成必要验证后，执行一次 GitHub 提交与上传，并说明这次改了什么。无需定时上传。**
+
+每次任务结束前，AI 必须完成以下步骤：
+
+1. 检查本次改动，执行与改动有关的验证；记录实际结果，未验证的部分如实说明。
+2. 在 [CHANGELOG.md](CHANGELOG.md) 追加本次修改的日期、具体修改内容及验证结果。
+3. 执行 `python tools/sync_github.py --message "具体描述本次修改"`，将修改和记录一并提交、推送到 `main`。提交说明应写明改动，例如“修复方块恢复时重复生成”，不要只写“更新”或“同步”。
+4. 向用户报告修改内容、验证结果和 GitHub 提交链接。上传失败时保留本地成果并说明原因，不得声称已上传。
+
+没有文件改动的咨询或查看任务无需创建提交。若用户当次明确要求不上传，以当次要求为准。README 是约定说明；执行上传依赖 AI 遵循这些要求及本机 GitHub 登录可用。
+
 已在这台电脑的红沙 **1.0.0.2976** 上跑通。红沙地图、人物和战斗继续运行，后台真实 Minecraft Java **1.21.1** 管理实验背包、原版合成配方、方块和拆除掉落。红沙使用原生一米蓝色网格实体显示这些方块并提供碰撞。
 
 **这是可用的建造／合成实验，不是完整 MC 移植。** 暂无 MC 材质、客户端画面、红石、生物或完整生存玩法；几种材料目前外观相同。没有安装 PCL2 离线客户端，也不需要登录 MC 客户端来使用这个服务端原型。
@@ -26,9 +39,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/install_red_side.ps1 -
 
 需要从源码重编译原生插件时，先运行准备脚本的 `-SourceBuild` 选项取得固定提交并应用补丁，再用 MSYS2 UCRT64 GCC 和 `python tools/build_worldbuilder.py` 构建。MC 模块用 `tools/build_minecraft.ps1` 构建。
 
-## GitHub 自动同步
+## 修改结束后上传 GitHub
 
-后续在桌面 `CrimsonMC` 中完成的项目修改会通过 `tools/sync_github.py` 提交并推送到本仓库的 `main`。项目说明 `AGENTS.md` 记录了这一持续授权。当前聊天的定时任务每 15 分钟检查一次，补传手动修改；定时运行需要电脑开机、应用运行并且能够连接 GitHub。
+后续 AI 在桌面 `CrimsonMC` 中完成项目修改后，通过 `tools/sync_github.py` 提交并推送到本仓库的 `main`。项目说明 `AGENTS.md` 记录了这一持续授权，`CHANGELOG.md` 保存每次的修改内容。已取消定时上传；手动编辑文件时，可自行执行以下命令。
 
 手动同步入口：
 

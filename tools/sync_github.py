@@ -71,7 +71,7 @@ def main():
     args = parser.parse_args()
     lock_path = ROOT / "runtime/github-sync.lock"
     lock_path.parent.mkdir(exist_ok=True)
-    # A kernel file lock releases on process exit; concurrent heartbeats do not commit twice.
+    # A kernel file lock releases on process exit; concurrent sync calls do not commit twice.
     with lock_path.open("a+b") as lock:
         lock.seek(0)
         if not lock.read(1):
