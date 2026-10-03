@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "crimsonmc",
+  "version": "0.1.0",
+  "name": "Crimson MC Authority Prototype",
+  "description": "Loopback bridge to real Minecraft blocks, items and crafting recipes.",
+  "environment": "*",
+  "entrypoints": {"main": ["local.crimsonmc.Authority"]},
+  "depends": {"fabricloader": ">=0.16.10", "minecraft": "1.21.1", "java": ">=21", "fabric-api": "*"}
+}

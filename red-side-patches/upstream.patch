@@ -1,0 +1,90 @@
+diff --git a/asi/cdmodkit/cdmodkit.cpp b/asi/cdmodkit/cdmodkit.cpp
+index 99718d9..b188096 100644
+--- a/asi/cdmodkit/cdmodkit.cpp
++++ b/asi/cdmodkit/cdmodkit.cpp
+@@ -7,6 +7,7 @@
+ #include <cmath>
+ #include <deque>
+ #include <mutex>
++#include <thread>
+ #include <cstring>
+ #include <fstream>
+ #include <sstream>
+@@ -6392,7 +6393,8 @@ static DWORD WINAPI InitThread(LPVOID) {
+     overlay::Install();          // first: must be in place before the game creates its swapchain
+     LoadPrefabs();
+     if (g_httpEnabled) httpapi::Start(g_httpPort);   // opt-in; before ResolveGame on purpose: /api/status reports a failed build, writes answer 503
+-    thumbgen::Start();           // background: renders prefab previews from the pack files into bin64\cdmodkit\thumbs
++    thumbgen::SetBackground(false); // Prototype: render requested previews only, skip the 48k background pass.
++    thumbgen::Start();           // renders requested prefab previews into bin64\cdmodkit\thumbs
+     g_buildOk = ResolveGame();
+     if (!g_buildOk) { Log("signature resolution failed; game functions will NOT be hooked or called"); return 0; }
+     ReleaseHookGap();
+diff --git a/asi/cdmodkit/http_api.cpp b/asi/cdmodkit/http_api.cpp
+index 93f9853..d96c3a6 100644
+--- a/asi/cdmodkit/http_api.cpp
++++ b/asi/cdmodkit/http_api.cpp
+@@ -173,6 +173,43 @@ static std::string Handle(const std::string& method, const std::string& path, co
+         Vec3 p{}; if (!core::PlayerWorldPos(&p)) { status = 503; return Error("player is not in the world"); }
+         return "{\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + "}";
+     }
++    // Prototype diagnostics: reuse the editor's resolved camera and game-thread
++    // physics queue. No fixed game addresses or synchronous game-thread calls.
++    if (method == "GET" && path == "/api/prototype/render-camera") {
++        Vec3 p{}, r{}, u{}, f{}; float m00 = 0, m11 = 0;
++        if (!core::RenderCamera(&p, &r, &u, &f, &m00, &m11)) {
++            status = 503; return Error("renderer camera unavailable");
++        }
++        auto vec = [](Vec3 v) { return "{\"x\":" + Num(v.x) + ",\"y\":" + Num(v.y) + ",\"z\":" + Num(v.z) + "}"; };
++        return "{\"position\":" + vec(p) + ",\"right\":" + vec(r) + ",\"up\":" + vec(u) +
++            ",\"forward\":" + vec(f) + ",\"m00\":" + Num(m00) + ",\"m11\":" + Num(m11) + "}";
++    }
++    if (method == "POST" && path == "/api/prototype/ground-probe") {
++        std::string failure; if (!Ready(status, failure)) return failure;
++        float x = 0, y = 0, z = 0, len = 10;
++        if (!Number(arg, "x", x, true) || !Number(arg, "y", y, true) || !Number(arg, "z", z, true) ||
++            !Number(arg, "length", len) || len <= 0 || len > 100) {
++            status = 400; return Error("finite x/y/z and length in (0,100] required");
++        }
++        const int ticket = core::GroundProbe({x, y, z}, len);
++        if (!ticket) { status = 503; return Error("ground probe not ready; enter the world and walk a few steps"); }
++        status = 202; return "{\"ticket\":" + Int(ticket) + "}";
++    }
++    if (method == "GET" && path == "/api/prototype/ground-result") {
++        float ticket = 0;
++        if (!Number(arg, "ticket", ticket, true) || ticket <= 0 || ticket > 2147483646 || floorf(ticket) != ticket) {
++            status = 400; return Error("positive integer ticket required");
++        }
++        core::GroundHit hit{};
++        const auto st = core::GroundResultState((int)ticket, &hit);
++        if (st == core::GroundProbeStatus::Pending) { status = 202; return "{\"state\":\"pending\"}"; }
++        if (st == core::GroundProbeStatus::Invalidated || st == core::GroundProbeStatus::Unknown) {
++            status = 410; return Error("probe invalidated or expired; discard the action");
++        }
++        if (st == core::GroundProbeStatus::Miss) return "{\"state\":\"miss\"}";
++        return "{\"state\":\"hit\",\"x\":" + Num(hit.center.x) + ",\"y\":" + Num(hit.centerY - hit.radius) +
++            ",\"z\":" + Num(hit.center.z) + "}";
++    }
+     if (method == "GET" && path == "/api/camera") {
+         // pos + axis of the camera object; the axis sign is ambiguous, so "view" is the horizontal direction from the camera
+         // towards the player (the third-person camera always looks over the character), which is what callers want
+diff --git a/asi/cdmodkit/overlay.cpp b/asi/cdmodkit/overlay.cpp
+index 9784267..31f6309 100644
+--- a/asi/cdmodkit/overlay.cpp
++++ b/asi/cdmodkit/overlay.cpp
+@@ -22,6 +22,7 @@ void* CdHeapAlloc(size_t n); void* CdHeapRealloc(void* p, size_t n); void CdHeap
+ #include <set>
+ #include <deque>
+ #include <mutex>
++#include "mc_panel.h"
+ #include <chrono>
+ #include <string>
+ #include <d3d12.h>
+@@ -479,6 +480,7 @@ namespace overlay {
+         Stage("imgui newframe");
+         ImGui::NewFrame();
+         editor::Draw();
++        mc_panel::Draw();
+         Stage("imgui render");
+         ImGui::Render();
+         // edit mode: every input belongs to the menu (the game keeps running but does not react); play mode / placement: everything to the game

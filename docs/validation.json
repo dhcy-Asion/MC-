@@ -1,0 +1,34 @@
+{
+  "game_version": "1.0.0.2976",
+  "minecraft_version": "1.21.1",
+  "prototype_version": "0.1.0",
+  "authority_checks": [
+    "vanilla oak_planks recipe: 1 log -> 4 planks",
+    "retrying identical operation ID does not duplicate crafting",
+    "vanilla shaped stick and crafting_table recipes",
+    "real MC world placement consumes item; native loot restores plank on break",
+    "rejected recipe leaves inventory, blocks and revision unchanged",
+    "insufficient materials roll back partially consumed ingredients"
+  ],
+  "bridge_checks": [
+    "MC item consumed",
+    "MC real block placed",
+    "native collision added",
+    "reconnect reuses owned object",
+    "MC loot returns plank",
+    "native collision removed"
+  ],
+  "native_height_delta_metres": 1.0320440000000417,
+  "native_height_restored_after_removal": true,
+  "restart_checks": [
+    "normal MC shutdown",
+    "inventory/revision/block survive restart",
+    "restored native collider",
+    "test block removed and materials returned"
+  ],
+  "limitations": [
+    "Native blue collision proxies; no MC textures",
+    "Fixed instant breaking with diamond-pickaxe loot",
+    "No complete survival, redstone, mob or combat interaction validation"
+  ]
+}
