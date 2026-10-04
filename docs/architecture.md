@@ -21,11 +21,12 @@ flowchart LR
 | `bridge/service.py` | 接收面板操作，转换坐标，调用 MC，并同步红沙代理实体 | 不计算配方／掉落；只维护 `CrimsonMCPrototype` 项目的对象 |
 | `bridge/red_side.py` | 原生 JSON HTTP 客户端、地面探针轮询 | 请求超时或未命中时报错，不猜测地面高度 |
 | `red-side-patches/mc_panel.cpp/.h` | ImGui 操作面板、异步 WinHTTP 请求 | 与桥接通信；没有第四角色、手持物模型或心形 HUD |
+| `red-side-patches/mc_inventory_ui.cpp/.h`、`mc_inventory_protocol.h` | 全物品目录、36 格选择与异步背包操作；有界 TSV 解码 | 所选槽位由 MC 返回；不是原生手持模型，异常响应不覆盖已知库存 |
 | `red-side-patches/upstream.patch` | 对固定 World Builder 的 HTTP 诊断、面板接入等改动 | 是可重建的上游差异；不能只留在忽略目录 |
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断 | 只申请读和查询权限，不调用游戏函数、不创建角色或写游戏内存 |
 | `config/` | 可公开的默认服务端配置与诊断版本配置 | 不是用户运行时存档；未知 EXE 版本或 SHA 不使用诊断布局 |
-| `artifacts/` | 已成功构建的原型自身 ASI 和 Fabric JAR | 没有原版游戏程序／资源；本里程碑未更新这些二进制 |
+| `artifacts/` | 已成功构建的原型自身 ASI 和 Fabric JAR | M6a 更新两份产物；没有原版游戏程序／资源 |
 | `docs/`、`licenses/` | 可接手的架构、进度、检查摘要及许可证 | 未验证项和实验限制明确标记；原始进程数据不发布 |
 | `vendor/`、`downloads/`、`build/` | 本机固定上游、下载依赖及构建缓存 | 忽略上传，可由准备／构建步骤恢复 |
 | `runtime/`、`backups/` | 用户实验状态、日志、安装清单、探针原始证据和备份 | 忽略上传；不能依赖这些文件作为唯一开发文档 |
@@ -57,10 +58,32 @@ HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 4
 | `POST /ui/break` | `x,y,z` | 拆除相对坐标指定方块 |
 | `POST /ui/break-last` | `{}` | 拆除当前 MC 记录的最后一个非空气方块 |
 | `POST /ui/craft` | `recipe` | 调用 MC 原版配方 |
+| `GET /ui/catalog` | query `search,offset,limit` | MC 物品目录搜索／分页；TSV，limit 为 1～100、offset 不超出过滤后总数 |
+| `GET /ui/inventory` | 无 | TSV 格子快照，固定 36 格及服务端 selectedSlot |
+| `POST /ui/grant` | `item` | 免费领取该物品原版最大一组，整组放不下则回滚 |
+| `POST /ui/select` | `slot` | 选择 0～35，可选空槽，不替代可见手持 |
+| `POST /ui/consume` | `{}` | 明确消耗当前非方块物品 1 件；未执行弓／桶／食物用途 |
+| `POST /ui/place-selected` | `x,y,z` | 由 MC 从所选格放置；兼容现有六种方块，仍是指定坐标 |
+| `POST /ui/front-selected` | `{}` | 所选格放置到旧前方列算法；仍不是鼠标准星命中面 |
 | `POST /ui/shutdown` | `{}` | 停止桥接 HTTP 服务；不停止 MC 或拆除原生实体 |
 
 桥接以互斥锁串行执行操作／摘要读取，给 MC 修改生成 UUID `operationId`。
-目前没有客户端重试票据，也没有跨进程事务。
+目前没有客户端重试票据，也没有跨进程事务。背包读取／领取／选择／消耗只需要 MC，
+不依赖红沙或实验原点；方块放置仍须原生就绪和原点。结果未知时不会自动重试。
+
+背包 TSV 约定（UTF-8 纯文本，名称中的 Tab／CR／LF 替换为空格）：
+
+```text
+catalog<TAB>total<TAB>offset<TAB>nextOffset（末页为 -1）
+item<TAB>id<TAB>name<TAB>maxCount<TAB>placeSupported（0/1）<TAB>isBlock（0/1）
+
+inventory<TAB>revision<TAB>selectedSlot
+slot<TAB>slotIndex<TAB>id<TAB>count<TAB>maxCount<TAB>name
+```
+
+inventory 固定 36 条 slot，空槽 id 为 `-`、count/maxCount 为 0、name 为空。
+解码失败不更改面板中的已知数据。目录每页最多 100 条，原生面板请求 50 条；
+搜索改变时重置 offset。非结构化 summary 仍沿用原文本接口。
 
 ## 桥接 → MC：8766
 
@@ -70,7 +93,12 @@ HTTP 线程把工作提交到 **MC 服务端线程**，等待最多五秒。参�
 
 | 方法／路径 | 输入 | 输出／规则 |
 | --- | --- | --- |
-| `GET /api/state` | 无 | `engine,revision,inventory,blocks`；库存是物品 ID → 总数量，不是格子／装备／快捷栏 |
+| `GET /api/state` | 无 | `engine,revision,inventory,blocks,schemaVersion,slots,selectedSlot,selectedItem`；保留 ID 总数，新增 36 格；没有装备栏或玩家快捷栏 |
+| `GET /api/catalog` | 无 | `items:[{id,name,maxCount,isBlock,placeSupported}]`；真实 Registries.ITEM 的所有非 AIR 物品类型，默认 ItemStack 信息 |
+| `POST /api/grant` | `operationId,item` | MC getMaxCount 整组插入；部分插入后放不下亦完整回滚 |
+| `POST /api/select` | `operationId,slot` | 服务端保存选中格 0～35，允许空格 |
+| `POST /api/consume` | `operationId` | 仅扣所选非 BlockItem 1 个；空格／方块拒绝，不跨格替补 |
+| `POST /api/place-selected` | `operationId,x,y,z` | 只扣所选格，兼容六种方块；不按 ID 自动找别的格 |
 | `POST /api/place` | `operationId,block,x,y,z` | MC 接受后扣一个材料、增加 revision、保存并返回状态与 operationId |
 | `POST /api/break` | `operationId,x,y,z` | MC 掉落表计算，当前固定钻石镐；掉落进入库存，方块变空气 |
 | `POST /api/craft` | `operationId,recipe` | 用 RecipeManager、真实合成输入和 Ingredient 验证，消费材料并返回产物／剩余物 |
@@ -82,7 +110,13 @@ MC API 使用 MC 坐标：X/Z 为 `-16..16`，Y 为 `64..95`。支持六种方�
 
 修改前保存库存／方块状态快照，规则或保存失败会尝试回滚。成功操作的收据仅在内存
 保留最近 256 个，相同 `operationId` 在收据仍保留时返回原结果，不重复消费。
-收据不跨重启持久化，也不校验相同 ID 的请求正文；调用方不得复用 ID 发出不同操作。
+收据绑定路径和 JSON 正文，相同 ID 发出不同操作会拒绝。收据仍不跨重启持久化；
+返回的重复收据是当时的结果，调用方需要最新状态时另外读取 `/api/state`。
+
+slots 是 `[{slot,empty:true}]` 或 `[{slot,empty:false,id,name,count,maxCount,isBlock,placeSupported}]`，
+selectedItem 为 null 或所选非空格的同一结构。用完设置为空 ItemStack，selectedSlot 不变。
+目录中的 isBlock 不意味着已经支持红沙原生形状；placeSupported 当前只对六种基线方块为 true。
+非方块“消耗”是显式库存操作，不包含物品用途、耐久或 MC 生存玩家规则。
 
 ## 桥接 → 原生适配器：8765
 
@@ -120,17 +154,17 @@ MC 状态后执行恢复，不能重复发送一次新的放置来“补显示�
 
 | 状态 | 保存位置／格式 |
 | --- | --- |
-| MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`revision,slots,touched`；36 格 ItemStack.CODEC，包含空气墓碑 |
+| MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`schemaVersion:1,selectedSlot,revision,slots,touched`；36 格 ItemStack.CODEC，包含空气墓碑 |
 | MC 实际区块 | 同目录中的原版世界文件；正常停止时保存 |
 | 红沙锚点 | `runtime/bridge-origin.json`：红沙世界坐标 `x,y,z` |
 | 安装归属 | `runtime/installation.json`：游戏路径、备份路径及已安装文件的 SHA |
 | 诊断输出 | `runtime/character-*.json`：原始指针／本机路径，只留本机 |
 
 MC 状态写临时文件后替换，优先原子移动，不支持时回退替换。重启按 `touched` 修复实验
-坐标，正常加载不重新发初始材料。锚点不能与已有建筑分离删除。当前保存格式没有
-显式 schemaVersion；引入真实 PlayerInventory／装备时，必须先定义版本和迁移，保留旧数据。
-接口新增或不兼容变化先更新本文件与调用方，不能将计划中的 `/api/grant`、`/api/equip`
-或伤害接口当成已存在。
+坐标，正常加载不重新发初始材料。锚点不能与已有建筑分离删除。旧无 schemaVersion
+存档完整校验后迁移为版本 1，默认选择槽 0，原有 revision／材料／建筑不变。
+版本 1 强制 36 格、合法选中格与实验坐标；未知未来版本禁用权威 API，不覆盖其文件。
+仍未引入真实 PlayerInventory／装备，引入时要新增迁移；`/api/equip` 和伤害接口不存在。
 
 ## 构建与可重建来源
 
@@ -159,7 +193,8 @@ world-root 签名和 RTTI 链解析；多个 child 全部记录，不默认选�
 
 ## 关键决策
 
-- 2026-10-04：按里程碑交付；当前先完成文档和只读诊断基线，不跨阶段修改背包／战斗。
+- 2026-10-04：M1 文档与只读基线已完成，用户随后同意先独立交付 M6a 背包。
+- 2026-10-04：目录与堆叠由 MC 注册表决定；选择／消耗不依赖原生角色，但不声称已有可见手持。
 - 2026-10-04：第四角色须为独立身份；不以替换原版三人外观作为验收。
 - 2026-10-04：MC 规则继续为权威；新增生命／装备接口需要真实 MC 玩家及原生事件证据。
 - 2026-10-04：仅修改结束后按授权提交上传；不使用定时上传。详见 [../AGENTS.md](../AGENTS.md)。

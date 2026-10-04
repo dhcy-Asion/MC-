@@ -9,7 +9,10 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.recipe.CraftingRecipe;
 import net.minecraft.recipe.Ingredient;
 import net.minecraft.recipe.ShapedRecipe;
@@ -34,19 +37,22 @@ import java.util.concurrent.*;
 /** Real MC runtime is authoritative; no recipes are reproduced in the bridge. */
 public final class Authority implements ModInitializer {
     private static final Logger LOG = LoggerFactory.getLogger("crimsonmc");
-    private static final Gson JSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson JSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
     private static final Set<String> BLOCK_IDS = Set.of("minecraft:oak_log", "minecraft:oak_planks",
             "minecraft:cobblestone", "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table");
     private static final Set<String> RECIPE_IDS = Set.of("minecraft:oak_planks", "minecraft:stick", "minecraft:crafting_table");
+    private static final int SCHEMA_VERSION = 1;
     private final SimpleInventory inventory = new SimpleInventory(36);
     // Tombstones are retained so a restart repairs stale chunk saves after a crash.
     private final Map<BlockPos, String> touched = new LinkedHashMap<>();
-    private final Map<String, JsonObject> receipts = new LinkedHashMap<>();
+    private record Receipt(String path, JsonObject request, JsonObject result) { }
+    private final Map<String, Receipt> receipts = new LinkedHashMap<>();
     private MinecraftServer server;
     private HttpServer http;
     private ExecutorService httpWorkers;
     private Path stateFile;
     private long revision;
+    private int selectedSlot;
 
     @Override public void onInitialize() {
         ServerLifecycleEvents.SERVER_STARTED.register(this::start);
@@ -57,7 +63,12 @@ public final class Authority implements ModInitializer {
         server = s;
         stateFile = s.getSavePath(WorldSavePath.ROOT).resolve("crimsonmc-state.json");
         try {
-            if (Files.exists(stateFile)) load(JsonParser.parseString(Files.readString(stateFile)).getAsJsonObject());
+            if (Files.exists(stateFile)) {
+                JsonObject saved = JsonParser.parseString(Files.readString(stateFile)).getAsJsonObject();
+                load(saved);
+                // Migrate only a validated legacy snapshot; never overwrite an unknown future format.
+                if (!saved.has("schemaVersion")) save();
+            }
             else {
                 inventory.addStack(new ItemStack(Registries.ITEM.get(Identifier.of("minecraft:oak_log")), 16));
                 inventory.addStack(new ItemStack(Registries.ITEM.get(Identifier.of("minecraft:cobblestone")), 64));
@@ -108,6 +119,7 @@ public final class Authority implements ModInitializer {
 
     private JsonObject handle(String method, String path, JsonObject req) {
         if (method.equals("GET") && path.equals("/api/state")) return state();
+        if (method.equals("GET") && path.equals("/api/catalog")) return catalog();
         if (!method.equals("POST")) throw new BadRequest("unknown read endpoint");
         if (path.equals("/api/shutdown")) {
             // Stop from a separate thread after the HTTP response; normal MC shutdown saves chunks.
@@ -119,10 +131,17 @@ public final class Authority implements ModInitializer {
             stopping.start();
             JsonObject response = new JsonObject(); response.addProperty("stopping", true); return response;
         }
-        if (!Set.of("/api/place", "/api/break", "/api/craft").contains(path)) throw new BadRequest("unknown action");
+        if (!Set.of("/api/place", "/api/break", "/api/craft", "/api/grant", "/api/select",
+                "/api/consume", "/api/place-selected").contains(path)) throw new BadRequest("unknown action");
         String operation = required(req, "operationId");
+        if (operation.isBlank()) throw new BadRequest("operation ID is empty");
         if (operation.length() > 128) throw new BadRequest("operation ID too long");
-        if (receipts.containsKey(operation)) return receipts.get(operation).deepCopy();
+        Receipt previous = receipts.get(operation);
+        if (previous != null) {
+            if (!previous.path().equals(path) || !previous.request().equals(req))
+                throw new BadRequest("operation ID already belongs to a different request");
+            return previous.result().deepCopy();
+        }
         // Roll back both inventory and experiment block state on a failed mutation/save.
         JsonObject before = diskState();
         try {
@@ -130,6 +149,10 @@ public final class Authority implements ModInitializer {
                 case "/api/place" -> place(req);
                 case "/api/break" -> breakBlock(req);
                 case "/api/craft" -> craft(req);
+                case "/api/grant" -> grant(req);
+                case "/api/select" -> selectedSlot = integer(req, "slot", 0, inventory.size() - 1);
+                case "/api/consume" -> consume();
+                case "/api/place-selected" -> placeSelected(req);
             }
             revision++;
             save();
@@ -143,14 +166,13 @@ public final class Authority implements ModInitializer {
         }
         JsonObject result = state();
         result.addProperty("operationId", operation);
-        receipts.put(operation, result.deepCopy());
+        receipts.put(operation, new Receipt(path, req.deepCopy(), result.deepCopy()));
         if (receipts.size() > 256) receipts.remove(receipts.keySet().iterator().next());
         return result;
     }
 
     private BlockPos position(JsonObject req) {
-        int x = req.get("x").getAsInt(), y = req.get("y").getAsInt(), z = req.get("z").getAsInt();
-        if (Math.abs(x) > 16 || Math.abs(z) > 16 || y < 64 || y > 95) throw new BadRequest("outside prototype region");
+        int x = integer(req, "x", -16, 16), y = integer(req, "y", 64, 95), z = integer(req, "z", -16, 16);
         if (touched.size() >= 512 && !touched.containsKey(new BlockPos(x,y,z))) throw new BadRequest("prototype limit: 512 touched cells");
         return new BlockPos(x,y,z);
     }
@@ -158,15 +180,83 @@ public final class Authority implements ModInitializer {
     private void place(JsonObject req) {
         String id = required(req, "block");
         if (!BLOCK_IDS.contains(id)) throw new BadRequest("block not supported in this slice");
+        int slot = findItem(id);
+        if (slot < 0) throw new BadRequest("not enough material");
+        placeFromSlot(req, slot, id);
+    }
+
+    private void placeSelected(JsonObject req) {
+        ItemStack stack = inventory.getStack(selectedSlot);
+        if (stack.isEmpty()) throw new BadRequest("selected slot is empty");
+        String id = Registries.ITEM.getId(stack.getItem()).toString();
+        if (!(stack.getItem() instanceof BlockItem) || !BLOCK_IDS.contains(id))
+            throw new BadRequest("selected item placement is not supported in this slice");
+        placeFromSlot(req, selectedSlot, id);
+    }
+
+    private void placeFromSlot(JsonObject req, int slot, String id) {
         BlockPos pos = position(req);
         var world = server.getOverworld();
         if (!world.getBlockState(pos).isAir()) throw new BadRequest("cell occupied");
-        int slot = findItem(id);
-        if (slot < 0) throw new BadRequest("not enough material");
         if (!world.setBlockState(pos, Registries.BLOCK.get(Identifier.of(id)).getDefaultState(), 3))
             throw new BadRequest("Minecraft refused placement");
-        inventory.getStack(slot).decrement(1);
+        decrementSlot(slot);
         touched.put(pos, id);
+    }
+
+    private void grant(JsonObject req) {
+        String id = required(req, "item");
+        Identifier key = Identifier.tryParse(id);
+        if (key == null || !Registries.ITEM.containsId(key)) throw new BadRequest("unknown Minecraft item");
+        Item item = Registries.ITEM.get(key);
+        if (item == Items.AIR) throw new BadRequest("air is not an inventory item");
+        ItemStack stack = item.getDefaultStack();
+        stack.setCount(stack.getMaxCount());
+        if (!inventory.addStack(stack).isEmpty()) throw new BadRequest("a whole stack cannot fit inventory");
+    }
+
+    private void consume() {
+        ItemStack stack = inventory.getStack(selectedSlot);
+        if (stack.isEmpty()) throw new BadRequest("selected slot is empty");
+        if (stack.getItem() instanceof BlockItem) throw new BadRequest("use placement to consume a block");
+        // This is explicit inventory consumption, not a simulated bow, bucket or food use action.
+        decrementSlot(selectedSlot);
+    }
+
+    private void decrementSlot(int slot) {
+        ItemStack stack = inventory.getStack(slot);
+        stack.decrement(1);
+        if (stack.isEmpty()) inventory.setStack(slot, ItemStack.EMPTY);
+        inventory.markDirty();
+    }
+
+    private JsonObject catalog() {
+        JsonObject result = new JsonObject();
+        result.addProperty("engine", "Minecraft Java 1.21.1");
+        JsonArray items = new JsonArray();
+        for (Item item : Registries.ITEM) if (item != Items.AIR) items.add(itemDescription(item.getDefaultStack()));
+        result.add("items", items);
+        return result;
+    }
+
+    private JsonObject itemDescription(ItemStack stack) {
+        String id = Registries.ITEM.getId(stack.getItem()).toString();
+        JsonObject item = new JsonObject();
+        item.addProperty("id", id);
+        item.addProperty("name", stack.getName().getString());
+        item.addProperty("maxCount", stack.getMaxCount());
+        item.addProperty("isBlock", stack.getItem() instanceof BlockItem);
+        item.addProperty("placeSupported", stack.getItem() instanceof BlockItem && BLOCK_IDS.contains(id));
+        return item;
+    }
+
+    private JsonObject slotDescription(int slot) {
+        ItemStack stack = inventory.getStack(slot);
+        JsonObject result = stack.isEmpty() ? new JsonObject() : itemDescription(stack);
+        result.addProperty("slot", slot);
+        result.addProperty("empty", stack.isEmpty());
+        if (!stack.isEmpty()) result.addProperty("count", stack.getCount());
+        return result;
     }
 
     private void breakBlock(JsonObject req) {
@@ -223,6 +313,12 @@ public final class Authority implements ModInitializer {
         JsonObject result = new JsonObject();
         result.addProperty("engine", "Minecraft Java 1.21.1");
         result.addProperty("revision", revision);
+        result.addProperty("schemaVersion", SCHEMA_VERSION);
+        result.addProperty("selectedSlot", selectedSlot);
+        JsonArray slots = new JsonArray();
+        for (int i = 0; i < inventory.size(); i++) slots.add(slotDescription(i));
+        result.add("slots", slots);
+        result.add("selectedItem", inventory.getStack(selectedSlot).isEmpty() ? JsonNull.INSTANCE : slotDescription(selectedSlot));
         JsonObject counts = new JsonObject();
         for (int i = 0; i < inventory.size(); i++) {
             ItemStack stack = inventory.getStack(i); if (stack.isEmpty()) continue;
@@ -242,6 +338,8 @@ public final class Authority implements ModInitializer {
 
     private JsonObject diskState() {
         JsonObject result = new JsonObject(); result.addProperty("revision", revision);
+        result.addProperty("schemaVersion", SCHEMA_VERSION);
+        result.addProperty("selectedSlot", selectedSlot);
         JsonArray slots = new JsonArray();
         var ops = RegistryOps.of(JsonOps.INSTANCE, server.getRegistryManager());
         for (int i = 0; i < inventory.size(); i++) slots.add(inventory.getStack(i).isEmpty() ? JsonNull.INSTANCE :
@@ -255,14 +353,37 @@ public final class Authority implements ModInitializer {
     }
 
     private void load(JsonObject data) {
-        revision = data.get("revision").getAsLong();
-        inventory.clear(); touched.clear();
+        int version = data.has("schemaVersion") ? integer(data, "schemaVersion", 0, Integer.MAX_VALUE) : 0;
+        if (version > SCHEMA_VERSION) throw new BadRequest("unsupported future inventory schema " + version);
+        int selection = version == 0 ? 0 : integer(data, "selectedSlot", 0, inventory.size() - 1);
+        long savedRevision = data.get("revision").getAsBigDecimal().longValueExact();
+        if (savedRevision < 0) throw new BadRequest("invalid saved revision");
         var ops = RegistryOps.of(JsonOps.INSTANCE, server.getRegistryManager());
         JsonArray slots = data.getAsJsonArray("slots");
-        for (int i=0; i < Math.min(slots.size(), inventory.size()); i++)
-            if (!slots.get(i).isJsonNull()) inventory.setStack(i, ItemStack.CODEC.parse(ops, slots.get(i)).getOrThrow());
-        for (JsonElement cell : data.getAsJsonArray("touched")) { JsonObject b=cell.getAsJsonObject();
-            touched.put(new BlockPos(b.get("x").getAsInt(),b.get("y").getAsInt(),b.get("z").getAsInt()),b.get("block").getAsString()); }
+        if (slots == null || slots.size() != inventory.size()) throw new BadRequest("saved inventory must contain exactly 36 slots");
+        List<ItemStack> stacks = new ArrayList<>();
+        for (JsonElement value : slots) {
+            ItemStack stack = value.isJsonNull() ? ItemStack.EMPTY : ItemStack.CODEC.parse(ops, value).getOrThrow();
+            if (!value.isJsonNull() && (stack.isEmpty() || stack.getCount() < 1 || stack.getCount() > stack.getMaxCount()))
+                throw new BadRequest("saved inventory stack exceeds its Minecraft maximum");
+            stacks.add(stack);
+        }
+        Map<BlockPos, String> cells = new LinkedHashMap<>();
+        JsonArray savedCells = data.getAsJsonArray("touched");
+        if (savedCells == null || savedCells.size() > 512) throw new BadRequest("invalid saved touched cells");
+        for (JsonElement cell : savedCells) {
+            JsonObject b = cell.getAsJsonObject();
+            BlockPos pos = new BlockPos(integer(b, "x", -16, 16), integer(b, "y", 64, 95), integer(b, "z", -16, 16));
+            String id = required(b, "block");
+            if (!id.equals("minecraft:air") && !BLOCK_IDS.contains(id)) throw new BadRequest("unknown saved prototype block");
+            if (cells.put(pos, id) != null) throw new BadRequest("duplicate saved cell");
+        }
+        // Parse and validate the complete snapshot before replacing any live state.
+        inventory.clear(); touched.clear();
+        for (int i = 0; i < stacks.size(); i++) inventory.setStack(i, stacks.get(i));
+        touched.putAll(cells);
+        revision = savedRevision;
+        selectedSlot = selection;
     }
 
     private void save() throws IOException {
@@ -273,8 +394,17 @@ public final class Authority implements ModInitializer {
     }
 
     private static String required(JsonObject req, String key) {
-        if (!req.has(key) || !req.get(key).isJsonPrimitive()) throw new BadRequest("missing " + key);
+        if (!req.has(key) || !req.get(key).isJsonPrimitive() || !req.getAsJsonPrimitive(key).isString()) throw new BadRequest("missing string " + key);
         return req.get(key).getAsString();
+    }
+    private static int integer(JsonObject req, String key, int min, int max) {
+        if (!req.has(key) || !req.get(key).isJsonPrimitive() || !req.getAsJsonPrimitive(key).isNumber())
+            throw new BadRequest("missing integer " + key);
+        try {
+            int value = req.get(key).getAsBigDecimal().intValueExact();
+            if (value < min || value > max) throw new BadRequest(key + " outside allowed range");
+            return value;
+        } catch (ArithmeticException error) { throw new BadRequest("invalid integer " + key); }
     }
     private static final class BadRequest extends RuntimeException { BadRequest(String message) { super(message); } }
 }

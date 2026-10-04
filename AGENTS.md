@@ -20,7 +20,8 @@ the earlier copy under Desktop/Git.
 1. 开始前确认 `docs/progress.md` 中当前里程碑的范围、前置条件和验收标准。
    用户当次指令可以调整优先级；及时记录这一调整。
 2. 每次只处理当前里程碑相关的代码。后续功能只记录计划，不能顺手改背包、战斗、
-   角色或全局输入。当前用户优先验证第四角色，背包修改延后。
+   角色或全局输入。用户最新选择先让背包独立可用：当前 M6a 为物品目录、整组领取、
+   36 格选择与实际消耗；M2 原生角色研究保持未完成，不安装未验收的切换记录器。
 3. 完成后运行相关检查，在进度文件写明日期、命令、结果、证据及未验证项，再标记完成。
    只读探针运行成功不等于第四角色创建成功；构建成功不等于游戏内行为验证成功。
 4. 未达到验收标准时保留在进行中，记录具体障碍和下一项可执行检查，不能为了收尾
@@ -51,6 +52,7 @@ the earlier copy under Desktop/Git.
 | --- | --- |
 | 文档／诊断 | 检查相对链接和 JSON；`python tools/check_character_probe.py`；Python 语法检查；已支持版本运行只读探针 |
 | MC 规则 | `tools/build_minecraft.ps1` 构建；按变更运行 `tools/check_authority.py` 或新增有意义的规则检查 |
+| 背包 | MC 构建；`python tools/check_inventory.py` 使用独立测试世界；`python tools/check_inventory_bridge.py`；`python tools/check_inventory_ui.py`；原生构建和游戏内面板检查 |
 | 跨游戏方块同步 | `tools/check_bridge.py`；保存／重启改动再运行 `tools/check_restart.py` |
 | 原生源码 | 准备固定上游、构建、补丁可重建检查及相关游戏内行为验证；更新插件前关闭游戏 |
 | Git 同步脚本 | `python tools/check_sync.py`，使用其临时仓库，不重写用户仓库历史 |

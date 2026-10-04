@@ -12,6 +12,7 @@ import threading
 import uuid
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlsplit
 
 from bridge.red_side import RedSide, GameAPIError
 
@@ -22,6 +23,22 @@ PROJECT = "CrimsonMCPrototype"
 ALLOWED_BLOCKS = {"minecraft:oak_log", "minecraft:oak_planks", "minecraft:cobblestone",
                   "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table"}
 ALLOWED_RECIPES = {"minecraft:oak_planks", "minecraft:stick", "minecraft:crafting_table"}
+INVENTORY_ACTIONS = {"/ui/grant", "/ui/select", "/ui/consume"}
+PLACEMENT_ACTIONS = {"/ui/place", "/ui/front", "/ui/place-selected", "/ui/front-selected"}
+ACTIONS = INVENTORY_ACTIONS | PLACEMENT_ACTIONS | {
+    "/ui/anchor", "/ui/reconnect", "/ui/craft", "/ui/break", "/ui/break-last"}
+
+
+def strict_integer(value, name, minimum, maximum):
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise GameAPIError(f"{name} must be an integer from {minimum} to {maximum}")
+    return value
+
+
+def tsv_text(value):
+    if not isinstance(value, str):
+        raise GameAPIError("Minecraft item text must be a string")
+    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")
 
 
 def mc(path="/api/state", body=None):
@@ -32,7 +49,20 @@ def mc(path="/api/state", body=None):
         with urlopen(request, timeout=7) as response:
             return json.load(response)
     except HTTPError as error:
-        raise GameAPIError(f"Minecraft rejected action: {json.load(error)}") from error
+        with error:
+            details = json.load(error)
+        uncertain = (" Result may be unknown; refresh Minecraft state before retrying."
+                     if body is not None and error.code >= 500 else "")
+        raise GameAPIError(f"Minecraft request failed (HTTP {error.code}): {details}.{uncertain}") from error
+
+
+def mutate_mc(path, body):
+    try:
+        return mc(path, body)
+    except OSError as error:
+        # A lost response does not prove the server rejected a queued operation.
+        raise GameAPIError("Minecraft action response unavailable; result unknown. "
+                           "Refresh Minecraft inventory/build state before retrying. " + str(error)) from error
 
 
 class Bridge:
@@ -111,7 +141,28 @@ class Bridge:
         return state
 
     def action(self, path, body):
+        if path not in ACTIONS:
+            raise GameAPIError("Unknown action")
+        if not isinstance(body, dict):
+            raise GameAPIError("JSON object required")
         with self.lock:
+            if path in INVENTORY_ACTIONS:
+                mutation = {"operationId": str(uuid.uuid4())}
+                if path == "/ui/grant":
+                    item = body.get("item")
+                    if not isinstance(item, str) or not item or len(item) > 256:
+                        raise GameAPIError("item must be a Minecraft item ID")
+                    mutation["item"] = item
+                    verb = "Granted one original Minecraft stack of " + item
+                elif path == "/ui/select":
+                    mutation["slot"] = strict_integer(body.get("slot"), "slot", 0, 35)
+                    verb = f"Selected Minecraft inventory slot {mutation['slot']} (native hand model not connected)"
+                else:
+                    verb = "Consumed one selected non-block item; special item effects are not connected"
+                # Inventory actions work while Crimson Desert is closed and never move the anchor.
+                result = mutate_mc("/api/" + path.rsplit("/", 1)[1], mutation)
+                self.message = f"{verb}. Revision {result['revision']}"
+                return result
             if path == "/ui/anchor":
                 self.anchor()
                 return
@@ -126,13 +177,20 @@ class Bridge:
                 recipe = body.get("recipe")
                 if recipe not in ALLOWED_RECIPES:
                     raise GameAPIError("Unsupported recipe")
-                result = mc("/api/craft", {"recipe": recipe, "operationId": str(uuid.uuid4())})
+                result = mutate_mc("/api/craft", {"recipe": recipe, "operationId": str(uuid.uuid4())})
                 self.message = f"Crafted via Minecraft's own recipe: {recipe}. Revision {result['revision']}"
                 return
             state = mc()
-            if len(state["blocks"]) >= 128 and path in {"/ui/place", "/ui/front"}:
+            if len(state["blocks"]) >= 128 and path in PLACEMENT_ACTIONS:
                 raise GameAPIError("Native proxy limit: 128 blocks")
-            if path == "/ui/front":
+            selected_placement = path in {"/ui/place-selected", "/ui/front-selected"}
+            if selected_placement:
+                selected = state.get("selectedItem")
+                if not selected:
+                    raise GameAPIError("The selected Minecraft slot is empty")
+                if selected.get("id") not in ALLOWED_BLOCKS or selected.get("placeSupported") is not True:
+                    raise GameAPIError("This selected item has no native block placement support yet")
+            if path in {"/ui/front", "/ui/front-selected"}:
                 _, player = self.red.request("/api/player")
                 _, camera = self.red.request("/api/camera")
                 if not camera.get("view"):
@@ -146,38 +204,98 @@ class Bridge:
                 if not state["blocks"]:
                     raise GameAPIError("No MC block to break")
                 x, y, z = self.cell(state["blocks"][-1])
-            elif path in {"/ui/place", "/ui/break"}:
-                x, y, z = (int(body.get(a, 0)) for a in "xyz")
+            elif path in {"/ui/place", "/ui/break", "/ui/place-selected"}:
+                x, y, z = (strict_integer(body.get(a, 0), a, 0 if a == "y" else -16,
+                                          31 if a == "y" else 16) for a in "xyz")
             else:
                 raise GameAPIError("Unknown action")
             if abs(x) > 16 or abs(z) > 16 or not 0 <= y <= 31:
                 raise GameAPIError("Stay within the 33 x 32 x 33 prototype grid")
             mutation = {"x": x, "y": y+64, "z": z, "operationId": str(uuid.uuid4())}
-            if path in {"/ui/place", "/ui/front"}:
+            if selected_placement:
+                result = mutate_mc("/api/place-selected", mutation)
+                verb = "Placed"
+            elif path in {"/ui/place", "/ui/front"}:
                 block = body.get("block")
                 if block not in ALLOWED_BLOCKS:
                     raise GameAPIError("Unsupported block")
                 mutation["block"] = block
-                result = mc("/api/place", mutation)
+                result = mutate_mc("/api/place", mutation)
                 verb = "Placed"
             else:
-                result = mc("/api/break", mutation)
+                result = mutate_mc("/api/break", mutation)
                 verb = "Broke"
             # MC remains authoritative if a native spawn fails; reconnect repairs presentation.
-            self.sync(result)
+            try:
+                self.sync(result)
+            except Exception as error:
+                self.message = (f"Minecraft committed revision {result['revision']} for cell ({x},{y},{z}); "
+                                "native sync failed. Use Restore blocks; do not repeat the placement.")
+                raise GameAPIError(self.message + " " + str(error)) from error
             self.message = f"{verb} cell ({x},{y},{z}); materials/drops handled by Minecraft."
 
-    def summary(self):
+    def catalog_text(self, search="", offset=0, limit=50):
+        strict_integer(offset, "offset", 0, 2**31-1)
+        strict_integer(limit, "limit", 1, 100)
+        if not isinstance(search, str) or len(search) > 256:
+            raise GameAPIError("search must be at most 256 characters")
+        with self.lock:
+            items = mc("/api/catalog")["items"]
+            needle = search.casefold()
+            filtered = [item for item in items if needle in item["id"].casefold()
+                        or needle in item["name"].casefold()]
+            if offset > len(filtered):
+                raise GameAPIError("offset exceeds the filtered Minecraft item catalog")
+            page = filtered[offset:offset+limit]
+            next_offset = offset + len(page) if offset + len(page) < len(filtered) else -1
+            lines = [f"catalog\t{len(filtered)}\t{offset}\t{next_offset}"]
+            for item in page:
+                maximum = strict_integer(item["maxCount"], "Minecraft maxCount", 1, 2**31-1)
+                if type(item["placeSupported"]) is not bool or type(item["isBlock"]) is not bool:
+                    raise GameAPIError("Invalid Minecraft item placement metadata")
+                lines.append("\t".join(("item", tsv_text(item["id"]), tsv_text(item["name"]),
+                                        str(maximum), str(int(item["placeSupported"])), str(int(item["isBlock"])))))
+            return "\n".join(lines)
+
+    def inventory_text(self):
+        with self.lock:
+            state = mc()
+            selected = strict_integer(state["selectedSlot"], "Minecraft selectedSlot", 0, 35)
+            slots = state["slots"]
+            if len(slots) != 36 or {slot.get("slot") for slot in slots} != set(range(36)):
+                raise GameAPIError("Minecraft must return all 36 inventory slots")
+            lines = [f"inventory\t{state['revision']}\t{selected}"]
+            for slot in sorted(slots, key=lambda row: row["slot"]):
+                index = strict_integer(slot["slot"], "Minecraft slot", 0, 35)
+                if slot.get("empty") is True:
+                    lines.append(f"slot\t{index}\t-\t0\t0\t")
+                elif slot.get("empty") is False:
+                    maximum = strict_integer(slot["maxCount"], "Minecraft maxCount", 1, 2**31-1)
+                    count = strict_integer(slot["count"], "Minecraft count", 1, maximum)
+                    lines.append("\t".join(("slot", str(index), tsv_text(slot["id"]),
+                                            str(count), str(maximum), tsv_text(slot["name"]))))
+                else:
+                    raise GameAPIError("Invalid Minecraft inventory slot metadata")
+            return "\n".join(lines)
+
+    def summary(self, state=None, check_red=True):
         with self.lock:
             lines = ["Minecraft Java 1.21.1 authority", "Visuals: native blue grid proxies (MC textures pending)"]
             try:
-                status = self.ready()
-                state = mc()
-                lines += [f"Red side: ready ({status['gameVersion']})", f"MC revision: {state['revision']} | blocks: {len(state['blocks'])}",
+                state = mc() if state is None else state
+                lines += [f"MC revision: {state['revision']} | blocks: {len(state['blocks'])}",
                           "Anchor: " + ("set" if self.origin else "not set"), "", "Inventory:"]
                 lines += [f"  {k.removeprefix('minecraft:')}: {v}" for k,v in state["inventory"].items()]
             except Exception as error:
-                lines += ["Backend not ready: " + str(error)]
+                lines += ["Minecraft backend not ready: " + str(error)]
+            if check_red:
+                try:
+                    status = self.ready()
+                    lines += [f"Red side: ready ({status['gameVersion']})"]
+                except Exception as error:
+                    lines += ["Red-side building unavailable: " + str(error)]
+            else:
+                lines += ["Red side: not checked; inventory actions require Minecraft only."]
             lines += ["", self.message]
             return "\n".join(lines)
 
@@ -195,25 +313,44 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(encoded)
 
     def do_GET(self):
-        if self.path != "/ui/state":
-            self.reply(404, "Unknown endpoint")
-            return
-        self.reply(200, self.bridge.summary())
+        try:
+            parsed = urlsplit(self.path)
+            query = parse_qs(parsed.query, keep_blank_values=True)
+            if parsed.path == "/ui/state" and not query:
+                self.reply(200, self.bridge.summary())
+            elif parsed.path == "/ui/inventory" and not query:
+                self.reply(200, self.bridge.inventory_text())
+            elif parsed.path == "/ui/catalog":
+                if set(query) - {"search", "offset", "limit"} or any(len(value) != 1 for value in query.values()):
+                    raise GameAPIError("Invalid or repeated catalog query parameter")
+                offset, limit = query.get("offset", ["0"])[0], query.get("limit", ["50"])[0]
+                if not offset.isascii() or not offset.isdecimal() or not limit.isascii() or not limit.isdecimal():
+                    raise GameAPIError("Catalog offset and limit must be unsigned decimal integers")
+                self.reply(200, self.bridge.catalog_text(query.get("search", [""])[0], int(offset), int(limit)))
+            else:
+                self.reply(404, "Unknown endpoint")
+        except Exception as error:
+            self.reply(400, str(error))
 
     def do_POST(self):
         try:
+            if self.path not in ACTIONS | {"/ui/shutdown"}:
+                self.reply(404, "Unknown endpoint")
+                return
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 raise ValueError("application/json required")
             length = int(self.headers.get("Content-Length", 0))
             if not 0 <= length <= 65536:
                 raise ValueError("invalid length")
             body = json.loads(self.rfile.read(length))
+            if not isinstance(body, dict):
+                raise GameAPIError("JSON object required")
             if self.path == "/ui/shutdown":
                 self.reply(200, "Bridge stopping; MC and native objects retained.")
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return
-            self.bridge.action(self.path, body)
-            self.reply(200, self.bridge.summary())
+            state = self.bridge.action(self.path, body)
+            self.reply(200, self.bridge.summary(state=state, check_red=self.path not in INVENTORY_ACTIONS))
         except Exception as error:
             self.reply(400, str(error))
 

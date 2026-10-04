@@ -8,6 +8,7 @@
 #include <string>
 #include <cstdio>
 #include "mc_panel.h"
+#include "mc_inventory_ui.h"
 namespace editor { bool IsOpen(); bool PlayMode(); }
 
 namespace mc_panel {
@@ -68,15 +69,17 @@ void Draw() {
         lastPoll = GetTickCount64();
     }
     if (!editor::IsOpen() || editor::PlayMode()) return;
-    if (!pending.valid() && GetTickCount64()-lastPoll>1500) Queue(L"/ui/state");
     ImGui::SetNextWindowSize(ImVec2(460,650),ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x-490,65),ImGuiCond_FirstUseEver);
     if (ImGui::Begin("MC 建造与合成原型###crimsonmc")) {
         ImGui::TextWrapped("真实 Minecraft Java 1.21.1 规则；蓝色方块为碰撞测试模型。MC 材质尚未接入。");
         ImGui::Separator();
+        mc_inventory_ui::Draw(pending.valid());
+        if (ImGui::CollapsingHeader("原有建造与合成操作")) {
+        if (!pending.valid() && !mc_inventory_ui::Busy() && GetTickCount64()-lastPoll>1500) Queue(L"/ui/state");
         ImGui::TextWrapped("%s",summary.c_str());
         ImGui::Separator();
-        ImGui::BeginDisabled(pending.valid());
+        ImGui::BeginDisabled(pending.valid() || mc_inventory_ui::Busy());
         if (ImGui::Button("在角色前方建立实验原点")) Queue(L"/ui/anchor","{}");
         ImGui::SameLine();
         if (ImGui::Button("恢复方块")) Queue(L"/ui/reconnect","{}");
@@ -94,6 +97,7 @@ void Draw() {
         if (ImGui::Button("2 木板 → 4 木棍")) Queue(L"/ui/craft","{\"recipe\":\"minecraft:stick\"}");
         if (ImGui::Button("4 木板 → 工作台")) Queue(L"/ui/craft","{\"recipe\":\"minecraft:crafting_table\"}");
         ImGui::EndDisabled();
+        }
         ImGui::TextWrapped("按 Insert 关闭菜单后继续红沙战斗。实验背包由 MC 服务端保存，与红沙原有背包独立。");
     }
     ImGui::End();

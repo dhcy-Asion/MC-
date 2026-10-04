@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-04",
+  "milestone": "M6a",
+  "engine": "Minecraft Java 1.21.1",
+  "catalogCount": 1332,
+  "realMinecraft": {
+    "result": "passed",
+    "isolated": true,
+    "forcedStop": false,
+    "checks": [
+      "Legacy 36-slot inventory and touched blocks migrate without losses or revision change",
+      "Complete non-air MC registry catalog reports native maximum stacks 64/16/1 and actual placement limits",
+      "Unknown items, air and invalid selections leave state unchanged",
+      "Selected-slot placement consumes its last block, preserves other stacks and keeps an empty selection",
+      "Free grants insert one whole original MC stack for blocks, pearls and unstackable tools",
+      "Explicit item consumption empties only selected slot and never pulls from another stack",
+      "Unsupported blocks and occupied cells reject placement before any consumption",
+      "All three existing vanilla recipes and diamond-pickaxe block drops still work",
+      "A real snapshot-write failure rolls back inventory, selection, touched cells and revision without changing the saved file",
+      "Receipts bind operation IDs to path/body and reject conflicting retries",
+      "A whole-stack grant rolls back its one inserted plank when only one of 64 can fit",
+      "Normal restart preserves all 36 slots, selection, inventory components and touched blocks",
+      "Unknown future schema disables authority without truncating or overwriting its file"
+    ]
+  },
+  "bridge": {
+    "result": "passed",
+    "checks": 15,
+    "mode": "isolated HTTP fixtures"
+  },
+  "nativeProtocol": {
+    "result": "passed",
+    "scope": "C++ host decoder: pages, complete slots, bounds, truncation, duplicate entries, atomic rejection"
+  },
+  "builds": {
+    "minecraft": "passed",
+    "native": "passed",
+    "preparedSource": "passed"
+  },
+  "live": {
+    "installation": "passed",
+    "legacyMigration": "passed, revision/slots/touched unchanged",
+    "panel": "not verified: installed game entered; physical Insert requested because automated short press was not captured"
+  },
+  "artifacts": {
+    "artifacts/native/cdmodkit.asi": "4e4f335bcfa4883bfdc9f07c1f62dd4b0335beef24e53360c48a582319357c9f",
+    "artifacts/minecraft/crimsonmc-authority-0.1.0.jar": "56526b6d850a4fbdd91306d1fceb5257eae3ad448b7f21b1cc480cc4c8017d2d"
+  },
+  "limitations": [
+    "No fourth F1 character, Steve model or survival combat",
+    "No native hand model or crosshair placement",
+    "Only six baseline blocks have native placement support; other block items can be granted and selected",
+    "Non-block consumption is explicit inventory consumption, not item-specific effects"
+  ]
+}
