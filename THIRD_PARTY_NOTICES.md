@@ -15,6 +15,14 @@ The accompanying license texts are in `licenses/`:
 - GCC libgcc/libstdc++ — GPLv3 with the GCC Runtime Library Exception.
 - MinGW runtime and winpthreads — licenses reproduced from the build toolchain.
 
+The read-only character diagnostic profile in `config/character-probe-2976.json`
+uses signature/layout research from [gugi97/Trinity](https://github.com/gugi97/Trinity)
+commit `e0d287e002a1947a74eacedc21b95bb021d9f5fe`, copyright (c) 2026
+XeTrinityz, under MIT. Its license is retained in `licenses/Trinity-MIT.txt`.
+The world-root signature and transform layout use the World Builder commit above.
+This diagnostic does not install Trinity, call its game functions or enable its
+gameplay modifications.
+
 The preparation script downloads Ultimate ASI Loader, Java, Gradle, Fabric and
 Minecraft dependencies from their upstream sources. These downloads and Minecraft
 game binaries are excluded from this repository. Minecraft and Crimson Desert

@@ -1,0 +1,53 @@
+{
+  "game_version": "1.0.0.2976",
+  "game_sha256": "57da440d72f4db974f25fef047cf84c4dadd999a88cb2a3c5af4c9bd67fde1e7",
+  "source": {
+    "repo": "https://github.com/gugi97/Trinity",
+    "commit": "e0d287e002a1947a74eacedc21b95bb021d9f5fe",
+    "path": "src/game/offsets.h",
+    "license": "MIT"
+  },
+  "note": "Source realm labels are unverified. On this machine both manager anchors resolve to the same ServerActorManager. These signatures do not register an F1 character.",
+  "world_root": {
+    "pattern": "48 8B 05 ?? ?? ?? ?? 48 8B 48 30 48 8B 83 A0 00 00 00 48 39 41 58",
+    "source": "https://github.com/Moon-yungg/crimson-desert-world-builder/blob/4dcedc8dfe1592fdee0528894389221291900b8d/asi/cdmodkit/cdmodkit.cpp",
+    "license": "MIT"
+  },
+  "anchors": [
+    {
+      "name": "source_client_0",
+      "pattern": "4D 8B 00 49 C1 E8 20 48 8D 54 24 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 09 E8",
+      "mov_offset": 12
+    },
+    {
+      "name": "source_client_1",
+      "pattern": "44 8B 82 90 00 00 00 48 8D 54 24 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 09 E8",
+      "mov_offset": 12
+    },
+    {
+      "name": "source_client_2",
+      "pattern": "44 8B 07 45 3B 45 60 0F 84 ?? ?? ?? ?? 48 8D 54 24 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 09 E8",
+      "mov_offset": 18
+    },
+    {
+      "name": "source_client_3",
+      "pattern": "45 8B 45 00 48 8D 95 30 01 00 00 48 8B 0D ?? ?? ?? ?? 48 8B 09 E8",
+      "mov_offset": 11
+    },
+    {
+      "name": "source_server",
+      "pattern": "4D 8B 24 24 48 8D 55 C0 48 8B 0D ?? ?? ?? ?? 48 8B 09 E8",
+      "mov_offset": 8
+    },
+    {
+      "name": "stat_commit",
+      "pattern": "66 44 89 4C 24 ?? 48 89 54 24 ?? 53 55 56 57 41 56 48 83 EC ?? 4C 8D 71 18",
+      "mov_offset": null
+    },
+    {
+      "name": "damage_apply",
+      "pattern": "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 49 8B C1 49 8B E8 0F B7 DA 48 8B F1 4D 85 C9",
+      "mov_offset": null
+    }
+  ]
+}
