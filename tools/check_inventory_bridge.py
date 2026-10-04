@@ -24,10 +24,10 @@ class FakeMC:
     def __init__(self):
         self.calls, self.revision, self.selected = [], 4, 0
         self.items = [
-            {"id": "minecraft:oak_planks", "name": "Oak Planks", "maxCount": 64, "isBlock": True, "placeSupported": True},
-            {"id": "minecraft:ender_pearl", "name": "Ender\tPearl\n", "maxCount": 16, "isBlock": False, "placeSupported": False},
-            {"id": "minecraft:diamond_sword", "name": "Diamond Sword", "maxCount": 1, "isBlock": False, "placeSupported": False},
-            {"id": "minecraft:torch", "name": "Torch", "maxCount": 64, "isBlock": True, "placeSupported": False},
+            {"id": "minecraft:oak_planks", "name": "橡木木板", "maxCount": 64, "isBlock": True, "placeSupported": True},
+            {"id": "minecraft:ender_pearl", "name": "末影\t珍珠\n", "maxCount": 16, "isBlock": False, "placeSupported": False},
+            {"id": "minecraft:diamond_sword", "name": "钻石剑", "maxCount": 1, "isBlock": False, "placeSupported": False},
+            {"id": "minecraft:torch", "name": "火把", "maxCount": 64, "isBlock": True, "placeSupported": False},
         ]
         self.slots = [{"slot": index, "empty": True} for index in range(36)]
         self.fill(0, self.items[0], 2)
@@ -60,6 +60,15 @@ class FakeMC:
             empty = next((row["slot"] for row in self.slots if row["empty"]), None)
             if empty is None: raise GameAPIError("Minecraft inventory is full")
             self.fill(empty, item, item["maxCount"])
+        elif path == "/api/add-item":
+            if body.get("player") != "console": raise GameAPIError("Unknown player")
+            if body["count"] < 1: raise GameAPIError("count must be positive")
+            item = next((row for row in self.items if row["id"] == body["item"]), None)
+            if item is None: raise GameAPIError("Unknown Minecraft item")
+            empty = next((row["slot"] for row in self.slots if row["empty"]), None)
+            if empty is None: raise GameAPIError("Minecraft inventory is full")
+            self.fill(empty, item, min(body["count"], item["maxCount"]))
+            # Fixture only tests forwarding; real split/rollback is checked against MC.
         elif path == "/api/select":
             self.selected = body["slot"]
         elif path in {"/api/consume", "/api/place-selected"}:
@@ -142,10 +151,36 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.red.available = True
         self.bridge.origin = {"x": 0, "y": 0.03, "z": 0}
 
+    def test_add_item_needs_neither_red_nor_anchor(self):
+        # Console-style direct add: item, explicit count and a target player.
+        code, text = self.request("/ui/add-item", {"item": "minecraft:diamond_sword", "count": 3, "player": "console"})
+        self.assertEqual(code, 200)
+        self.assertIn("diamond_sword", text)
+        self.assertEqual(self.mc.slots[2]["id"], "minecraft:diamond_sword")
+        forwarded = next(body for path, body in self.mc.calls if path == "/api/add-item")
+        self.assertEqual(forwarded["count"], 3)
+        self.assertEqual(forwarded["player"], "console")
+        self.assertEqual(self.red.calls, [])
+        self.assertIsNone(self.bridge.origin)
+
+    def test_add_item_validates_count_and_player(self):
+        for body in ({"item": "minecraft:diamond_sword"},
+                     {"item": "minecraft:diamond_sword", "count": 0, "player": "console"},
+                     {"item": "minecraft:diamond_sword", "count": 1.5, "player": "console"},
+                     {"item": "minecraft:diamond_sword", "count": 1, "player": "someone_else"},
+                     {"item": 1, "count": 1, "player": "console"}):
+            self.assertEqual(self.request("/ui/add-item", body)[0], 400)
+        # Rejected bodies must never reach Minecraft with a mutation.
+        self.assertFalse(any(body is not None for _, body in self.mc.calls))
+
+    def test_crafting_route_is_gone(self):
+        self.assertEqual(self.request("/ui/craft", {"recipe": "minecraft:oak_planks"})[0], 404)
+        self.assertFalse(any(body is not None for _, body in self.mc.calls))
+
     def test_inventory_mutations_need_neither_red_nor_anchor(self):
         code, text = self.request("/ui/grant", {"item": "minecraft:diamond_sword"})
         self.assertEqual(code, 200)
-        self.assertIn("diamond_sword: 1", text)
+        self.assertIn("钻石剑 (minecraft:diamond_sword): 1", text)
         self.assertIn("inventory actions require Minecraft only", text)
         self.assertEqual(self.request("/ui/select", {"slot": 2})[0], 200)
         self.assertEqual(self.request("/ui/consume", {})[0], 200)
@@ -160,10 +195,14 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.assertEqual(rows[0], ["catalog", "4", "0", "2"])
         self.assertEqual(len(rows), 3)
         self.assertTrue(all(len(row) == 6 for row in rows[1:]))
-        self.assertEqual(rows[2][2], "Ender Pearl ")
+        self.assertEqual(rows[2][2], "末影 珍珠 ")
         code, text = self.request("/ui/catalog?search=SWORD&offset=0&limit=50")
         self.assertEqual(code, 200)
         self.assertEqual(text.splitlines()[0], "catalog\t1\t0\t-1")
+        self.assertIn("minecraft:diamond_sword", text)
+        # Search also matches the Chinese name MC now reports.
+        code, text = self.request("/ui/catalog?search=%E9%92%BB%E7%9F%B3&offset=0&limit=50")
+        self.assertEqual(code, 200)
         self.assertIn("minecraft:diamond_sword", text)
         self.assertEqual(self.request("/ui/catalog?search=missing")[1], "catalog\t0\t0\t-1")
         self.assertEqual(self.red.calls, [])
@@ -182,7 +221,7 @@ class BridgeHTTPChecks(unittest.TestCase):
     def test_summary_reports_mc_inventory_while_game_is_closed(self):
         code, text = self.request("/ui/state")
         self.assertEqual(code, 200)
-        self.assertIn("oak_planks: 2", text)
+        self.assertIn("橡木木板 (minecraft:oak_planks): 2", text)
         self.assertIn("Red-side building unavailable", text)
         self.assertNotIn("Minecraft backend not ready", text)
 

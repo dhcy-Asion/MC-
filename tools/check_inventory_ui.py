@@ -13,7 +13,7 @@ using namespace mc_inventory;
 std::string inventory() {
     std::string out = "inventory\t9\t1\n";
     for (int n=0;n<36;++n) out += "slot\t" + std::to_string(n) +
-        (n==1 ? "\tminecraft:ender_pearl\t16\t16\tEnder Pearl\n" : "\t-\t0\t0\t\n");
+        (n==1 ? "\tminecraft:ender_pearl\t16\t16\t末影珍珠\n" : "\t-\t0\t0\t\n");
     return out;
 }
 int main() {
@@ -25,6 +25,7 @@ int main() {
     Inventory inv;
     assert(ParseInventory(inventory(),inv) && inv.selected==1 && inv.slots[1].count==16);
     assert(inv.slots[0].id.empty());
+    assert(inv.slots[1].name == "末影珍珠");
     auto bad=inventory(); bad.erase(bad.find("slot\t35"));
     assert(!ParseInventory(bad,inv) && inv.slots[1].count==16); // failure is atomic
     bad=inventory(); bad.replace(bad.find("slot\t35"),7,"slot\t34");
@@ -37,19 +38,19 @@ int main() {
     assert(!ParseInventory(bad,inv));
     assert(!ParseInventory(std::string(65537,'x'),inv));
     Catalog cat;
-    assert(ParseCatalog("catalog\t2\t0\t1\nitem\tminecraft:stone\tStone\t64\t1\t1\n",cat));
-    assert(cat.next==1 && cat.items[0].maxCount==64);
-    assert(ParseCatalog("catalog\t2\t1\t-1\nitem\tminecraft:bow\tBow\t1\t0\t0\n",cat));
+    assert(ParseCatalog("catalog\t2\t0\t1\nitem\tminecraft:stone\t石头\t64\t1\t1\n",cat));
+    assert(cat.next==1 && cat.items[0].maxCount==64 && cat.items[0].name=="石头");
+    assert(ParseCatalog("catalog\t2\t1\t-1\nitem\tminecraft:bow\t弓\t1\t0\t0\n",cat));
     assert(!cat.items[0].placeSupported && !cat.items[0].isBlock);
     assert(ParseCatalog("catalog\t0\t0\t-1\n",cat) && cat.items.empty());
     assert(!ParseCatalog("catalog\t2\t0\t-1\n",cat)); // incomplete page
     assert(!ParseCatalog("catalog\t2\t3\t-1\n",cat));
-    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tminecraft:bow\tBow\t0\t0\t0\n",cat));
-    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tminecraft:bow\tBow\t1\t2\t0\n",cat));
-    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tbad\tBow\t1\t0\t0\n",cat));
-    assert(!ParseCatalog("catalog\t2\t0\t-1\nitem\tminecraft:bow\tBow\t1\t0\t0\n"
-                        "item\tminecraft:bow\tBow\t1\t0\t0\n",cat));
-    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tminecraft:bow\tBow\t1\t0\n",cat));
+    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tminecraft:bow\t弓\t0\t0\t0\n",cat));
+    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tminecraft:bow\t弓\t1\t2\t0\n",cat));
+    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tbad\t弓\t1\t0\t0\n",cat));
+    assert(!ParseCatalog("catalog\t2\t0\t-1\nitem\tminecraft:bow\t弓\t1\t0\t0\n"
+                        "item\tminecraft:bow\t弓\t1\t0\t0\n",cat));
+    assert(!ParseCatalog("catalog\t1\t0\t-1\nitem\tminecraft:bow\t弓\t1\t0\n",cat));
     std::cout << "Native inventory decoder checks passed: valid pages/slots, bounds, malformed/truncated responses, atomic rejection\n";
 }
 '''

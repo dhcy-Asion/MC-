@@ -11,6 +11,8 @@
 #include "mc_inventory_ui.h"
 #include "mc_inventory_protocol.h"
 #include "i18n.h"
+#include "core.h"
+#include "overlay.h"
 
 namespace mc_inventory_ui {
 namespace {
@@ -32,6 +34,9 @@ ULONGLONG lastInventoryPoll = 0;
 char search[256] = {};
 std::string fetchSearch, appliedSearch;
 int fetchOffset = 0, cell[3] = {0,0,0};
+// Direct addition to the MC experiment inventory, by ID or exact name.
+char addId[128] = {};
+int addCount = 1;
 std::string message = "正在连接 MC 实验背包……";
 std::string details;
 bool lastMutationFailed = false;
@@ -104,16 +109,66 @@ bool Placeable(const std::string& id) {
     return id == "minecraft:oak_log" || id == "minecraft:oak_planks" || id == "minecraft:cobblestone" ||
            id == "minecraft:dirt" || id == "minecraft:stone" || id == "minecraft:crafting_table";
 }
-std::string ShortName(const std::string& text) {
-    size_t end = 0;
-    int characters = 0;
-    while (end < text.size() && characters < 4) {
-        const unsigned char ch = (unsigned char)text[end];
-        size_t length = ch < 0x80 ? 1 : ch < 0xE0 ? 2 : ch < 0xF0 ? 3 : 4;
-        if (length > text.size() - end) break;
-        end += length; ++characters;
+bool IconButton(const std::string& id, int count, int slot = -1) {
+    const float width = std::max(32.0f, ImGui::GetContentRegionAvail().x);
+    const bool clicked = ImGui::Button("##MCItemIcon", ImVec2(width,60));
+    const ImVec2 top = ImGui::GetItemRectMin(), bottom = ImGui::GetItemRectMax();
+    auto* draw = ImGui::GetWindowDrawList();
+    ImTextureID texture = 0;
+    // IDs from MC are identifiers, never filenames supplied by a user.
+    if (id.rfind("minecraft:",0) == 0 && id.size() > 10 &&
+        id.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_",10) == std::string::npos) {
+        const std::string file = core::ModDir() + "\\mc-icons\\" + id.substr(10) + ".png";
+        texture = overlay::Thumb(file);
     }
-    return text.substr(0,end) + (end < text.size() ? "…" : "");
+    if (texture) {
+        const float side = std::min(44.0f,width-8);
+        const ImVec2 center((top.x+bottom.x)*0.5f,(top.y+bottom.y)*0.5f-3);
+        draw->AddImage(texture, ImVec2(center.x-side/2,center.y-side/2),
+                       ImVec2(center.x+side/2,center.y+side/2));
+    } else if (!id.empty()) {
+        const auto size = ImGui::CalcTextSize("?");
+        draw->AddText(ImVec2((top.x+bottom.x-size.x)/2,(top.y+bottom.y-size.y)/2),
+                      IM_COL32(210,210,210,255),"?");
+    }
+    if (slot >= 0) {
+        const auto label = std::to_string(slot+1);
+        draw->AddText(ImVec2(top.x+3,top.y+2),IM_COL32(190,190,190,255),label.c_str());
+    }
+    if (count > 0) {
+        const auto label = std::to_string(count);
+        const auto size = ImGui::CalcTextSize(label.c_str());
+        const ImVec2 position(bottom.x-size.x-4,bottom.y-size.y-2);
+        draw->AddText(ImVec2(position.x+1,position.y+1),IM_COL32(0,0,0,255),label.c_str());
+        draw->AddText(position,IM_COL32(255,255,255,255),label.c_str());
+    }
+    return clicked;
+}
+void IconTooltip(const std::string& id, const std::string& name, int count, int maxCount,
+                 bool catalogItem, bool unsupportedBlock = false, int slot = -1, bool selected = false) {
+    if (!ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) return;
+    ImGui::BeginTooltip();
+    if (slot >= 0) ImGui::Text("第 %d 槽%s",slot+1,selected ? "（已选中）" : "");
+    if (id.empty()) ImGui::TextUnformatted("空槽位也可以选择");
+    else {
+        ImGui::TextUnformatted(name.c_str());
+        ImGui::TextDisabled("%s",id.c_str());
+        if (catalogItem) ImGui::Text("点击获取一组：%d 件",maxCount);
+        else ImGui::Text("数量 %d，最大堆叠 %d",count,maxCount);
+        if (unsupportedBlock) ImGui::TextUnformatted("方块：放置待接入");
+        ImGui::TextDisabled("图标为物品类型预览，属性外观尚未同步。");
+    }
+    ImGui::EndTooltip();
+}
+std::string JsonString(const std::string& value) {
+    std::string quoted = "\"";
+    for (char ch : value) {
+        const unsigned char byte = (unsigned char)ch;
+        if (ch == '"' || ch == '\\') { quoted += '\\'; quoted += ch; }
+        else if (byte < 0x20) { char escape[8]; std::snprintf(escape, sizeof escape, "\\u%04X", byte); quoted += escape; }
+        else quoted += ch;
+    }
+    return quoted + "\"";
 }
 void CollectReply() {
     if (!pending.valid() || pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
@@ -162,7 +217,12 @@ void Glyphs() {
         "放置选中方块（指定坐标／旧前方方式）目前可放置原木、木板、圆石、泥土、石头和工作台。"
         "需要先建立实验原点；放置方式尚非准星。相对方块坐标到一格约一米，最多方块。"
         "库存尚未读取，操作暂不可用。物品目录：自由领取，使用时消耗搜索支持名称或物品ID搜索"
-        "共项，当前筛选：上一页下一页没有匹配的物品。方块：放置待接入获取一组最近操作信息原有建造与合成操作…×—");
+        "共项，当前筛选：上一页下一页没有匹配的物品。方块：放置待接入获取一组最近操作信息建造操作…×—"
+        "直接添加物品（控制台方式）输入物品或中文／英文名称与数量，直接放入背包。无需合成。"
+        "添加到背包方块、工具与食物均可添加。"
+        "物品ID名称钻石剑支持中文名搜索重名物品请使用无需合成。"
+        "点击图标获取一组，悬停查看中文名称。图标为物品类型预览，属性外观尚未同步。"
+        "点击获取一组：件图标未安装或正在加载时显示问号。");
 }
 }
 
@@ -195,7 +255,8 @@ void Draw(bool otherBusy) {
         ImGui::Text("当前选中：第 %d 槽", inventory.selected+1);
         if (held.id.empty()) ImGui::TextDisabled("空槽位");
         else ImGui::TextWrapped("%s × %d / %d", held.name.c_str(), held.count, held.maxCount);
-        if (ImGui::BeginTable("MCInventorySlots", 6, ImGuiTableFlags_SizingStretchSame)) {
+        const int columns = std::clamp((int)(ImGui::GetContentRegionAvail().x / 64.0f), 1, 6);
+        if (ImGui::BeginTable("MCInventorySlots", columns, ImGuiTableFlags_SizingStretchSame)) {
             for (int index = 0; index < 36; ++index) {
                 ImGui::TableNextColumn(); ImGui::PushID(index);
                 const auto& slot = inventory.slots[index];
@@ -204,23 +265,12 @@ void Draw(bool otherBusy) {
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.24f,0.47f,0.22f,1));
                     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f,0.57f,0.28f,1));
                 }
-                char count[64];
-                std::snprintf(count, sizeof count, "%02d: ", index+1);
-                std::string label = count + (slot.id.empty() ? std::string("空") : ShortName(slot.name));
-                label += "\n" + (slot.id.empty() ? std::string("—") : std::to_string(slot.count));
                 ImGui::BeginDisabled(busy);
-                if (ImGui::Button(label.c_str(), ImVec2(-1,45)))
+                if (IconButton(slot.id,slot.count,index))
                     Mutation(L"/ui/select", "{\"slot\":" + std::to_string(index) + "}");
                 ImGui::EndDisabled();
                 if (chosen) ImGui::PopStyleColor(2);
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::BeginTooltip();
-                    ImGui::Text("第 %d 槽%s", index+1, chosen ? "（已选中）" : "");
-                    if (slot.id.empty()) ImGui::TextUnformatted("空槽位也可以选择");
-                    else { ImGui::TextUnformatted(slot.name.c_str()); ImGui::TextUnformatted(slot.id.c_str());
-                           ImGui::Text("数量 %d，最大堆叠 %d",slot.count,slot.maxCount); }
-                    ImGui::EndTooltip();
-                }
+                IconTooltip(slot.id,slot.name,slot.count,slot.maxCount,false,false,index,chosen);
                 ImGui::PopID();
             }
             ImGui::EndTable();
@@ -243,9 +293,28 @@ void Draw(bool otherBusy) {
             if (ImGui::Button("前方放置（旧方式）")) Mutation(L"/ui/front-selected", "{}");
             ImGui::EndDisabled();
         }
+        if (ImGui::CollapsingHeader("直接添加物品（控制台方式）")) {
+            ImGui::TextWrapped("输入物品 ID 或中文／英文名称与数量，直接放入背包。重名物品请使用 ID。无需合成。");
+            ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x-90));
+            ImGui::InputTextWithHint("##MCAddItem", "minecraft:diamond_sword 或 钻石剑", addId, sizeof addId);
+            ImGui::SetNextItemWidth(90);
+            ImGui::InputInt("数量", &addCount);
+            if (addCount < 1) addCount = 1;
+            if (addCount > 6400) addCount = 6400;
+            ImGui::BeginDisabled(busy || addId[0] == '\0');
+            if (ImGui::Button("添加到背包")) {
+                const std::string body = "{\"item\":" + JsonString(addId) + ",\"count\":" +
+                    std::to_string(addCount) + "}";
+                Mutation(L"/ui/add-item", body);
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled("方块、工具与食物均可添加。");
+        }
     } else ImGui::TextDisabled("库存尚未读取，操作暂不可用。");
     ImGui::Separator();
     ImGui::TextUnformatted("物品目录：自由领取，使用时消耗");
+    ImGui::TextWrapped("点击图标获取一组，悬停查看中文名称。图标未安装或正在加载时显示问号。");
     ImGui::SetNextItemWidth(std::max(100.0f, ImGui::GetContentRegionAvail().x-70));
     const bool enter = ImGui::InputText("##MCItemSearch", search, sizeof search, ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::SameLine();
@@ -253,7 +322,7 @@ void Draw(bool otherBusy) {
     const bool clicked = ImGui::Button("搜索");
     if ((enter || clicked) && !busy) QueueCatalog(0, search);
     ImGui::EndDisabled();
-    ImGui::TextDisabled("支持名称或 minecraft:物品ID 搜索");
+    ImGui::TextDisabled("支持中文名称或 minecraft:物品ID 搜索");
     if (haveCatalog) {
         ImGui::Text("共 %d 项，当前 %d—%d", catalog.total, catalog.total ? catalog.offset+1 : 0,
                     catalog.offset+(int)catalog.items.size());
@@ -266,22 +335,19 @@ void Draw(bool otherBusy) {
         ImGui::EndDisabled();
         if (ImGui::BeginChild("MCItemCatalog",ImVec2(0,230),true)) {
             if (catalog.items.empty()) ImGui::TextUnformatted("没有匹配的物品。");
-            for (const auto& item : catalog.items) {
-                ImGui::PushID(item.id.c_str());
-                if (ImGui::BeginTable("row",2,ImGuiTableFlags_SizingStretchProp)) {
-                    ImGui::TableSetupColumn("物品",ImGuiTableColumnFlags_WidthStretch);
-                    ImGui::TableSetupColumn("领取",ImGuiTableColumnFlags_WidthFixed,140);
+            const int columns = std::clamp((int)(ImGui::GetContentRegionAvail().x/64.0f),1,8);
+            if (ImGui::BeginTable("MCItemIcons",columns,ImGuiTableFlags_SizingStretchSame)) {
+                for (const auto& item : catalog.items) {
                     ImGui::TableNextColumn();
-                    ImGui::TextWrapped("%s",item.name.c_str());
-                    if (ImGui::IsItemHovered()) { ImGui::BeginTooltip(); ImGui::TextUnformatted(item.id.c_str()); ImGui::EndTooltip(); }
-                    if (item.isBlock && !item.placeSupported) ImGui::TextDisabled("方块：放置待接入");
-                    ImGui::TableNextColumn();
-                    char label[96]; std::snprintf(label,sizeof label,"获取一组（%d）",item.maxCount);
+                    ImGui::PushID(item.id.c_str());
                     ImGui::BeginDisabled(busy || !haveInventory);
-                    if (ImGui::Button(label,ImVec2(-1,0))) Mutation(L"/ui/grant", "{\"item\":\""+item.id+"\"}");
-                    ImGui::EndDisabled(); ImGui::EndTable();
+                    if (IconButton(item.id,item.maxCount))
+                        Mutation(L"/ui/grant", "{\"item\":"+JsonString(item.id)+"}");
+                    ImGui::EndDisabled();
+                    IconTooltip(item.id,item.name,0,item.maxCount,true,item.isBlock && !item.placeSupported);
+                    ImGui::PopID();
                 }
-                ImGui::Separator(); ImGui::PopID();
+                ImGui::EndTable();
             }
         }
         ImGui::EndChild();

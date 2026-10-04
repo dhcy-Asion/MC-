@@ -186,7 +186,7 @@ def main():
     old_slots = [None] * 36
     old_slots[0] = {"id": "minecraft:oak_planks", "count": 1}
     old_slots[1] = {"id": "minecraft:oak_planks", "count": 5}
-    old_slots[2] = {"id": "minecraft:iron_sword", "count": 1, "components": {"minecraft:damage": 7}}
+    old_slots[2] = {"id": "minecraft:iron_sword", "count": 1, "components": {"minecraft:damage": 7, "minecraft:custom_name": '"用户命名的剑"'}}
     legacy = {"revision": 23, "slots": old_slots,
               "touched": [{"x": 0, "y": 64, "z": 0, "block": "minecraft:stone"}]}
     server.write_snapshot(legacy)
@@ -195,21 +195,63 @@ def main():
         migrated = json.loads(server.state_file.read_text(encoding="utf-8"))
         check(migrated["schemaVersion"] == 1 and migrated["selectedSlot"] == 0, "Legacy snapshot was not migrated")
         check(migrated["slots"] == old_slots and migrated["touched"] == legacy["touched"], "Legacy migration lost existing materials/blocks")
+        check(initial["slots"][2]["name"] == "用户命名的剑", "Custom item name lost during localization")
         check(initial["revision"] == 23 and initial["inventory"] == {"minecraft:oak_planks": 6, "minecraft:iron_sword": 1}, "Legacy state changed")
         check(len(initial["slots"]) == 36 and [s["slot"] for s in initial["slots"]] == list(range(36)), "Slot contract invalid")
         evidence["checks"].append("Legacy 36-slot inventory and touched blocks migrate without losses or revision change")
 
         catalog = call("catalog")["items"]
         by_id = {item["id"]: item for item in catalog}
-        check(len(by_id) == len(catalog) and len(catalog) > 1000, "Registry catalog is incomplete or has duplicates")
-        check("minecraft:air" not in by_id, "Air should not be grantable")
+        check(len(by_id) == len(catalog) == 1332, "Catalog must list all 1332 vanilla non-air items independently")
+        check("minecraft:air" not in by_id and all(" " not in row["id"] for row in catalog), "Invalid/merged catalog IDs")
+        language_file = ROOT / "downloads/minecraft-lang-1.21.1-zh_cn.json"
+        check(hashlib.sha1(language_file.read_bytes()).hexdigest() == "f87510f4509890eaf176e0de1430f6bb326a6800", "Wrong language fixture")
+        translations = json.loads(language_file.read_text(encoding="utf-8"))
+        for row in catalog:
+            check(row["name"] == translations[row["translationKey"]], f"Chinese name differs from official MC translation: {row['id']}")
         for item, expected in [("minecraft:oak_planks", 64), ("minecraft:ender_pearl", 16), ("minecraft:diamond_sword", 1)]:
-            check(by_id[item]["maxCount"] == expected and by_id[item]["name"], f"Wrong vanilla item catalog entry {item}")
-        check({i["id"] for i in catalog if i["placeSupported"]} == {
-            "minecraft:oak_log", "minecraft:oak_planks", "minecraft:cobblestone", "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table"}, "Catalog overstates supported placement")
+            check(by_id[item]["maxCount"] == expected, f"Wrong maximum stack: {item}")
+        check(by_id["minecraft:raw_copper"]["name"] == "粗铜", "Raw ore mistranslated as food")
+        wools = [row for row in catalog if row["id"].endswith("_wool")]
+        check(len(wools) == len({row["name"] for row in wools}) == 16, "Dyed wool IDs/names collapsed")
+        check({row["id"] for row in catalog if row["placeSupported"]} == {
+            "minecraft:oak_log", "minecraft:oak_planks", "minecraft:cobblestone", "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table"}, "Catalog overstates placement")
         evidence["catalogCount"] = len(catalog)
-        evidence["checks"].append("Complete non-air MC registry catalog reports native maximum stacks 64/16/1 and actual placement limits")
+        evidence["catalogItems"] = len(catalog)
+        evidence["languageSha1"] = "f87510f4509890eaf176e0de1430f6bb326a6800"
+        evidence["checks"].append("All 1332 independent item IDs exactly match official MC 1.21.1 zh_cn; 16 wool colours and 64/16/1 stack limits retained")
+        duplicate_name = next(row["name"] for row in catalog if sum(other["name"] == row["name"] for other in catalog) > 1)
+        rejected("add-item", item=duplicate_name, count=1)
+        evidence["checks"].append("Ambiguous official display names reject without silently selecting an item")
 
+        # Crafting is removed; the console add path replaces it for blocks, tools and food.
+        rejected("craft", recipe="minecraft:oak_planks")
+        before_add = call()
+        added = mutate("add-item", item="圆石", count=100, player="console")
+        delta(before_add, added, {"minecraft:cobblestone": 100})
+        slot = next(s for s in added["slots"] if s.get("id") == "minecraft:cobblestone")
+        check(slot["name"] == "圆石", "Inventory slot name is not Chinese")
+        tool = mutate("add-item", item="minecraft:diamond_sword", count=2, player="console")
+        delta(added, tool, {"minecraft:diamond_sword": 2})
+        food = mutate("add-item", item="苹果", count=3, player="console")
+        delta(tool, food, {"minecraft:apple": 3})
+        english = mutate("add-item", item="Diamond Sword", count=1)
+        delta(food, english, {"minecraft:diamond_sword": 1})
+        bare = mutate("add-item", item="apple", count=1)
+        delta(english, bare, {"minecraft:apple": 1})
+        body = {"operationId": str(uuid.uuid4()), "item": "苹果", "count": 2}
+        once = call("add-item", body)
+        check(call("add-item", body) == once and call() == {k:v for k,v in once.items() if k != "operationId"}, "Bulk-add retry duplicated items")
+        evidence["checks"].append("Crafting is gone; console add-item inserts blocks, tools and food by ID or Chinese name")
+
+        rejected("add-item", item="minecraft:does_not_exist", count=1, player="console")
+        rejected("add-item", item="minecraft:air", count=1, player="console")
+        rejected("add-item", item="minecraft:dirt", count=0, player="console")
+        rejected("add-item", item="minecraft:dirt", count=1.5)
+        rejected("add-item", item="minecraft:dirt", count=True)
+        rejected("add-item", item="minecraft:dirt", count=6401)
+        rejected("add-item", item="minecraft:diamond_sword", count=37)
+        rejected("add-item", item="minecraft:dirt", count=1, player="not_a_player")
         rejected("grant", item="minecraft:does_not_exist")
         rejected("grant", item="minecraft:air")
         rejected("grant", item="minecraft:dirt", operationId="")
@@ -237,11 +279,17 @@ def main():
 
         state = mutate("grant", item="minecraft:diamond_sword")
         swords = [s for s in state["slots"] if s.get("id") == "minecraft:diamond_sword"]
-        check(len(swords) == 2 and all(s["count"] == 1 for s in swords), "Unstackable items merged")
+        total_swords = state["inventory"]["minecraft:diamond_sword"]
+        # A max-stack-1 tool must occupy one slot per copy: never merged, never over-counted.
+        check(total_swords == len(swords) and all(s["count"] == 1 for s in swords),
+              "Unstackable items merged or miscounted across slots")
         mutate("select", slot=swords[0]["slot"])
         consumed = mutate("consume")
         check(consumed["selectedItem"] is None and consumed["selectedSlot"] == swords[0]["slot"], "Consuming final item changed selection")
-        check(consumed["inventory"]["minecraft:diamond_sword"] == 1 and consumed["slots"][swords[1]["slot"]]["count"] == 1, "Consume pulled from a different slot")
+        remaining = [s for s in consumed["slots"] if s.get("id") == "minecraft:diamond_sword"]
+        check(consumed["inventory"]["minecraft:diamond_sword"] == total_swords - 1
+              and len(remaining) == len(swords) - 1 and all(s["count"] == 1 for s in remaining),
+              "Consume pulled from a different slot")
         rejected("consume")
         evidence["checks"].append("Explicit item consumption empties only selected slot and never pulls from another stack")
 
@@ -254,17 +302,13 @@ def main():
         rejected("place-selected", x=0, y=64, z=0)
         evidence["checks"].append("Unsupported blocks and occupied cells reject placement before any consumption")
 
-        before_craft = mutate("grant", item="minecraft:oak_log")
-        planks = mutate("craft", recipe="minecraft:oak_planks")
-        delta(before_craft, planks, {"minecraft:oak_log": -1, "minecraft:oak_planks": 4})
-        sticks = mutate("craft", recipe="minecraft:stick")
-        delta(planks, sticks, {"minecraft:oak_planks": -2, "minecraft:stick": 4})
-        table = mutate("craft", recipe="minecraft:crafting_table")
-        delta(sticks, table, {"minecraft:oak_planks": -4, "minecraft:crafting_table": 1})
+        before_craft = call()
+        # There is no crafting endpoint any more; only the console add path introduces items.
+        rejected("craft", recipe="minecraft:oak_planks")
         broken = mutate("break", x=0, y=65, z=0)
-        delta(table, broken, {"minecraft:oak_planks": 1})
+        delta(before_craft, broken, {"minecraft:oak_planks": 1})
         check(not any(b["x"] == 0 and b["y"] == 65 and b["z"] == 0 for b in broken["blocks"]), "Break did not remove test block")
-        evidence["checks"].append("All three existing vanilla recipes and diamond-pickaxe block drops still work")
+        evidence["checks"].append("Crafting remains removed while diamond-pickaxe block drops still work")
 
         before_save_failure = call()
         disk_hash = hashlib.sha256(server.state_file.read_bytes()).hexdigest()
@@ -312,8 +356,9 @@ def main():
         before_full = call()
         check(before_full["inventory"]["minecraft:oak_planks"] == 63, "Partial-capacity fixture was lost")
         rejected("grant", item="minecraft:oak_planks")
+        rejected("add-item", item="橡木木板", count=2)
         check(call() == before_full, "Full grant kept a partial insertion")
-        evidence["checks"].append("A whole-stack grant rolls back its one inserted plank when only one of 64 can fit")
+        evidence["checks"].append("Whole-stack grant and counted add both roll back partial insertion when only one plank fits")
 
         before_restart = call()
         server.stop()
@@ -321,7 +366,7 @@ def main():
         check(after_restart == before_restart, "Normal restart lost slot contents, selected slot, revision or blocks")
         saved_restart = json.loads(server.state_file.read_text(encoding="utf-8"))
         damaged_swords = [s for s in saved_restart["slots"] if s and s["id"] == "minecraft:iron_sword"]
-        check(damaged_swords[0]["components"]["minecraft:damage"] == 7, "Restart lost real item damage component")
+        check(damaged_swords[0]["components"] == old_slots[2]["components"], "Restart lost damage/custom-name components")
         evidence["checks"].append("Normal restart preserves all 36 slots, selection, inventory components and touched blocks")
         server.stop()
 

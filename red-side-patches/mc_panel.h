@@ -1,2 +1,2 @@
 #pragma once
-namespace mc_panel { void Draw(); }
+namespace mc_panel { void Draw(); bool ShowWorldBuilder(); }

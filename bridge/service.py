@@ -1,7 +1,7 @@
 """Local bridge: real Minecraft state -> native red-side collision proxies.
 
 This first slice uses the game's one-metre grid cube as a diagnostic visual.
-Minecraft owns blocks, inventory, recipes and drops. Only our named scene
+Minecraft owns blocks, inventory and drops; prototype crafting is disabled. Only our named scene
 objects are reconciled; native maps/NPCs/terrain are never enumerated or edited.
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,11 +22,10 @@ PREFAB = "/object/00_common/system/cd_testfield_grid_box_1m.prefab"
 PROJECT = "CrimsonMCPrototype"
 ALLOWED_BLOCKS = {"minecraft:oak_log", "minecraft:oak_planks", "minecraft:cobblestone",
                   "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table"}
-ALLOWED_RECIPES = {"minecraft:oak_planks", "minecraft:stick", "minecraft:crafting_table"}
-INVENTORY_ACTIONS = {"/ui/grant", "/ui/select", "/ui/consume"}
+INVENTORY_ACTIONS = {"/ui/grant", "/ui/add-item", "/ui/select", "/ui/consume"}
 PLACEMENT_ACTIONS = {"/ui/place", "/ui/front", "/ui/place-selected", "/ui/front-selected"}
 ACTIONS = INVENTORY_ACTIONS | PLACEMENT_ACTIONS | {
-    "/ui/anchor", "/ui/reconnect", "/ui/craft", "/ui/break", "/ui/break-last"}
+    "/ui/anchor", "/ui/reconnect", "/ui/break", "/ui/break-last"}
 
 
 def strict_integer(value, name, minimum, maximum):
@@ -154,6 +153,20 @@ class Bridge:
                         raise GameAPIError("item must be a Minecraft item ID")
                     mutation["item"] = item
                     verb = "Granted one original Minecraft stack of " + item
+                elif path == "/ui/add-item":
+                    # Console-style direct add: item ID or name, an explicit count and a player.
+                    item = body.get("item")
+                    if not isinstance(item, str) or not item or len(item) > 256:
+                        raise GameAPIError("item must be a Minecraft item ID or name")
+                    count = strict_integer(body.get("count"), "count", 1, 6400)
+                    player = body.get("player", "console")
+                    if not isinstance(player, str) or not player or len(player) > 64:
+                        raise GameAPIError("player must be a target player name")
+                    if player != "console":
+                        # This prototype has no real MC player entity; reject rather than guess.
+                        raise GameAPIError("unknown player; this prototype owns one console inventory")
+                    mutation.update({"item": item, "count": count, "player": player})
+                    verb = f"Added {count} x {item} to {player}"
                 elif path == "/ui/select":
                     mutation["slot"] = strict_integer(body.get("slot"), "slot", 0, 35)
                     verb = f"Selected Minecraft inventory slot {mutation['slot']} (native hand model not connected)"
@@ -173,13 +186,6 @@ class Bridge:
             self.ready()
             if self.origin is None:
                 raise GameAPIError("Set an anchor first")
-            if path == "/ui/craft":
-                recipe = body.get("recipe")
-                if recipe not in ALLOWED_RECIPES:
-                    raise GameAPIError("Unsupported recipe")
-                result = mutate_mc("/api/craft", {"recipe": recipe, "operationId": str(uuid.uuid4())})
-                self.message = f"Crafted via Minecraft's own recipe: {recipe}. Revision {result['revision']}"
-                return
             state = mc()
             if len(state["blocks"]) >= 128 and path in PLACEMENT_ACTIONS:
                 raise GameAPIError("Native proxy limit: 128 blocks")
@@ -285,7 +291,8 @@ class Bridge:
                 state = mc() if state is None else state
                 lines += [f"MC revision: {state['revision']} | blocks: {len(state['blocks'])}",
                           "Anchor: " + ("set" if self.origin else "not set"), "", "Inventory:"]
-                lines += [f"  {k.removeprefix('minecraft:')}: {v}" for k,v in state["inventory"].items()]
+                lines += [f"  {slot['name']} ({slot['id']}): {slot['count']}"
+                          for slot in state["slots"] if not slot["empty"]]
             except Exception as error:
                 lines += ["Minecraft backend not ready: " + str(error)]
             if check_red:

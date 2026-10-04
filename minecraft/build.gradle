@@ -17,6 +17,7 @@ loom {
             runDir '../runtime/minecraft-server'
             vmArg '-Xmx2G'
             vmArg '-Dcrimsonmc.port=8766'
+            vmArg '-Dcrimsonmc.languageFile=' + file('../downloads/minecraft-lang-1.21.1-zh_cn.json').absolutePath
             programArg 'nogui'
         }
     }

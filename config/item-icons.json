@@ -1,0 +1,18 @@
+{
+  "minecraftVersion": "1.21.1",
+  "source": "https://github.com/TinyTank800/MinecraftAllImages",
+  "commit": "8888a461f088c6b907f13c14f25a12d90a481ae3",
+  "archiveUrl": "https://raw.githubusercontent.com/TinyTank800/MinecraftAllImages/8888a461f088c6b907f13c14f25a12d90a481ae3/public/images-v2/1.21.1.zip",
+  "archiveSha256": "ccd08c21dce8fdc16985784329ea73a4dfa3e885342d94afd6b47fb68442dab8",
+  "archiveBytes": 6382204,
+  "iconCount": 1332,
+  "typePreviews": {
+    "potion": "potion__water_bottle__8281f226.png",
+    "splash_potion": "splash_potion__splash_water_bottle__8281f226.png",
+    "lingering_potion": "lingering_potion__lingering_water_bottle__8281f226.png",
+    "tipped_arrow": "tipped_arrow__649e2315.png",
+    "enchanted_book": "enchanted_book__enchanted_book_aqua_affinity__2b16377d.png",
+    "suspicious_stew": "suspicious_stew__0b18f019.png",
+    "goat_horn": "goat_horn__071c0c27.png"
+  }
+}

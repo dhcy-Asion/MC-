@@ -4,7 +4,7 @@
 *.gradle text eol=lf
 *.md text eol=lf
 *.json text eol=lf
-*.patch text eol=lf
+*.patch text eol=lf whitespace=-blank-at-eol
 *.cpp text eol=lf
 *.h text eol=lf
 *.ps1 text eol=crlf

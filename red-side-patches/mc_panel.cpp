@@ -9,6 +9,8 @@
 #include <cstdio>
 #include "mc_panel.h"
 #include "mc_inventory_ui.h"
+#include "i18n.h"
+#include "core.h"
 namespace editor { bool IsOpen(); bool PlayMode(); }
 
 namespace mc_panel {
@@ -23,6 +25,7 @@ std::string summary = "Connecting to the local Minecraft bridge...";
 ULONGLONG lastPoll = 0;
 int selected = 0;
 int cell[3] = {0, 0, 0};
+bool showWorldBuilder = false;
 const char* ids[] = {"minecraft:oak_planks", "minecraft:oak_log", "minecraft:cobblestone", "minecraft:dirt", "minecraft:crafting_table"};
 const char* labels[] = {"橡木木板", "橡木原木", "圆石", "泥土", "工作台"};
 
@@ -63,19 +66,25 @@ std::string BlockBody() {
     return buffer;
 }
 }
+bool ShowWorldBuilder() { return showWorldBuilder; }
 void Draw() {
     if (pending.valid() && pending.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         try {summary=pending.get();} catch (...) {summary="Bridge worker failed";}
         lastPoll = GetTickCount64();
     }
     if (!editor::IsOpen() || editor::PlayMode()) return;
+    i18n::AddGlyphText(summary);
+    i18n::AddGlyphText("真实我的世界版显示红沙世界构建器红沙场景资源；下方目录用于领取物品。");
+    i18n::AddGlyphText("MC 物品控制台与建造建造操作无需合成直接添加物品获取一组真实规则蓝色方块为碰撞测试模型材质尚未接入材料橡木木板原木圆石泥土石头工作台在角色前方建立实验原点恢复放置指定拆除最后一块方块坐标相对到原型最多关闭菜单后继续红沙战斗实验背包由服务端保存与原有独立请在上方目录取得物品。");
     ImGui::SetNextWindowSize(ImVec2(460,650),ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x-490,65),ImGuiCond_FirstUseEver);
-    if (ImGui::Begin("MC 建造与合成原型###crimsonmc")) {
-        ImGui::TextWrapped("真实 Minecraft Java 1.21.1 规则；蓝色方块为碰撞测试模型。MC 材质尚未接入。");
+    if (ImGui::Begin("MC 物品控制台与建造###crimsonmc")) {
+        ImGui::TextWrapped("真实《我的世界》Java 版 1.21.1；场景中的蓝色方块为碰撞测试模型，尚未接入 MC 材质。");
+        ImGui::Checkbox("显示红沙世界构建器", &showWorldBuilder);
+        if (showWorldBuilder) ImGui::TextWrapped("世界构建器列出红沙场景资源；下方目录用于领取 MC 物品。");
         ImGui::Separator();
         mc_inventory_ui::Draw(pending.valid());
-        if (ImGui::CollapsingHeader("原有建造与合成操作")) {
+        if (ImGui::CollapsingHeader("建造操作")) {
         if (!pending.valid() && !mc_inventory_ui::Busy() && GetTickCount64()-lastPoll>1500) Queue(L"/ui/state");
         ImGui::TextWrapped("%s",summary.c_str());
         ImGui::Separator();
@@ -92,13 +101,10 @@ void Draw() {
         if (ImGui::Button("在角色前方放置")) Queue(L"/ui/front",BlockBody());
         ImGui::SameLine();
         if (ImGui::Button("拆除最后一块")) Queue(L"/ui/break-last","{}");
-        ImGui::Separator();
-        if (ImGui::Button("原木 → 4 木板")) Queue(L"/ui/craft","{\"recipe\":\"minecraft:oak_planks\"}");
-        if (ImGui::Button("2 木板 → 4 木棍")) Queue(L"/ui/craft","{\"recipe\":\"minecraft:stick\"}");
-        if (ImGui::Button("4 木板 → 工作台")) Queue(L"/ui/craft","{\"recipe\":\"minecraft:crafting_table\"}");
+        ImGui::TextWrapped("无需合成；请在上方用“直接添加物品（控制台方式）”或“获取一组”取得物品。");
         ImGui::EndDisabled();
         }
-        ImGui::TextWrapped("按 Insert 关闭菜单后继续红沙战斗。实验背包由 MC 服务端保存，与红沙原有背包独立。");
+        ImGui::TextWrapped("按 %s 关闭菜单后继续红沙战斗。实验背包由 MC 服务端保存，与红沙原有背包独立。", core::KeyName(core::g_keyToggle));
     }
     ImGui::End();
 }

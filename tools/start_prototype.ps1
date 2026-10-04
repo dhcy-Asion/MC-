@@ -39,5 +39,15 @@ if(-not $bridgeText){
 if(-not $NoGame -and -not (Get-Process CrimsonDesert -ErrorAction SilentlyContinue)){
     Start-Process -FilePath 'steam://rungameid/3321460'
 }
-Write-Host 'Ready. Enter the Crimson Desert world and press Insert for the MC panel.'
+$menuKey='F8'
+$installationFile=Join-Path $runtimeRoot 'installation.json'
+if(Test-Path -LiteralPath $installationFile){
+    $installation=Get-Content -LiteralPath $installationFile -Raw | ConvertFrom-Json
+    $settingsFile=Join-Path $installation.gameRoot 'bin64\cdmodkit\settings.txt'
+    if(Test-Path -LiteralPath $settingsFile){
+        $keyMatch=[regex]::Match([IO.File]::ReadAllText($settingsFile),'(?m)^key_toggle=([^\r\n]+)')
+        if($keyMatch.Success){$menuKey=$keyMatch.Groups[1].Value}
+    }
+}
+Write-Host "Ready. Enter the Crimson Desert world and press $menuKey for the MC panel."
 Write-Host 'After a game restart, click Restore Blocks in the MC panel.'

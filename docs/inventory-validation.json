@@ -9,28 +9,30 @@
     "forcedStop": false,
     "checks": [
       "Legacy 36-slot inventory and touched blocks migrate without losses or revision change",
-      "Complete non-air MC registry catalog reports native maximum stacks 64/16/1 and actual placement limits",
+      "All 1332 independent item IDs exactly match official MC 1.21.1 zh_cn; 16 wool colours and 64/16/1 stack limits retained",
+      "Ambiguous official display names reject without silently selecting an item",
+      "Crafting is gone; console add-item inserts blocks, tools and food by ID or Chinese name",
       "Unknown items, air and invalid selections leave state unchanged",
       "Selected-slot placement consumes its last block, preserves other stacks and keeps an empty selection",
       "Free grants insert one whole original MC stack for blocks, pearls and unstackable tools",
       "Explicit item consumption empties only selected slot and never pulls from another stack",
       "Unsupported blocks and occupied cells reject placement before any consumption",
-      "All three existing vanilla recipes and diamond-pickaxe block drops still work",
+      "Crafting remains removed while diamond-pickaxe block drops still work",
       "A real snapshot-write failure rolls back inventory, selection, touched cells and revision without changing the saved file",
       "Receipts bind operation IDs to path/body and reject conflicting retries",
-      "A whole-stack grant rolls back its one inserted plank when only one of 64 can fit",
+      "Whole-stack grant and counted add both roll back partial insertion when only one plank fits",
       "Normal restart preserves all 36 slots, selection, inventory components and touched blocks",
       "Unknown future schema disables authority without truncating or overwriting its file"
     ]
   },
   "bridge": {
     "result": "passed",
-    "checks": 15,
+    "checks": 18,
     "mode": "isolated HTTP fixtures"
   },
   "nativeProtocol": {
     "result": "passed",
-    "scope": "C++ host decoder: pages, complete slots, bounds, truncation, duplicate entries, atomic rejection"
+    "scope": "C++ host decoder including UTF-8 Chinese names, complete 36 slots, boundaries, duplicate/truncated responses and atomic rejection"
   },
   "builds": {
     "minecraft": "passed",
@@ -39,17 +41,78 @@
   },
   "live": {
     "installation": "passed",
-    "legacyMigration": "passed, revision/slots/touched unchanged",
-    "panel": "not verified: installed game entered; physical Insert requested because automated short press was not captured"
+    "legacyMigration": "No schema change; existing production slots/touched/revision retained before UI acceptance",
+    "panel": {
+      "result": "partial acceptance",
+      "evidence": [
+        "User confirmed F8 opens the panel",
+        "User screenshot showed Chinese MC slot names",
+        "User confirmed item pictures in inventory/catalog and hover text 橡木原木"
+      ],
+      "imageUiBuild": "321ac5e72b69764bfde4c14a0a14af832b0d467d92dd022f029941572a2d255a",
+      "finalInstalledBuild": "dedc627ff63d45af2d7b5b76043b96cbd8e3c24ce547084f09540f75a3e38a8b",
+      "finalBuildDifference": "Keep World Builder background ticks while hiding its window; image/tooltip code unchanged",
+      "notVerified": [
+        "Final background-tick correction in live gameplay",
+        "Game UI clicks for grant/direct add/select/consume; backend behavior covered by isolated checks"
+      ],
+      "computerUse": "User stopped UI automation; subsequent visual evidence came from user confirmation"
+    },
+    "productionAuthority": {
+      "result": "passed",
+      "mode": "production reads and rejected requests only",
+      "catalogCount": 1332,
+      "officialNameMatches": 1332,
+      "rejections": 7,
+      "userStateUnchanged": true
+    },
+    "menuKey": "F8; replaced Insert following user-reported Steam screenshot conflict; other settings backed up and retained"
   },
   "artifacts": {
-    "artifacts/native/cdmodkit.asi": "4e4f335bcfa4883bfdc9f07c1f62dd4b0335beef24e53360c48a582319357c9f",
-    "artifacts/minecraft/crimsonmc-authority-0.1.0.jar": "56526b6d850a4fbdd91306d1fceb5257eae3ad448b7f21b1cc480cc4c8017d2d"
+    "artifacts/native/cdmodkit.asi": "dedc627ff63d45af2d7b5b76043b96cbd8e3c24ce547084f09540f75a3e38a8b",
+    "artifacts/minecraft/crimsonmc-authority-0.1.0.jar": "d12941ed49a5738ebf93893b249ba0e82d5948f8d9f0d3a6c9726bead9569884"
   },
   "limitations": [
     "No fourth F1 character, Steve model or survival combat",
     "No native hand model or crosshair placement",
     "Only six baseline blocks have native placement support; other block items can be granted and selected",
-    "Non-block consumption is explicit inventory consumption, not item-specific effects"
-  ]
+    "Non-block consumption is explicit inventory consumption, not item-specific effects",
+    "Icons are static item type previews; potion/enchanted/dyed/damage component appearance is not rendered"
+  ],
+  "change": "Disable prototype crafting; counted item addition; official zh_cn; F8; 1332 item pictures and Chinese hover tooltips",
+  "language": {
+    "source": "Minecraft 1.21.1 official asset index 17",
+    "sha1": "f87510f4509890eaf176e0de1430f6bb326a6800",
+    "matches": 1332,
+    "storedInGit": false,
+    "ambiguousNames": "rejected; exact item ID required"
+  },
+  "icons": {
+    "passed": true,
+    "minecraftVersion": "1.21.1",
+    "catalogItems": 1332,
+    "exactIdFiles": 1332,
+    "directRenders": 1325,
+    "componentTypePreviews": {
+      "potion": "potion__water_bottle__8281f226.png",
+      "splash_potion": "splash_potion__splash_water_bottle__8281f226.png",
+      "lingering_potion": "lingering_potion__lingering_water_bottle__8281f226.png",
+      "tipped_arrow": "tipped_arrow__649e2315.png",
+      "enchanted_book": "enchanted_book__enchanted_book_aqua_affinity__2b16377d.png",
+      "suspicious_stew": "suspicious_stew__0b18f019.png",
+      "goat_horn": "goat_horn__071c0c27.png"
+    },
+    "archiveSha256": "ccd08c21dce8fdc16985784329ea73a4dfa3e885342d94afd6b47fb68442dab8",
+    "sourceCommit": "8888a461f088c6b907f13c14f25a12d90a481ae3",
+    "dimensions": [
+      128,
+      128
+    ],
+    "pngValidation": "CRC, complete RGBA stream, rejected corruption/truncation",
+    "inventoryMutations": 0,
+    "gameRendering": "User confirmed pictures and Chinese hover tooltip",
+    "independentDecode": "Pillow decoded all 1332 PNGs, none fully transparent; visual contact sheet checked logs/planks/slabs/stairs/wool/tool/raw copper/food/special types",
+    "installedHashes": "All 1332 matched installation manifest",
+    "storedInGit": false
+  }
 }

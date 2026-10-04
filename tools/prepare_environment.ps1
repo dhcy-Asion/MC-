@@ -49,6 +49,21 @@ Ensure-PortableTool -ArchiveName 'temurin21-jdk.zip' -Url 'https://github.com/ad
 Ensure-PortableTool -ArchiveName 'gradle-8.10.2-bin.zip' -Url 'https://services.gradle.org/distributions/gradle-8.10.2-bin.zip' -Sha256 '31c55713e40233a8303827ceb42ca48a47267a0ad4bab9177123121e71524c26' -Directory 'gradle' -ExpectedFile 'gradle-8.10.2\bin\gradle.bat'
 Ensure-PortableTool -ArchiveName 'Ultimate-ASI-Loader-NoPDB_x64-v9.7.4.zip' -Url 'https://github.com/ThirteenAG/Ultimate-ASI-Loader/releases/download/v9.7.4/Ultimate-ASI-Loader-NoPDB_x64.zip' -Sha256 'e5860e7d9a1805267535b65749575b5e406cc6ea3325c7392189c578815045d1' -Directory 'asi-loader-v9.7.4' -ExpectedFile 'dinput8.dll'
 
+# Minecraft 1.21.1 asset index 17: official zh_cn resource, retained only in ignored downloads.
+# https://piston-meta.mojang.com/v1/packages/9b16298b1dc0697878cec88bb2d96168f5239e4f/17.json
+$languageHash='f87510f4509890eaf176e0de1430f6bb326a6800'
+$languageFile=Join-Path $downloadsRoot 'minecraft-lang-1.21.1-zh_cn.json'
+if(!(Test-Path -LiteralPath $languageFile)){
+    $languagePartial=$languageFile+'.download-'+[Guid]::NewGuid().ToString('N')
+    Invoke-WebRequest -Uri ('https://resources.download.minecraft.net/f8/'+$languageHash) -OutFile $languagePartial -UseBasicParsing
+    if((Get-FileHash -LiteralPath $languagePartial -Algorithm SHA1).Hash -ne $languageHash){throw 'Minecraft zh_cn download checksum mismatch; partial file retained.'}
+    Move-Item -LiteralPath $languagePartial -Destination $languageFile
+}
+if((Get-FileHash -LiteralPath $languageFile -Algorithm SHA1).Hash -ne $languageHash){throw 'Existing Minecraft zh_cn checksum mismatch; file retained.'}
+Write-Host 'Verified official Minecraft 1.21.1 Simplified Chinese language data.'
+& python (Join-Path $PSScriptRoot 'prepare_item_icons.py')
+if($LASTEXITCODE -ne 0){throw 'Item icon preparation failed.'}
+
 $nativeBuild=Join-Path $projectRoot 'build\world-builder\cdmodkit.asi'
 if(!(Test-Path -LiteralPath $nativeBuild -PathType Leaf)){
     $nativeArtifact=Join-Path $projectRoot 'artifacts\native\cdmodkit.asi'

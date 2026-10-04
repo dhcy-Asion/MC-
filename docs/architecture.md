@@ -17,11 +17,11 @@ flowchart LR
 
 | 路径 | 职责 | 边界 |
 | --- | --- | --- |
-| `minecraft/src/main/java/local/crimsonmc/Authority.java` | Fabric 服务端初始化、MC 配方、实验库存、方块、掉落和保存 | 使用真实 MC；当前是 36 格 `SimpleInventory`，没有 MC 玩家实体或生存战斗 |
+| `minecraft/src/main/java/local/crimsonmc/Authority.java` | Fabric 服务端初始化、实验库存、中文名称、方块、掉落和保存 | 使用真实 MC；当前是 36 格 `SimpleInventory`，原型合成已移除，没有 MC 玩家实体或生存战斗 |
 | `bridge/service.py` | 接收面板操作，转换坐标，调用 MC，并同步红沙代理实体 | 不计算配方／掉落；只维护 `CrimsonMCPrototype` 项目的对象 |
 | `bridge/red_side.py` | 原生 JSON HTTP 客户端、地面探针轮询 | 请求超时或未命中时报错，不猜测地面高度 |
 | `red-side-patches/mc_panel.cpp/.h` | ImGui 操作面板、异步 WinHTTP 请求 | 与桥接通信；没有第四角色、手持物模型或心形 HUD |
-| `red-side-patches/mc_inventory_ui.cpp/.h`、`mc_inventory_protocol.h` | 全物品目录、36 格选择与异步背包操作；有界 TSV 解码 | 所选槽位由 MC 返回；不是原生手持模型，异常响应不覆盖已知库存 |
+| `red-side-patches/mc_inventory_ui.cpp/.h`、`mc_inventory_protocol.h` | 全物品图标目录、中文悬停、36 格选择与异步背包操作；有界 TSV 解码 | 所选槽位由 MC 返回；不是原生手持模型，异常响应不覆盖已知库存 |
 | `red-side-patches/upstream.patch` | 对固定 World Builder 的 HTTP 诊断、面板接入等改动 | 是可重建的上游差异；不能只留在忽略目录 |
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断 | 只申请读和查询权限，不调用游戏函数、不创建角色或写游戏内存 |
@@ -57,10 +57,10 @@ HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 4
 | `POST /ui/front` | `block` | 在前方最近列按地面及列高度放置，不是准星命中面的完整 MC 操作 |
 | `POST /ui/break` | `x,y,z` | 拆除相对坐标指定方块 |
 | `POST /ui/break-last` | `{}` | 拆除当前 MC 记录的最后一个非空气方块 |
-| `POST /ui/craft` | `recipe` | 调用 MC 原版配方 |
 | `GET /ui/catalog` | query `search,offset,limit` | MC 物品目录搜索／分页；TSV，limit 为 1～100、offset 不超出过滤后总数 |
 | `GET /ui/inventory` | 无 | TSV 格子快照，固定 36 格及服务端 selectedSlot |
 | `POST /ui/grant` | `item` | 免费领取该物品原版最大一组，整组放不下则回滚 |
+| `POST /ui/add-item` | `item,count,player?` | 按 ID／中文或英文名称直接添加 1～6400 件，按原版堆叠分格；全部放不下则回滚；player 默认为 console，只接受此实验背包 |
 | `POST /ui/select` | `slot` | 选择 0～35，可选空槽，不替代可见手持 |
 | `POST /ui/consume` | `{}` | 明确消耗当前非方块物品 1 件；未执行弓／桶／食物用途 |
 | `POST /ui/place-selected` | `x,y,z` | 由 MC 从所选格放置；兼容现有六种方块，仍是指定坐标 |
@@ -85,6 +85,24 @@ inventory 固定 36 条 slot，空槽 id 为 `-`、count/maxCount 为 0、name �
 解码失败不更改面板中的已知数据。目录每页最多 100 条，原生面板请求 50 条；
 搜索改变时重置 offset。非结构化 summary 仍沿用原文本接口。
 
+## 物品图片与原生窗口
+
+`config/item-icons.json` 固定 MC 1.21.1 图片集的来源提交、ZIP 哈希和七个组件类型预览。
+`prepare_item_icons.py` 仅用标准库下载、校验 ZIP、逐张 PNG CRC／完整 RGBA 数据并生成
+ignored downloads 中的 1332 个独立 ID 文件与哈希清单。1325 项是原文件同名映射；
+药水、喷溅／滞留药水、药箭、附魔书、谜之炖菜、山羊角由明确列出的同类型变体作预览。
+这不合并 API 物品，也不改库存组件；图标不表示真实药水效果／附魔／染色／耐久状态。
+
+安装和更新前必须退出游戏。`install_item_icons.ps1` 先校验全部复制计划，拒绝非本项目
+拥有的既有文件和链接目录，再把图片安装到 `bin64/cdmodkit/mc-icons/<ID path>.png`；
+全部文件加入 installation.json，卸载只删除仍匹配哈希的本项目文件。图片不打入插件或 Git。
+
+渲染使用上游 `overlay::Thumb` 的异步解码／纹理上传和有界缓存，不做渲染线程网络请求。
+物品图片只由合法 minecraft ID 决定文件路径；未加载时显示问号，空槽只显示槽号，
+中文名称／数量／ID 来自 MC 的最新 TSV。目录点击图片领取一组，背包点击图片选择格子。
+World Builder 主窗口默认隐藏，通过复选框显示；其每帧后台排队、保存和放置刷新继续执行，
+已有 Play Mode／放置模式保持原来的显示路径，避免把红沙场景资源误认成 MC 目录。
+
 ## 桥接 → MC：8766
 
 请求与响应为 JSON。POST 要求 `application/json`，正文最多 65536 字节。
@@ -94,18 +112,18 @@ HTTP 线程把工作提交到 **MC 服务端线程**，等待最多五秒。参�
 | 方法／路径 | 输入 | 输出／规则 |
 | --- | --- | --- |
 | `GET /api/state` | 无 | `engine,revision,inventory,blocks,schemaVersion,slots,selectedSlot,selectedItem`；保留 ID 总数，新增 36 格；没有装备栏或玩家快捷栏 |
-| `GET /api/catalog` | 无 | `items:[{id,name,maxCount,isBlock,placeSupported}]`；真实 Registries.ITEM 的所有非 AIR 物品类型，默认 ItemStack 信息 |
+| `GET /api/catalog` | 无 | `items:[{id,name,translationKey,maxCount,isBlock,placeSupported}]`；真实 Registries.ITEM 的所有非 AIR 物品类型，每个 ID 独立一项，默认 ItemStack 的官方中文名称 |
 | `POST /api/grant` | `operationId,item` | MC getMaxCount 整组插入；部分插入后放不下亦完整回滚 |
+| `POST /api/add-item` | `operationId,item,count,player?` | item 可为完整／裸 ID 或精确中文／英文名；名称有歧义时拒绝并列出 ID；count 为整数 1～6400 且受 36 格实际容量限制；默认唯一目标 console；部分添加、写盘失败均回滚 |
 | `POST /api/select` | `operationId,slot` | 服务端保存选中格 0～35，允许空格 |
 | `POST /api/consume` | `operationId` | 仅扣所选非 BlockItem 1 个；空格／方块拒绝，不跨格替补 |
 | `POST /api/place-selected` | `operationId,x,y,z` | 只扣所选格，兼容六种方块；不按 ID 自动找别的格 |
 | `POST /api/place` | `operationId,block,x,y,z` | MC 接受后扣一个材料、增加 revision、保存并返回状态与 operationId |
 | `POST /api/break` | `operationId,x,y,z` | MC 掉落表计算，当前固定钻石镐；掉落进入库存，方块变空气 |
-| `POST /api/craft` | `operationId,recipe` | 用 RecipeManager、真实合成输入和 Ingredient 验证，消费材料并返回产物／剩余物 |
 | `POST /api/shutdown` | `{}` | 返回 `stopping:true`，随后正常停止 MC 并保存区块 |
 
 MC API 使用 MC 坐标：X/Z 为 `-16..16`，Y 为 `64..95`。支持六种方块：原木、木板、
-圆石、泥土、石头、工作台；三种配方：木板、木棍、工作台。面板当前只列其中五种材料。
+圆石、泥土、石头、工作台。原型不再提供合成：`/ui/craft` 返回 404，`/api/craft` 返回 400，库存与 revision 不变。原版 MC 配方资源未删除，已有工作台和材料保留。旧建造下拉框列五种材料，选中格路径支持六种。
 最多记录 512 个曾触碰的坐标，空气墓碑也计入。
 
 修改前保存库存／方块状态快照，规则或保存失败会尝试回滚。成功操作的收据仅在内存
@@ -117,6 +135,16 @@ slots 是 `[{slot,empty:true}]` 或 `[{slot,empty:false,id,name,count,maxCount,i
 selectedItem 为 null 或所选非空格的同一结构。用完设置为空 ItemStack，selectedSlot 不变。
 目录中的 isBlock 不意味着已经支持红沙原生形状；placeSupported 当前只对六种基线方块为 true。
 非方块“消耗”是显式库存操作，不包含物品用途、耐久或 MC 生存玩家规则。
+
+名称由固定 MC 1.21.1 官方 `zh_cn` 语言文件解析，SHA-1 为
+`f87510f4509890eaf176e0de1430f6bb326a6800`，来源为官方 asset index 17。
+准备脚本将文件保存在忽略上传的 `downloads/minecraft-lang-1.21.1-zh_cn.json`；
+Gradle 启动参数 `crimsonmc.languageFile` 传入绝对路径。权威服务校验哈希及全部
+注册物品默认 stack 的翻译键，失败则不开启 API，不使用猜测译名。
+服务端文本语言在本模块启用期间设为简体中文，停止时恢复原语言；原英文默认名称
+在切换前缓存，用于控制台英文名输入。实际库存名称使用 `ItemStack.getName()`，
+保留自定义名称和组件；`translationKey` 是新增只读字段，不改变 TSV 或存档格式。
+官方允许部分物品具有相同显示名称（例如音乐唱片），目录保留独立 ID，输入同名时要求 ID。
 
 ## 桥接 → 原生适配器：8765
 
@@ -195,6 +223,7 @@ world-root 签名和 RTTI 链解析；多个 child 全部记录，不默认选�
 
 - 2026-10-04：M1 文档与只读基线已完成，用户随后同意先独立交付 M6a 背包。
 - 2026-10-04：目录与堆叠由 MC 注册表决定；选择／消耗不依赖原生角色，但不声称已有可见手持。
+- 2026-10-04：按用户最新要求取消原型合成，增加按数量直加物品；名称改用固定官方简体中文，拒绝歧义名称，不合并变种。原版配方、库存组件和建筑保留。
 - 2026-10-04：第四角色须为独立身份；不以替换原版三人外观作为验收。
 - 2026-10-04：MC 规则继续为权威；新增生命／装备接口需要真实 MC 玩家及原生事件证据。
 - 2026-10-04：仅修改结束后按授权提交上传；不使用定时上传。详见 [../AGENTS.md](../AGENTS.md)。

@@ -20,6 +20,28 @@ index 99718d9..b188096 100644
      g_buildOk = ResolveGame();
      if (!g_buildOk) { Log("signature resolution failed; game functions will NOT be hooked or called"); return 0; }
      ReleaseHookGap();
+diff --git a/asi/cdmodkit/editor.cpp b/asi/cdmodkit/editor.cpp
+index 6daa16e..0913c0f 100644
+--- a/asi/cdmodkit/editor.cpp
++++ b/asi/cdmodkit/editor.cpp
+@@ -5423,7 +5423,7 @@ namespace editor {
+         for (const auto& report : g_projectPlacements) if (!core::PlaceRequestState(report.request).settled) return true;
+         return false;
+     }
+-    void Draw() {
++    void Draw(bool showWindow) {
+         ReconcileSpawnHistory();
+         PumpPendingNpcGrab();
+         g_placeHudDrawn = false;
+@@ -5455,6 +5455,8 @@ namespace editor {
+                 for (const auto& d : pts) if (WorldToScreen(cf, d.p, &s)) dl->AddCircleFilled(s, 3.0f, d.col, 6); }
+         }
+         if (!g_open) { if (g_cameraMode) StopCameraMode(); return; }
++        // Keep placement/snap/autosave tasks running even when only the MC panel is visible.
++        if (!showWindow) { ImGui::GetIO().MouseDrawCursor = !g_playMode; CameraTick(); return; }
+         if (g_numericEditId && g_numericEditLastSeenFrame >= 0 && ImGui::GetFrameCount() - g_numericEditLastSeenFrame > 1) CancelNumericEdit();
+         ImGuiIO& io = ImGui::GetIO();
+         io.MouseDrawCursor = !g_playMode;
 diff --git a/asi/cdmodkit/http_api.cpp b/asi/cdmodkit/http_api.cpp
 index 93f9853..d96c3a6 100644
 --- a/asi/cdmodkit/http_api.cpp
@@ -69,7 +91,7 @@ index 93f9853..d96c3a6 100644
          // pos + axis of the camera object; the axis sign is ambiguous, so "view" is the horizontal direction from the camera
          // towards the player (the third-person camera always looks over the character), which is what callers want
 diff --git a/asi/cdmodkit/overlay.cpp b/asi/cdmodkit/overlay.cpp
-index 9784267..31f6309 100644
+index 9784267..7719370 100644
 --- a/asi/cdmodkit/overlay.cpp
 +++ b/asi/cdmodkit/overlay.cpp
 @@ -22,6 +22,7 @@ void* CdHeapAlloc(size_t n); void* CdHeapRealloc(void* p, size_t n); void CdHeap
@@ -80,11 +102,22 @@ index 9784267..31f6309 100644
  #include <chrono>
  #include <string>
  #include <d3d12.h>
-@@ -479,6 +480,7 @@ namespace overlay {
+@@ -40,7 +41,7 @@ void* CdHeapAlloc(size_t n); void* CdHeapRealloc(void* p, size_t n); void CdHeap
+ #pragma comment(lib, "d3d12.lib")
+ #pragma comment(lib, "dxgi.lib")
+ 
+-namespace editor { void Draw(); void Toggle(); bool IsOpen(); void ApplyStyle(float scale); bool PlayMode(); void TogglePlay(); void ToggleCameraMode(); bool Placing(); bool MouseMode(); }
++namespace editor { void Draw(bool showWindow = true); void Toggle(); bool IsOpen(); void ApplyStyle(float scale); bool PlayMode(); void TogglePlay(); void ToggleCameraMode(); bool Placing(); bool MouseMode(); }
+ 
+ namespace overlay {
+     typedef HRESULT (WINAPI* CreateDXGIFactory_t)(REFIID, void**);
+@@ -478,7 +479,8 @@ namespace overlay {
+         input::FeedMouse(ImGui::GetIO());
          Stage("imgui newframe");
          ImGui::NewFrame();
-         editor::Draw();
+-        editor::Draw();
 +        mc_panel::Draw();
++        editor::Draw(mc_panel::ShowWorldBuilder() || editor::PlayMode() || editor::Placing());
          Stage("imgui render");
          ImGui::Render();
          // edit mode: every input belongs to the menu (the game keeps running but does not react); play mode / placement: everything to the game

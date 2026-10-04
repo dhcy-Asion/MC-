@@ -28,7 +28,7 @@ if(Test-Path -LiteralPath $steamUserData){
     }
 }
 New-Item -ItemType Directory -Path (Split-Path $manifestPath -Parent),(Split-Path $settingsPath -Parent) -Force | Out-Null
-$settings="key_toggle=INSERT`nkey_mode=HOME`nconsole=0`nlanguage=zh-CN`nhttp_api=1`nhttp_port=8765`nfovauto=1`nfov=55.0`nmirror=0`npreview_quality=0`n"
+$settings="key_toggle=F8`nkey_mode=HOME`nconsole=0`nlanguage=zh-CN`nhttp_api=1`nhttp_port=8765`nfovauto=1`nfov=55.0`nmirror=0`npreview_quality=0`n"
 [IO.File]::WriteAllText($settingsPath,$settings,[Text.UTF8Encoding]::new($false))
 $installed=@(@{path=$settingsPath;sha256=(Get-FileHash -LiteralPath $settingsPath -Algorithm SHA256).Hash})
 foreach($item in $sources){
@@ -37,4 +37,5 @@ foreach($item in $sources){
 }
 $manifest=@{gameRoot=$GameRoot;backupRoot=$backupRoot;created=(Get-Date -Format 'o');files=$installed}
 $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+& (Join-Path $PSScriptRoot 'install_item_icons.ps1')
 $manifest | ConvertTo-Json -Depth 5

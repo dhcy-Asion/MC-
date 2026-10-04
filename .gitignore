@@ -3,6 +3,7 @@ downloads/
 build/
 backups/
 runtime/
+output/
 __pycache__/
 minecraft/.gradle/
 minecraft/build/

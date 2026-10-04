@@ -13,13 +13,13 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.recipe.CraftingRecipe;
-import net.minecraft.recipe.Ingredient;
-import net.minecraft.recipe.ShapedRecipe;
-import net.minecraft.recipe.input.CraftingRecipeInput;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryOps;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.text.OrderedText;
+import net.minecraft.text.StringVisitable;
+import net.minecraft.util.Language;
+import java.security.MessageDigest;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
@@ -40,8 +40,11 @@ public final class Authority implements ModInitializer {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
     private static final Set<String> BLOCK_IDS = Set.of("minecraft:oak_log", "minecraft:oak_planks",
             "minecraft:cobblestone", "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table");
-    private static final Set<String> RECIPE_IDS = Set.of("minecraft:oak_planks", "minecraft:stick", "minecraft:crafting_table");
     private static final int SCHEMA_VERSION = 1;
+    // One console target for this slice; the prototype has no real MC player entity yet.
+    private static final String CONSOLE_PLAYER = "console";
+    private final Map<Item, String> englishNames = new HashMap<>();
+    private Language originalLanguage, chineseLanguage;
     private final SimpleInventory inventory = new SimpleInventory(36);
     // Tombstones are retained so a restart repairs stale chunk saves after a crash.
     private final Map<BlockPos, String> touched = new LinkedHashMap<>();
@@ -63,6 +66,7 @@ public final class Authority implements ModInitializer {
         server = s;
         stateFile = s.getSavePath(WorldSavePath.ROOT).resolve("crimsonmc-state.json");
         try {
+            loadChineseLanguage();
             if (Files.exists(stateFile)) {
                 JsonObject saved = JsonParser.parseString(Files.readString(stateFile)).getAsJsonObject();
                 load(saved);
@@ -91,6 +95,9 @@ public final class Authority implements ModInitializer {
     private void stop() {
         if (http != null) { http.stop(0); http = null; }
         if (httpWorkers != null) { httpWorkers.shutdownNow(); httpWorkers = null; }
+        if (chineseLanguage != null && Language.getInstance() == chineseLanguage)
+            Language.setInstance(originalLanguage);
+        chineseLanguage = null;
     }
 
     private void exchange(HttpExchange ex) throws IOException {
@@ -131,7 +138,7 @@ public final class Authority implements ModInitializer {
             stopping.start();
             JsonObject response = new JsonObject(); response.addProperty("stopping", true); return response;
         }
-        if (!Set.of("/api/place", "/api/break", "/api/craft", "/api/grant", "/api/select",
+        if (!Set.of("/api/place", "/api/break", "/api/grant", "/api/add-item", "/api/select",
                 "/api/consume", "/api/place-selected").contains(path)) throw new BadRequest("unknown action");
         String operation = required(req, "operationId");
         if (operation.isBlank()) throw new BadRequest("operation ID is empty");
@@ -148,8 +155,8 @@ public final class Authority implements ModInitializer {
             switch (path) {
                 case "/api/place" -> place(req);
                 case "/api/break" -> breakBlock(req);
-                case "/api/craft" -> craft(req);
                 case "/api/grant" -> grant(req);
+                case "/api/add-item" -> addItem(req);
                 case "/api/select" -> selectedSlot = integer(req, "slot", 0, inventory.size() - 1);
                 case "/api/consume" -> consume();
                 case "/api/place-selected" -> placeSelected(req);
@@ -234,7 +241,8 @@ public final class Authority implements ModInitializer {
         JsonObject result = new JsonObject();
         result.addProperty("engine", "Minecraft Java 1.21.1");
         JsonArray items = new JsonArray();
-        for (Item item : Registries.ITEM) if (item != Items.AIR) items.add(itemDescription(item.getDefaultStack()));
+        for (Item item : Registries.ITEM) if (item != Items.AIR)
+            items.add(itemDescription(item.getDefaultStack()));
         result.add("items", items);
         return result;
     }
@@ -244,6 +252,7 @@ public final class Authority implements ModInitializer {
         JsonObject item = new JsonObject();
         item.addProperty("id", id);
         item.addProperty("name", stack.getName().getString());
+        item.addProperty("translationKey", stack.getTranslationKey());
         item.addProperty("maxCount", stack.getMaxCount());
         item.addProperty("isBlock", stack.getItem() instanceof BlockItem);
         item.addProperty("placeSupported", stack.getItem() instanceof BlockItem && BLOCK_IDS.contains(id));
@@ -272,33 +281,90 @@ public final class Authority implements ModInitializer {
         touched.put(pos, "minecraft:air");
     }
 
-    private void craft(JsonObject req) {
-        String id = required(req, "recipe");
-        if (!RECIPE_IDS.contains(id)) throw new BadRequest("recipe not supported in this slice");
-        var entry = server.getRecipeManager().get(Identifier.of(id)).orElseThrow(() -> new BadRequest("Minecraft recipe missing"));
-        if (!(entry.value() instanceof CraftingRecipe recipe)) throw new BadRequest("not a crafting recipe");
-        int width = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : 3;
-        int height = recipe instanceof ShapedRecipe shaped ? shaped.getHeight() : 3;
-        List<ItemStack> input = new ArrayList<>(Collections.nCopies(width * height, ItemStack.EMPTY));
-        List<Ingredient> ingredients = recipe.getIngredients();
-        if (ingredients.size() > input.size()) throw new BadRequest("invalid recipe dimensions");
-        for (int n = 0; n < ingredients.size(); n++) {
-            Ingredient ingredient = ingredients.get(n);
-            if (ingredient.isEmpty()) continue;
-            int slot = -1;
-            for (int i = 0; i < inventory.size(); i++) {
-                if (!inventory.getStack(i).isEmpty() && ingredient.test(inventory.getStack(i))) { slot = i; break; }
-            }
-            if (slot < 0) throw new BadRequest("not enough material for " + id);
-            input.set(n, inventory.getStack(slot).copyWithCount(1));
-            inventory.getStack(slot).decrement(1);
+    /**
+     * Console-side addition of any Minecraft item to the experiment inventory.
+     * Crafting tables are no longer wired to real recipes: this is how materials enter now.
+     * The caller supplies an item ID or a name, a count and the target player. The prototype
+     * has no real MC player entity, so only the single console-backed inventory is addressable;
+     * an unknown player is rejected instead of silently writing to the wrong destination.
+     */
+    private void addItem(JsonObject req) {
+        String requested = required(req, "item");
+        int count = integer(req, "count", 1, 6400);
+        String player = req.has("player") ? required(req, "player") : CONSOLE_PLAYER;
+        if (!player.equals(CONSOLE_PLAYER))
+            throw new BadRequest("unknown player " + player + "; this prototype owns one console inventory (" + CONSOLE_PLAYER + ")");
+        Item item = resolveItem(requested);
+        String id = Registries.ITEM.getId(item).toString();
+        int maxCount = item.getDefaultStack().getMaxCount();
+        if (count > 36L * maxCount)
+            throw new BadRequest("cannot place " + count + " x " + id + ": 36 slots hold at most " + (36L * maxCount));
+        int remaining = count;
+        while (remaining > 0) {
+            int size = Math.min(remaining, maxCount);
+            ItemStack stack = new ItemStack(item, size);
+            ItemStack leftover = inventory.addStack(stack);
+            if (!leftover.isEmpty()) throw new BadRequest("not enough inventory space for the whole requested amount");
+            remaining -= size;
         }
-        CraftingRecipeInput grid = CraftingRecipeInput.create(width, height, input);
-        if (!recipe.matches(grid, server.getOverworld())) throw new BadRequest("Minecraft rejected the crafting grid");
-        ItemStack output = recipe.craft(grid, server.getRegistryManager());
-        if (output.isEmpty() || !inventory.addStack(output.copy()).isEmpty()) throw new BadRequest("output cannot fit inventory");
-        for (ItemStack remainder : recipe.getRemainder(grid))
-            if (!remainder.isEmpty() && !inventory.addStack(remainder.copy()).isEmpty()) throw new BadRequest("remainder cannot fit inventory");
+    }
+
+    /** Resolves an exact ID, a bare path or a (Chinese or English) name to a single registry item. */
+    private Item resolveItem(String requested) {
+        String query = requested.trim();
+        if (query.isEmpty()) throw new BadRequest("item must not be empty");
+        Identifier key = Identifier.tryParse(query);
+        if (key != null && Registries.ITEM.containsId(key)) {
+            Item direct = Registries.ITEM.get(key);
+            if (direct == Items.AIR) throw new BadRequest("air is not an inventory item");
+            return direct;
+        }
+        Identifier prefixed = Identifier.tryParse("minecraft:" + query);
+        if (prefixed != null && Registries.ITEM.containsId(prefixed)) {
+            Item direct = Registries.ITEM.get(prefixed);
+            if (direct == Items.AIR) throw new BadRequest("air is not an inventory item");
+            return direct;
+        }
+        String needle = query.toLowerCase(Locale.ROOT);
+        List<Item> matches = new ArrayList<>();
+        for (Item item : Registries.ITEM) {
+            if (item == Items.AIR) continue;
+            if (item.getDefaultStack().getName().getString().toLowerCase(Locale.ROOT).equals(needle)
+                    || englishNames.getOrDefault(item, "").toLowerCase(Locale.ROOT).equals(needle)) {
+                matches.add(item);
+            }
+        }
+        if (matches.isEmpty())
+            throw new BadRequest("unknown Minecraft item: " + requested);
+        if (matches.size() > 1) {
+            List<String> ids = matches.stream().map(item -> Registries.ITEM.getId(item).toString()).toList();
+            throw new BadRequest("ambiguous item name; use an exact item ID: " + String.join(", ", ids));
+        }
+        return matches.get(0);
+    }
+
+    /** Official 1.21.1 language stays outside the plugin and Git, downloaded by setup. */
+    private void loadChineseLanguage() throws Exception {
+        Path file = Path.of(System.getProperty("crimsonmc.languageFile", "../../downloads/minecraft-lang-1.21.1-zh_cn.json"));
+        byte[] bytes = Files.readAllBytes(file);
+        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-1").digest(bytes));
+        if (!hash.equals("f87510f4509890eaf176e0de1430f6bb326a6800"))
+            throw new IOException("Minecraft 1.21.1 zh_cn language checksum mismatch; run prepare_environment.ps1");
+        Map<String, String> translations = new HashMap<>();
+        try (var input = new java.io.ByteArrayInputStream(bytes)) { Language.load(input, translations::put); }
+        originalLanguage = Language.getInstance();
+        for (Item item : Registries.ITEM) if (item != Items.AIR) {
+            englishNames.put(item, item.getDefaultStack().getName().getString());
+            if (!translations.containsKey(item.getDefaultStack().getTranslationKey()))
+                throw new IOException("Missing Chinese item translation: " + Registries.ITEM.getId(item));
+        }
+        chineseLanguage = new Language() {
+            @Override public String get(String key, String fallback) { return translations.getOrDefault(key, originalLanguage.get(key, fallback)); }
+            @Override public boolean hasTranslation(String key) { return translations.containsKey(key) || originalLanguage.hasTranslation(key); }
+            @Override public boolean isRightToLeft() { return false; }
+            @Override public OrderedText reorder(StringVisitable text) { return originalLanguage.reorder(text); }
+        };
+        Language.setInstance(chineseLanguage);
     }
 
     private int findItem(String id) {
@@ -407,4 +473,5 @@ public final class Authority implements ModInitializer {
         } catch (ArithmeticException error) { throw new BadRequest("invalid integer " + key); }
     }
     private static final class BadRequest extends RuntimeException { BadRequest(String message) { super(message); } }
+
 }

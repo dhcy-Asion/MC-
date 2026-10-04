@@ -28,3 +28,21 @@ Minecraft dependencies from their upstream sources. These downloads and Minecraf
 game binaries are excluded from this repository. Minecraft and Crimson Desert
 remain the property of their respective owners. No original game assets or
 personal saves are included.
+
+Simplified Chinese item names use the Minecraft 1.21.1 language asset listed in
+[official asset index 17](https://piston-meta.mojang.com/v1/packages/9b16298b1dc0697878cec88bb2d96168f5239e4f/17.json),
+SHA-1 `f87510f4509890eaf176e0de1430f6bb326a6800`. Setup downloads and verifies
+this data into ignored `downloads/`; it is not distributed in the plugin JAR or
+this repository. Minecraft's ownership and EULA continue to apply.
+
+Local item type previews use the Minecraft 1.21.1 enhanced renders from
+[TinyTank800/MinecraftAllImages](https://github.com/TinyTank800/MinecraftAllImages/tree/8888a461f088c6b907f13c14f25a12d90a481ae3),
+commit `8888a461f088c6b907f13c14f25a12d90a481ae3`. The gallery/export tooling is
+MIT, copyright (c) 2025 TinyTank800; the license is retained in
+[licenses/MinecraftAllImages-MIT.txt](licenses/MinecraftAllImages-MIT.txt).
+The images are Minecraft game renders, not original CrimsonMC art; Minecraft
+assets remain the property of Mojang/Microsoft. Setup verifies archive SHA-256
+`ccd08c21dce8fdc16985784329ea73a4dfa3e885342d94afd6b47fb68442dab8`
+and prepares 1332 ID-specific local files, including seven explicitly documented
+same-type component previews. The downloaded ZIP/PNGs are ignored and are not
+redistributed in Git or the ASI. Names/counts/components remain MC-authoritative.
