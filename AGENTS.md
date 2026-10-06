@@ -74,6 +74,9 @@ the earlier copy under Desktop/Git.
 | 原生源码 | 准备固定上游、构建、补丁可重建检查及相关游戏内行为验证；更新插件前关闭游戏 |
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |
 | Steve 离线资产 | `python tools/build_steve_asset.py`；`python tools/check_steve_asset.py`；产物留 ignored build，不安装为原生角色 |
+| 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
+| 独立资源包预演 | `py -3.12 -B tools/check_asset_overlay.py --verify-game`；原索引保留、完整 DDS、逐项解包、路径与报告输出保护；预演不写游戏 |
+| 临时原木资源探针 | `py -3.12 -B tools/check_asset_probe.py`（隔离副本）；`python tools/check_native_block_probe.py`（隔离 HTTP）；实际安装／恢复先关闭游戏并核对备份／所有权，实机显示与碰撞另验收 |
 | Git 同步脚本 | `python tools/check_sync.py`，使用其临时仓库，不重写用户仓库历史 |
 
 运行中的验证可能改变实验材料或方块。先阅读脚本的前置条件与清理逻辑，保护用户建筑，

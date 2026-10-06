@@ -71,3 +71,15 @@ The development workflow references
 [universal-modder 671544554523eb3ae8048c18d4eb8973f5f19652](https://github.com/rehan-remade/universal-modder/tree/671544554523eb3ae8048c18d4eb8973f5f19652).
 Its MIT license is retained in `licenses/Universal-Modder-MIT.txt`; its checkout is
 ignored and its GTA-specific runtime is not bundled into this plugin.
+
+Native texture candidate checks use [Pillow 12.2.0](https://github.com/python-pillow/Pillow/tree/12.2.0)
+as an independent decoder, under MIT-CMU. The license is retained in
+[licenses/Pillow-MIT-CMU.txt](licenses/Pillow-MIT-CMU.txt). Its DDS plugin source
+SHA256 is checked, and the decoder binary fingerprint is recorded locally;
+Pillow is not bundled in the ASI. The PNG reader and BC1/BC3/BC5 encoder are
+project source, checked against the independent decoder. DDS format references
+are Microsoft's [DDS guide](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide)
+and [block compression specification](https://learn.microsoft.com/en-us/windows/win32/direct3d10/d3d10-graphics-programming-guide-resources-block-compression).
+Compressed native textures, generated PAM/PAMLOD/PAMI/prefab resources, PAC/material
+candidates and local archive overlays remain ignored local derivatives of game assets; none
+are distributed in this repository.

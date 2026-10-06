@@ -157,7 +157,8 @@ World Builder 的 HTTP API 说明其文件覆盖用于 level／prefab／表，�
 
 已有 Steve 工具读取固定官方客户端的真实经典模型，导出本机 glTF；六个 MC 刚性
 关节在本轮进一步绑定到真实红沙 palette，生成了离线 PAC 候选；候选使用部分辅助/扭转骨，
-尚无材质／prefab／meshparam、动画验收、装备 socket 或游戏加载证据。
+已生成本地 BC3/BC5/DXT1 与 Plain PBR 材质候选，并完成独立解码及资源包预演；
+尚无 actor 引用、prefab／meshparam、透明/动画验收、装备 socket 或游戏加载证据。
 其配置中的原生集成标志全部 false，可作为资产准备工具，不能当作
 已经切换史蒂夫或支持穿戴装备的验收成果。
 

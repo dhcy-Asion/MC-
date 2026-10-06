@@ -31,6 +31,11 @@ flowchart LR
 | `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
 | `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
 | `tools/prepare_native_steve.py`、`check_native_steve.py` | 只读提取真实红沙 PAB/PAC 及相关模板，重建并生成真实 palette 的 Steve PAC 候选 | 所有资源仅本地 build；四个 LOD 已回读，材质、动画、装备、原生显示仍未验收 |
+| `tools/prepare_steve_material.py`、`check_steve_material.py` | 编码 Steve BC3/BC5/DXT1 材质候选，用独立 Pillow 解码每层 mip，重写已核对的原生材质参数 | 仅本地候选；没有 actor 引用，透明/动画/装备/受控外观未验证 |
+| `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 单位立方碰撞不适用于特殊形状；原生光照/采样/加载未验收 |
+| `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 只写 ignored build；预演不安装，也不证明引擎渲染 |
+| `tools/install_asset_probe.py`、`check_asset_probe.py` | 关闭游戏时临时安装/恢复自有 21 项原木 overlay，核对新鲜索引、存档备份、所有权与并发锁 | 拒绝外部修改；恢复不覆盖后来存档；不安装 Steve 或接通正式 MC 映射 |
+| `tools/probe_native_block.py`、`check_native_block_probe.py` | 同一游戏实例生成/清理一块诊断原木，分别记录登记与实际碰撞证据 | 画面须另验；只清理精确自有 UID/变换，不消费 MC 材料；上游可能创建空编辑项目 |
 | `config/` | 可公开的默认服务端配置与诊断版本配置 | 不是用户运行时存档；未知 EXE 版本或 SHA 不使用诊断布局 |
 | `artifacts/` | 已成功构建的原型自身 ASI 和 Fabric JAR | M6a 更新两份产物；没有原版游戏程序／资源 |
 | `docs/`、`licenses/` | 可接手的架构、进度、检查摘要及许可证 | 未验证项和实验限制明确标记；原始进程数据不发布 |

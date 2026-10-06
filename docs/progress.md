@@ -5,8 +5,9 @@
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
 用户已于 2026-10-06 将剩余移植工作设为持续目标并要求开始执行，之后再次要求继续。
-目标已建立且未标记完整移植完成；本轮末工具返回 usageLimited，保留成果及下一步，
-没有自行改为 complete/paused/blocked。本轮来源、路线和实测保护见 [../MODLOG.md](../MODLOG.md)。
+目标已建立且未标记完整移植完成。此前一轮触及 usageLimited；用户继续后已恢复 active，
+当前继续原生资产与实机探针工作，没有自行改为 complete/paused/blocked。
+来源、路线和实测保护见 [../MODLOG.md](../MODLOG.md)。
 
 ## 当前里程碑
 
@@ -22,6 +23,10 @@ F8 开关及点击仍待验收。模型资产已推进为真实红沙 palette �
 持续角色替换、全方块、装备、心形条和工坊仍未完成；只读身份解码、资产导出及构建
 不能替代游戏内验收。仍需实际身体到外观控制器的安全回链、刷新线程、原生资源、
 骨骼／动画／装备绑定与恢复生命周期。
+本轮已补齐原木三轴 PAM/PAMI 和 Steve 皮肤材质的本地候选、独立 overlay 预演及
+可恢复临时安装工具。21 项原木资源已实际挂载，游戏进入世界 ready/buildOk；
+用户随后用物理 Escape 停止 Computer Use，尚未生成对象或验收显示/碰撞。
+临时包当前仍在自有 0041，需正常关闭游戏后执行恢复；原版归档未改。
 静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
 [native-character-feasibility.md](native-character-feasibility.md)。
 
@@ -328,3 +333,67 @@ Play Mode／放置模式沿用显示路径；此修正构建、补丁与安装�
 对 88 个 Git 可见文件的独立快照返回 0 failures/0 warnings；未包含 ignored 资源、存档或日志。
 该 lint 未使用 --game（本项目编译的 ASI 也已安装在游戏目录，字节相同不表示原版文件）。
 同步脚本临时仓库检查通过，真实提交/推送由收尾调用执行。
+
+## 2026-10-06 继续目标：原生原木、Steve 材质与可恢复 overlay
+
+持续目标恢复为 active。实现和验证的本轮小步如下：
+
+- `prepare_native_block.py` 只读实际 0000 模板，生成三轴静态 PAM/PAMLOD、Standard
+  PAMI、原 HKX/meshinfo 和重定位 prefab，共 21 项候选；不是角色 PAC。无编辑重建
+  字节相同，24 顶点/12 三角，三轴使用真实 MC 端纹/侧纹 UV，远 LOD 保留完整立方体。
+  `py -3.12 -B tools/check_native_block.py --rebuild` 13 项通过，真实重建全部一致。
+- `prepare_steve_material.py` 生成真实皮肤 BC3、BC5U normal、DXT1 常量图及 Plain PBR
+  身体材质候选。保留原 PAC palette/运行属性，18 个材质包装/6 组变体回读；没有
+  actor/prefab 引用或控制外观接入。`check_steve_material.py --rebuild` 14 项通过。
+- 两套 DDS 使用独立 Pillow 12.2.0 解码全部 mip；原木底层最大 RGB 误差 4/平均
+  1.705729、低 mip 最大误差 21，Steve 底层最大 4/平均 1.479367/alpha 误差 0。
+  没有声称压缩无损、透明裁切/原生过滤/光照/动画或装备正确。
+- `prepare_asset_overlay.py` 为两套候选分别预演独立 PAMT/PAZ 与 PAPGT/PATHC；
+  原木 21 项/56736 字节 PAZ，Steve 5 项/332752 字节 PAZ。原 39 项挂载记录与
+  PATHC 291531 项/654 header/12 collision 保留，新 DDS 各增加三项。0036～0040
+  是已有可选保留目录，不当作空闲；本机选 0041。完整 DDS 使用 raw flags=0，
+  不继承 PartialDDS 存储；材质按原 LZ4/ChaCha 编码。两套 13 项预演检查通过，
+  包内逐项解码与输入一致；预演阶段只写 ignored build。
+- `install_asset_probe.py` 仅允许本项目 21 项原木，重新检查源索引与所有权，先备份
+  metadata/存档，PAPGT 最后挂载；恢复先解除挂载，不覆盖后续存档。15 项隔离
+  安装/故障回滚/硬中断/并发锁/外部修改保护检查通过，检查未修改真实游戏。
+- `python tools/check_native_block_probe.py` 最终 25 项隔离 HTTP 检查通过，初始 fixture
+  改为真实非空 Untitled 1。覆盖原生创建项目/精确初始归属、赋项目前失败清理、外部
+  项目变化拒绝、自动保存及中途启用拒绝、缺日志/跨进程/丢响应/碰撞与清理失败。
+  不调用真实对象 API，visualVerified 始终 false，画面证据另验收。
+
+### 实际安装和中断交接
+
+实际执行 `py -3.12 -B tools/install_asset_probe.py --install --plan build/native-asset-overlay`
+成功，收据 ID 为 `ff31f4892ff445aea30b78628f83e094`，状态 installed，自有目录 0041。
+metadata 与两根合计 36 份存档备份在本机
+`backups/asset-probe-ff31f4892ff445aea30b78628f83e094`。没有修改原版 PAZ/PAMT/PAPK/PAVER。
+原 PAPGT SHA256 为 `2997a04a76e5812d3a4b7840ac0615cdfc3d7d865244e133023c415b5f918646`，
+原 PATHC 为 `5d2f9d61c661e2c628c5482d026358e7ca049ad6deec9a92c17ba547870353ef`。
+
+启动现有后台并进入红沙世界成功，原生 ready/buildOk=true、版本 1.0.0.2976，原 UI 与
+九格仍显示。发现上游 POST objects 会 EnsureEditingProject，首次新 UID 默认属于
+当前编辑项目/可能创建空 Untitled，并写设置；探针修正精确记录初始归属与失败清理，
+要求项目 autosave=0，不调用项目保存或删除旧项目。正式当前已有 Untitled 1、对象数 0。
+这项真实行为不能称为完全无项目副作用；诊断项目不会自动成为正式 MC 桥接资源映射。
+
+用户回复空地“就绪”后，Computer Use 返回物理 Escape 停止信号。本轮即停止界面操作，
+**尚未调用 --spawn，未消费 MC 材料、未创建原木、未验收原生显示/碰撞，也未执行恢复。**
+收尾时游戏 PID 57428 仍运行，故不在运行中改索引。0041 与 active receipt 保留；下一次
+必须先检查当前进程和收据，再在用户正常退出游戏后运行
+`py -3.12 -B tools/install_asset_probe.py --restore`，核对原 metadata 哈希和目录删除。
+若继续同一进程测试，应先检查新鲜玩家/相机及项目状态，只生成一个 journalled 对象，
+分别验收登记、实际碰撞、画面，再在同一进程清理并退出恢复。不能盲目重放消费请求。
+
+新依赖许可证与来源已记录，资源/存档/运行证据留本机，公开内容为转换/保护工具和文档。
+完整 Steve、持续外观/卸载恢复、两套装备、正式全部方块映射、真实 HP 心形与工坊均未完成。
+
+Steve 下一项具体离线检查：克隆真实 nude prefab 的新 crimsonmc 路径，将 CD_Nude
+SkinnedMeshComponent 的 PAC 引用指向候选，保留 CD_Underwear 与 PAB/PABC/PAPR。
+只读研究在内存里完成一处路径替换/六处 pointer relocation；尚未产出或加载该 prefab。
+原生 app_xml 是 NPC 外观名单，不能据此推定当前 Kliff 受控身体；必须另查实际外观回链
+与刷新生命周期，不把新场景物体或共享旧 PAC 替换称为持续 Steve 模式。
+
+收尾：十个新 Python 工具语法、公开 JSON/Markdown 相对链接、Git 差异格式通过；
+99 个公开文件没有新增游戏素材、运行日志、存档或备份，Pillow 许可证与本机原文一致。
+源代码提交/推送结果以本轮实际 sync_github 输出为准。
