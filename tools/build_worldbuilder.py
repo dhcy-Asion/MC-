@@ -44,7 +44,7 @@ def main():
     sources = [SRC / name for name in (
         "cdmodkit.cpp playmode.cpp environment.cpp terrain.cpp terrain_research.cpp travel.cpp "
         "terrain_live.cpp terrain_physics.cpp gpu_research.cpp http_api.cpp diag.cpp overlay.cpp input.cpp "
-        "editor.cpp thumbgen.cpp heap.cpp icons.cpp i18n.cpp proj_codec.cpp wb_group_math.cpp report_projection.cpp mc_panel.cpp mc_inventory_ui.cpp"
+        "editor.cpp thumbgen.cpp heap.cpp icons.cpp i18n.cpp proj_codec.cpp wb_group_math.cpp report_projection.cpp mc_panel.cpp mc_inventory_ui.cpp mc_resource_probe.cpp"
     ).split()]
     sources += [im / name for name in (
         "imgui.cpp imgui_draw.cpp imgui_tables.cpp imgui_widgets.cpp "

@@ -23,10 +23,15 @@ F8 开关及点击仍待验收。模型资产已推进为真实红沙 palette �
 持续角色替换、全方块、装备、心形条和工坊仍未完成；只读身份解码、资产导出及构建
 不能替代游戏内验收。仍需实际身体到外观控制器的安全回链、刷新线程、原生资源、
 骨骼／动画／装备绑定与恢复生命周期。
-本轮已补齐原木三轴 PAM/PAMI 和 Steve 皮肤材质的本地候选、独立 overlay 预演及
-可恢复临时安装工具。21 项原木资源已实际挂载，游戏进入世界 ready/buildOk；
-用户随后用物理 Escape 停止 Computer Use，尚未生成对象或验收显示/碰撞。
-临时包当前仍在自有 0041，需正常关闭游戏后执行恢复；原版归档未改。
+本轮已补齐原木三轴 PAM/PAMI、Steve 七资源 prefab 候选，以及官方 vanilla 注册表
+（1060 种方块、26684 个合法状态）。用户恢复授权后已实际生成一块诊断原木：登记
+成功，但模型未显示、未检测到一米碰撞，原生加载验收失败。对象已清理、MC 状态不变；
+游戏正常退出后临时 0041 已恢复，38 个原索引/元数据哈希一致。下一步定位实际加载
+失败环节；不把离线解包、场景对象指针或注册表覆盖当作游戏内功能完成。
+随后为读取诊断构建并安装新 ASI、再次临时挂载原木 0041；启动后用户物理 Escape
+停止 Computer Use，已停止界面操作，**尚未请求资源读取**。最新收据
+`51159fa10a564fa392027e71af157471` 为 installed；游戏仍运行，须正常退出后恢复。
+不要把上一次收据已恢复误读为本次新包也已恢复，详见本文件最后一节。
 静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
 [native-character-feasibility.md](native-character-feasibility.md)。
 
@@ -362,7 +367,7 @@ Play Mode／放置模式沿用显示路径；此修正构建、补丁与安装�
   项目变化拒绝、自动保存及中途启用拒绝、缺日志/跨进程/丢响应/碰撞与清理失败。
   不调用真实对象 API，visualVerified 始终 false，画面证据另验收。
 
-### 实际安装和中断交接
+### 首次安装和中断记录（后续已恢复，见下一节）
 
 实际执行 `py -3.12 -B tools/install_asset_probe.py --install --plan build/native-asset-overlay`
 成功，收据 ID 为 `ff31f4892ff445aea30b78628f83e094`，状态 installed，自有目录 0041。
@@ -397,3 +402,94 @@ SkinnedMeshComponent 的 PAC 引用指向候选，保留 CD_Underwear 与 PAB/PA
 收尾：十个新 Python 工具语法、公开 JSON/Markdown 相对链接、Git 差异格式通过；
 99 个公开文件没有新增游戏素材、运行日志、存档或备份，Pillow 许可证与本机原文一致。
 源代码提交/推送结果以本轮实际 sync_github 输出为准。
+
+## 2026-10-06 恢复验证：原木加载失败、清理与原始资源恢复
+
+用户明确恢复游戏接管并确认前方平坦。旧进程已结束，重新进入世界后核对支持版本与
+ready/buildOk，正式探针在新游戏实例中只提交一次原木生成。之前陡坡被前置检查拒绝；
+新工具最多探测七个附近位置，逐点检查中心/四角并避开登记对象，全部不合格不生成。
+`python -B tools/check_native_block_probe.py` 最终 **28/28 通过**，含近处候选、全陡坡拒绝
+和用户对象保留；中间一次检查被中断，确认进程不存在后完整重跑通过。
+
+实际运行 `python -B tools/probe_native_block.py --spawn`：选中前方 4 米位置，五点地面
+高差 0.07922 米。新 UID 被登记，原生日志返回 SceneObjectClient，随后物理验证失败
+（未检测到一米碰撞增量）；实际游戏画面也没有原木。**加载/显示/碰撞未通过**，返回
+指针或 pending=0 不能证明资源读取成功。证据留本机 `runtime/native-block-probe.json`
+及 `native-oak-before-20261006.jpg`、`native-oak-load-failed-20261006.jpg`。
+
+同一进程执行 `--cleanup` 成功，登记对象移除、地面回到原高度。日志 phase=cleaned、
+registryRemoved/collisionRemovedVerified/mcStateUnchanged=true；MC revision 18、36 槽
+内容与建筑不变。项目自动保存保持关闭，无新编辑项目，诊断没有显式保存旧项目。
+正常退出后再次核对，settings.txt 和原 Untitled 1.cdproj 哈希也与测试前相同。
+随后通过游戏退出确认正常退出，确认进程结束，再执行 `install_asset_probe.py --restore`
+成功。收据 `ff31f4892ff445aea30b78628f83e094` 转历史 restored，active receipt 与 0041
+目录不存在；原 34 份 PAMT、PAPGT/PATHC/PAPK/PAVER 共 **38 文件**哈希全部匹配安装前。
+未回滚游戏后来存档，未替换 ASI/JAR，测试对象和临时包均已收尾。
+
+离线核对未发现缺失的同名配套文件：真实蓝块与候选均为 PAM/PAMI/PAMLOD/HKX/
+meshinfo/prefab 六类；新旧 flags、folder hashes 与资源引用可核对。当前没有新路径
+实际读取跟踪，不能据此确定挂载或文件格式哪层失败。下一步通过已有引擎读取契约
+获取固定白名单资源的实际读取结果，再决定修复；不盲目重复生成和消费 MC 材料。
+
+### 同轮离线资产与真实注册表
+
+- 新 `prepare_steve_prefab.py` / `check_steve_prefab.py`：完整解析真实 nude prefab 的
+  CD_Nude/CD_Underwear，仅修改前者的 PAC 路径；一次等长路径改动、六处指针重定位，
+  其它字节保持一致，逆改与原文相同。保留内衣和 descriptor 原文及真实 PAB/PABC/PAPR
+  依赖。`py -3.12 -B tools/check_steve_prefab.py --rebuild` **16/16 通过**。
+- 七资源报告在 `build/steve-prefab/steve-prefab-report.json`，新增 prefab 与 descriptor
+  合并原五项皮肤/模型资源；全部集成标志 false。七资源 overlay **13/13 通过**，PAZ
+  334976 字节。该次预演基于尚挂载 0041 的快照规划 0042，恢复原木后计划过期，须
+  重建再验证。**Steve 包未安装**；受控身体/动画/装备/持续应用仍未实现。
+- 新 `build_block_registry.py` / `check_block_registry.py` 使用固定官方 1.21.1 数据生成
+  入口（客户端及 46 个库哈希验证），实际生成 **1060 种方块、26684 个合法状态**。
+  完整检查属性乘积、唯一默认状态、两种 ID 空间连续/唯一，与所有客户端资源关联。
+  1062 个资源文件中额外的 item_frame/glow_item_frame 不在方块注册表。真实报告及资源
+  留 ignored build；没有启动客户端/服务端世界，没有更改当前权威库存。
+  CLI 审查修复相对客户端/Java 路径因切换 cwd 失效，以及自定义输出与已验证输入的
+  同路径/硬链接冲突；拒绝发生在生成器启动前，输入保持完整。
+  `python -B tools/check_block_registry.py --rebuild` 最终 **10/10 通过**，含实际相对路径
+  重建和 NTFS 硬链接拒绝。这是 vanilla 注册表，不是 Fabric 运行时注册表，也不表示全部
+  状态的红沙模型/碰撞、特殊渲染或物品用途已经实现。
+
+### 为定位失败新增固定资源读取接口
+
+新增 `mc_resource_probe.h/.cpp` 与可复建上游补丁；POST 只接受 27 个蓝块/原木固定
+枚举，返回 ticket 后在游戏线程一次处理一项。原生存储与解码长度都先限定 16KiB，
+分离 guarded load/metadata/read/release，取得 handler 后只尝试释放一次。旧
+GameReadFile/Range 逐字与固定上游一致。结果只含长度、头部、FNV-1a64 及释放状态；
+最多 16 条队列/结果、30 秒 TTL，过期但未执行的任务仍占槽，已完成结果可淘汰以支持
+27 项顺序诊断。只对首 64 字节全零的异常最多重试三次，不在游戏线程 sleep。
+
+`python -B tools/check_native_resources.py` **22 项隔离行为 + 2 项源码边界检查通过**：
+实际 backend 提取到 host harness、异常释放、双尺寸上限、队列停滞跨 TTL、未知枚举、
+严格请求和顺序 27 项；不连接游戏。新客户端 `probe_native_resources.py` 默认 15 项，
+校验本地蓝块/候选 SHA，再比较引擎长度/头部/FNV，要求同游戏实例与 MC 状态保持。
+`py -3.12 -B tools/check_native_resource_probe.py` **22/22 通过**，均为隔离 HTTP。
+超时不重提，完整报告只写新的 ignored runtime 文件；不生成实体或消费材料。
+
+完整 ASI 编译成功，SHA256 `ad8835ecddd4938b39ce9735e12e15ee2cbad6b269bf3c546c32277ddd39d95c`，
+12751872 字节。`prepare_environment.ps1 -SourceBuild` 验证固定上游、补丁及新文件复制
+通过，未改已有 vendor；42 个 Python AST、7 个公开 JSON、50 个 Markdown 相对链接、
+PowerShell 解析和 Git diff 格式检查通过。108 个 Git 可见文件没有 ignored 资源混入。
+安装及实机资源读取结果另记；这些离线检查不改变上一节原木加载失败的结论。
+
+### 读取诊断安装后的再次接管中断
+
+独立源码审查无阻断问题。成功构建后更新 artifacts/native 与实际插件安装，三份 ASI
+SHA 均为 `ad8835ecddd4938b39ce9735e12e15ee2cbad6b269bf3c546c32277ddd39d95c`；
+原插件留在 backups，更新脚本重新核对 1332 图标及安装清单。没有修改 MC JAR。
+再次执行 `install_asset_probe.py --install --plan build/native-asset-overlay` 成功，新的
+active receipt 为 `51159fa10a564fa392027e71af157471`，目录 0041，备份在
+`backups/asset-probe-51159fa10a564fa392027e71af157471`。
+
+启动游戏后首次定位窗口，Computer Use 立即报告用户物理 Escape 停止。之后没有再
+调用 Computer Use，也没有向资源读取/生成 API 发请求。只读收尾确认游戏 PID 14624
+（22:49:36 启动）仍运行、收据 installed，所以没有运行中恢复索引。**新读取接口尚无
+实机读取结果；本次没有新增诊断实体。** 此处 PID 只为本次记录，下次必须重新枚举。
+
+下一次若只恢复包，先正常退出红沙，再执行 `py -3.12 -B tools/install_asset_probe.py
+--restore`，核对新收据转 restored、0041/active receipt 消失及原始 38 文件哈希。
+若用户重新授权继续游戏接管，再获取新鲜窗口/游戏实例状态，执行资源读取客户端，
+随后退出恢复。上次 spawn journal 已 cleaned，不能把旧 UID 用于新的游戏实例。
+整个持续目标仍未完成；没有因界面接管中断将目标擅自标记暂停或完成。

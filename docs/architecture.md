@@ -30,12 +30,15 @@ flowchart LR
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
 | `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
 | `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
+| `tools/build_block_registry.py`、`check_block_registry.py` | 在隔离 build 目录运行固定官方 vanilla 数据生成器，核对 1060 种方块、26684 个合法状态及客户端资源 | 不启动世界；不是 Fabric 实际运行注册表，不表示原生模型/碰撞/特殊渲染已接通 |
 | `tools/prepare_native_steve.py`、`check_native_steve.py` | 只读提取真实红沙 PAB/PAC 及相关模板，重建并生成真实 palette 的 Steve PAC 候选 | 所有资源仅本地 build；四个 LOD 已回读，材质、动画、装备、原生显示仍未验收 |
 | `tools/prepare_steve_material.py`、`check_steve_material.py` | 编码 Steve BC3/BC5/DXT1 材质候选，用独立 Pillow 解码每层 mip，重写已核对的原生材质参数 | 仅本地候选；没有 actor 引用，透明/动画/装备/受控外观未验证 |
+| `tools/prepare_steve_prefab.py`、`check_steve_prefab.py` | 完整解析原生 nude prefab，仅改 CD_Nude 的 PAC 路径；保留内衣、descriptor 与骨骼依赖，生成七资源报告 | 离线候选，不选择受控角色身体，也不提供已验证的动画控制或刷新生命周期 |
 | `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 单位立方碰撞不适用于特殊形状；原生光照/采样/加载未验收 |
 | `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 只写 ignored build；预演不安装，也不证明引擎渲染 |
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 关闭游戏时临时安装/恢复自有 21 项原木 overlay，核对新鲜索引、存档备份、所有权与并发锁 | 拒绝外部修改；恢复不覆盖后来存档；不安装 Steve 或接通正式 MC 映射 |
-| `tools/probe_native_block.py`、`check_native_block_probe.py` | 同一游戏实例生成/清理一块诊断原木，分别记录登记与实际碰撞证据 | 画面须另验；只清理精确自有 UID/变换，不消费 MC 材料；上游可能创建空编辑项目 |
+| `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木，分别记录登记与实际碰撞证据 | 画面须另验；只清理精确自有 UID/变换，不消费 MC 材料；上游可能创建空编辑项目 |
+| `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
 | `config/` | 可公开的默认服务端配置与诊断版本配置 | 不是用户运行时存档；未知 EXE 版本或 SHA 不使用诊断布局 |
 | `artifacts/` | 已成功构建的原型自身 ASI 和 Fabric JAR | M6a 更新两份产物；没有原版游戏程序／资源 |
 | `docs/`、`licenses/` | 可接手的架构、进度、检查摘要及许可证 | 未验证项和实验限制明确标记；原始进程数据不发布 |
@@ -169,6 +172,8 @@ JSON API；`/api/status` 中 `apiVersion=1`、`ready` 和 `buildOk` 必须先检
 | `GET /api/prototype/render-camera` | 当前渲染相机与完整方向的诊断接口 |
 | `POST /api/prototype/ground-probe` | `x,y,z,length`，提交向下物理探针并返回 202／ticket |
 | `GET /api/prototype/ground-result?ticket=...` | pending 返回 202；hit 返回接触坐标；miss／失效不可继续放置 |
+| `POST /api/prototype/resource-probe` | 只接受一个 `resource` 固定枚举，返回 202／ticket；实际读取在游戏线程执行 |
+| `GET /api/prototype/resource-result?ticket=...` | 读取状态、长度、头 16 字节、FNV-1a64 及释放结果；旧/未知 ticket 返回 410 |
 | `GET /api/objects?offset=...&limit=500` | 分页读取编辑器对象，筛选本项目归属 |
 | `POST /api/objects` | `prefab,x,y,z,scale`，排队创建并返回 UID；仍需原生执行和验证 |
 | `POST /api/objects/{uid}/project` | `name:CrimsonMCPrototype`，标记归属 |
@@ -177,6 +182,13 @@ JSON API；`/api/status` 中 `apiVersion=1`、`ready` 和 `buildOk` 必须先检
 原生 HTTP 返回受理不等于场景或碰撞已创建。当前地面结果是向下球形探测，桥接采用
 结果高度；不能直接推广为任意方向准星射线或方块面选择。上游还有研究写接口，但
 本次诊断工具不使用它们。
+
+资源读取诊断有 27 个蓝块/原木固定路径，每项原生存储/解码尺寸均限 16KiB；保留最多
+16 个排队或结果记录、TTL 30 秒，未执行的队列不能因过期释放容量。已完成结果可淘汰，
+只对空缓冲最多尝试三次，每次经游戏线程排队。该接口不返回完整资源，不接收任意路径；
+FNV-1a64 是比较摘要，不是安全校验或渲染验收。原有 GameReadFile/Range 行为保持不变。
+`emptyBuffer` 沿用上游首 64 字节全零的流式读取异常判断；它是重试线索，不证明整个
+文件未初始化。实际诊断仍须与蓝块对照和已校验的本地完整资源摘要相互印证。
 
 ## 坐标、权威和失败恢复
 

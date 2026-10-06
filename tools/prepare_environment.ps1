@@ -124,7 +124,7 @@ if($SourceBuild){
             $prepared=(Invoke-PinnedGit $upstream @('rev-parse','HEAD')).Trim() -eq $worldCommit
             $prepared=$prepared -and ((Invoke-PinnedGit (Join-Path $upstream 'tools\minhook') @('rev-parse','HEAD')).Trim() -eq $minhookCommit)
             $prepared=$prepared -and ((Invoke-PinnedGit (Join-Path $upstream 'tools\imgui') @('rev-parse','HEAD')).Trim() -eq $imguiCommit)
-            foreach($name in @('mc_panel.cpp','mc_panel.h','mc_inventory_ui.cpp','mc_inventory_ui.h','mc_inventory_protocol.h','mc_hotbar_layout.h')){
+            foreach($name in @('mc_panel.cpp','mc_panel.h','mc_inventory_ui.cpp','mc_inventory_ui.h','mc_inventory_protocol.h','mc_hotbar_layout.h','mc_resource_probe.cpp','mc_resource_probe.h')){
                 $prepared=$prepared -and ((Get-FileHash -LiteralPath (Join-Path $patchRoot $name)).Hash -eq (Get-FileHash -LiteralPath (Join-Path $upstream ('asi\cdmodkit\'+$name))).Hash)
             }
             Invoke-PinnedGit $upstream @('apply','--reverse','--check',(Join-Path $patchRoot 'upstream.patch')) | Out-Null
@@ -137,7 +137,7 @@ if($SourceBuild){
         New-PinnedCheckout (Join-Path $upstream 'tools\minhook') 'https://github.com/TsudaKageyu/minhook.git' $minhookCommit
         New-PinnedCheckout (Join-Path $upstream 'tools\imgui') 'https://github.com/ocornut/imgui.git' $imguiCommit
         Invoke-PinnedGit $upstream @('apply',(Join-Path $patchRoot 'upstream.patch')) | Out-Null
-        foreach($name in @('mc_panel.cpp','mc_panel.h','mc_inventory_ui.cpp','mc_inventory_ui.h','mc_inventory_protocol.h','mc_hotbar_layout.h')){
+        foreach($name in @('mc_panel.cpp','mc_panel.h','mc_inventory_ui.cpp','mc_inventory_ui.h','mc_inventory_protocol.h','mc_hotbar_layout.h','mc_resource_probe.cpp','mc_resource_probe.h')){
             Copy-Item -LiteralPath (Join-Path $patchRoot $name) -Destination (Join-Path $upstream 'asi\cdmodkit')
         }
         Write-Host 'Prepared the pinned World Builder, MinHook, ImGui, and prototype patches.'

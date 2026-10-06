@@ -27,6 +27,22 @@ python tools/check_block_assets.py
 6766 个模型选项、2071 个模型和 1012 个纹理依赖，缺失依赖为零。
 这是资源清单，**不是已验证的全部注册方块或全部合法状态表**。
 
+另用固定官方数据生成器导出实际 vanilla 注册表：
+
+```powershell
+python -B tools/build_block_registry.py
+python -B tools/check_block_registry.py --rebuild
+```
+
+`build/block-registry-1.21.1/block-registry.json` 核对 **1060 种注册方块、26684 个合法
+状态**；每类属性组合完整、全局状态 ID 唯一连续、默认状态唯一，客户端资源无缺失。
+1062 份资源中额外两份为 item_frame/glow_item_frame，不是注册方块。10 项检查含真实
+生成器重建通过。工具只运行 `net.minecraft.data.Main --reports`，输入客户端与 46 份
+库均固定哈希，输出只在 ignored build；不启动世界、不访问运行中的 MC 权威服务。
+这是 vanilla 注册表，不是 Fabric 服务的运行时注册表；尚未逐状态实现原生显示与碰撞。
+自定义相对客户端/Java 路径在切换工作目录前固定，发布拒绝与输入同路径或同硬链接的
+最终/临时输出，避免覆盖已验证的客户端或依赖。
+
 目前导出六种已有基线：橡木原木、橡木木板、圆石、泥土、石头、工作台。
 保留原木三轴、泥土四方向及石头四个普通/镜像选项，共 14 个 glTF、9 张原版纹理、84 个面。
 顶点、默认 UV、UV 旋转及状态旋转通过固定官方 Java 模型类计算。
@@ -53,7 +69,7 @@ py -3.12 -B tools/check_native_steve.py --rebuild
 本机也可省略 `--game-root`，从 ignored 安装清单读取。`--template-only` 只提取并检查原生模板。
 未知 EXE SHA、源码哈希或模板内容会停止，不能用替换固定哈希的方法跳过兼容验证。
 
-工具只读原生 `0009/0.pamt` 与相关 PAZ，导出 Kliff 身体的 PAB、PAC、prefab descriptor、
+工具只读原生 `0009/0.pamt` 与相关 PAZ，导出选定男性 nude 模板的 PAB、PAC、prefab descriptor、
 材质、PABC 与 PAPR。已验证真实 447 根骨、189 项 palette、13162 个模板顶点，
 原 PAC 无编辑重建字节完全一致。所有读取项在发布前复读，拒绝混用不同快照。
 
@@ -104,6 +120,24 @@ BC5U，材质常量图为 DXT1，各九层 mip。底层最大 RGB 误差 4、平
 `build/steve-material/steve-material-report.json` 含五项资源及全部模板 SHA。
 14 项含真实重建检查通过。这些新资源没有 actor 引用；材质转换不等于受控 Steve 外观。
 
+## Steve prefab 与骨骼依赖候选
+
+```powershell
+py -3.12 -B tools/prepare_steve_prefab.py
+py -3.12 -B tools/check_steve_prefab.py --rebuild
+py -3.12 -B tools/prepare_asset_overlay.py --report build/steve-prefab/steve-prefab-report.json --output build/steve-prefab-overlay
+py -3.12 -B tools/check_asset_overlay.py --output build/steve-prefab-overlay --verify-game
+```
+
+输出报告含 PAC、材质、三张 DDS、binary prefab 与 descriptor 共七项。
+新逻辑路径为 `/character/prefab/1_pc/01_phm/nude/crimsonmc_steve_1_21_1.prefab`。
+完整解析真实 prefab 的 CD_Nude/CD_Underwear 两对象，仅替换前者的 `_skinnedMeshFile`；
+等长路径改动、六处指针重定位、其它字节不变，逆向改回与真实模板完全一致。
+内衣资源和 descriptor 原文保留，PAB/PABC/PAPR 三依赖从真实归档复读校验。
+16 项检查含真实重建通过，七资源 overlay 的 13 项预演也通过，PAZ 为 334976 字节。
+这次预演以仍装原木 0041 的快照生成 0042；原木恢复后此快照已过期，安装前须重新生成，
+不能复用旧计划。Steve 从未安装；prefab 仍未指向受控 actor，动画、贴合与装备未验收。
+
 ## 独立资源包与索引预演
 
 ```powershell
@@ -149,13 +183,34 @@ py -3.12 -B tools/install_asset_probe.py --restore
 断电、发布失败和恢复中断的隔离测试通过；实际安装与恢复结果另记在进度文件。
 
 对象探针只通过已验证的游戏线程 API 放置诊断对象，不请求 MC 放置或消费材料。
+最多探测相机前方七个近处点，每点检查中心和四角；避开已有登记对象并拒绝陡坡。
+所有候选都不合格时不写生成日志、不创建对象；有合格点时只提交一次生成。
 登记受理、物理碰撞、实际画面分别验收；对象列表没有每 UID 原生 live 标志。
 日志保存进程创建时间、UID、路径和变换，清理拒绝跨重启 UID 与外部对象。
 红沙创建对象时会自动选择编辑项目，并可能创建空 Untitled 项目和更新设置；这项
 上游行为不能称为完全无项目副作用。诊断不调用项目保存或修改 autoload，测试前要求
 关闭项目自动保存，保留原有项目文件。临时资源验证不等于正式 MC ID 映射已接通。
 
-下一步用真实原木验证 prefab 实际加载、显示与既有碰撞，再接桥接 ID 映射；
+2026-10-06 实机登记成功，但画面无原木、一米碰撞检查失败；对象已清理且 MC 状态
+未变。游戏正常退出后临时包已恢复，38 个原始索引/元数据哈希一致。28 项隔离 HTTP
+检查通过不改变这项实机失败结论。下一步定位资源加载失败，再验收显示/碰撞及桥接映射；
 Steve 继续验证原生骨变换和安全可恢复的外观选择。
+
+## 原生资源读取诊断
+
+`probe_native_resources.py` 使用插件的固定资源读取接口。默认检查六项原版蓝块、
+六项 Y 轴原木及三张原木 DDS；`--group blue` 只检查六项对照，`--group oak` 检查
+九项 Y 轴/纹理资源，`--group all` 检查全部 27 项。读取前校验本地模板与报告来源，原生返回
+长度、前 16 字节和 FNV-1a64；本地资源仍使用 SHA256 校验，FNV 不作为安全哈希。
+
+```powershell
+python -B tools/probe_native_resources.py --output runtime/native-resource-probe-first.json
+```
+
+每项只提交一次；超时或失联保留已有 ticket，不重放。输出必须是 ignored runtime
+中的新文件，已有报告不覆盖；前后核对支持版本、同一游戏实例和真实 MC 状态。
+这个诊断不安装包、不生成实体、不修改库存；全部文件读取一致也不能代替画面和碰撞
+验收。完整命令、检查与实机结果见 [progress.md](progress.md)。
+
 全部原版/派生资源留在本机；Git 只发布转换代码、来源、许可证及检查摘要。
 总体进度见 [progress.md](progress.md)，分发边界见 [workshop-distribution.md](workshop-distribution.md)。

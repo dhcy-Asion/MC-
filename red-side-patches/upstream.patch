@@ -1,5 +1,5 @@
 diff --git a/asi/cdmodkit/cdmodkit.cpp b/asi/cdmodkit/cdmodkit.cpp
-index 99718d9..b188096 100644
+index 99718d9..0af6598 100644
 --- a/asi/cdmodkit/cdmodkit.cpp
 +++ b/asi/cdmodkit/cdmodkit.cpp
 @@ -7,6 +7,7 @@
@@ -10,7 +10,78 @@ index 99718d9..b188096 100644
  #include <cstring>
  #include <fstream>
  #include <sstream>
-@@ -6392,7 +6393,8 @@ static DWORD WINAPI InitThread(LPVOID) {
+@@ -928,6 +929,70 @@ bool GameReadFileRange(const std::string& path, std::vector<uint8_t>& out, uint3
+     return ok;
+ }
+ 
++// Isolate each native stage in its own fault guard. The result/vector lives
++// outside the guards; after a loader/metadata/read fault a captured handler can
++// still be released once. These are the existing GameReadFile ABIs above.
++struct ResourceProbeBackend {
++    const std::string& path;
++    alignas(16) uint8_t pathObj[64] = { 0 };
++    void* handler = nullptr;
++    uintptr_t worker = 0;
++    uint32_t stored = 0, decoded = 0;
++    uint8_t flags = 0;
++    bool releaseAttempted = false;
++    bool HasHandler() const noexcept { return handler != nullptr; }
++    bool Load() noexcept {
++        CDK_GUARD_BEGIN
++            auto sdAlloc = (uintptr_t(*)(int))(g_base + kRva_StringDataAlloc);
++            auto normalize = (void*(*)(void*, const void*))(g_base + kRva_PathNormalizeCtor);
++            uintptr_t sd = sdAlloc((int)path.size()); if (!sd) return false;
++            strncpy_s((char*)*(uintptr_t*)sd, path.size() + 1, path.c_str(), _TRUNCATE);
++            uintptr_t holder = sd; normalize(pathObj, &holder);
++            g_origResLoad(g_resLoader, &handler, pathObj, 0);
++            return true;
++        CDK_GUARD_FAIL return false;
++        CDK_GUARD_END
++    }
++    bool Metadata(uint32_t& s, uint32_t& d, uint32_t& f) noexcept {
++        CDK_GUARD_BEGIN
++            const uintptr_t h = (uintptr_t)handler;
++            worker = *(uintptr_t*)(h + 0x20);
++            stored = *(uint32_t*)(h + 0x34); decoded = *(uint32_t*)(h + 0x38);
++            flags = *(uint8_t*)(h + 0x3c);
++            s = stored; d = decoded; f = flags; return true;
++        CDK_GUARD_FAIL return false;
++        CDK_GUARD_END
++    }
++    bool Read(uint8_t* bytes, uint32_t capacity) noexcept {
++        const uint32_t need = (flags & 15) == 1 ? stored : decoded;
++        const uint32_t cap = stored > decoded ? stored : decoded;
++        if (!worker || !need || !cap || stored > mc_resource_probe::MAX_BYTES ||
++            decoded > mc_resource_probe::MAX_BYTES || capacity != cap) return false;
++        CDK_GUARD_BEGIN
++            auto read5 = *(uint8_t(__fastcall**)(void*, void*, void*, uint32_t, uint32_t, uint32_t))(*(uintptr_t*)worker + 0x28);
++            return read5((void*)worker, handler, bytes, capacity, 0, 0) != 0;
++        CDK_GUARD_FAIL return false;
++        CDK_GUARD_END
++    }
++    bool Release() noexcept {
++        if (!handler || releaseAttempted) return false;
++        releaseAttempted = true; // Native release can itself fault; never retry.
++        CDK_GUARD_BEGIN
++            (*(void(__fastcall**)(void*, int))(*(uintptr_t*)handler))(handler, 1);
++            return true;
++        CDK_GUARD_FAIL return false;
++        CDK_GUARD_END
++    }
++};
++mc_resource_probe::ReadResult ReadResourceBounded(const std::string& path) {
++    mc_resource_probe::ReadResult unavailable; unavailable.state = mc_resource_probe::State::Unavailable;
++    if (!BuildOk() || strcmp(GameVersion(), "1.0.0.2976") || !GameThreadReady() ||
++        GetCurrentThreadId() != g_gameThread || !GameReadAvailable() || path.empty() || path.size() > 128)
++        return unavailable;
++    ResourceProbeBackend backend{path};
++    return mc_resource_probe::ReadBounded(backend);
++}
++
+ // ---- game call tracing (reverse engineering aid, console "trace on|off"): logs the game's own setWorldTransform / setEnable calls
+ // with the caller RVA, every object the game creates, and transform changes of the most recently created game object per tick.
+ static SetWorldTransformFn g_origSetXf = nullptr; static SetEnableFn g_origSetEnable = nullptr;
+@@ -6392,7 +6457,8 @@ static DWORD WINAPI InitThread(LPVOID) {
      overlay::Install();          // first: must be in place before the game creates its swapchain
      LoadPrefabs();
      if (g_httpEnabled) httpapi::Start(g_httpPort);   // opt-in; before ResolveGame on purpose: /api/status reports a failed build, writes answer 503
@@ -20,6 +91,24 @@ index 99718d9..b188096 100644
      g_buildOk = ResolveGame();
      if (!g_buildOk) { Log("signature resolution failed; game functions will NOT be hooked or called"); return 0; }
      ReleaseHookGap();
+diff --git a/asi/cdmodkit/core_internal.h b/asi/cdmodkit/core_internal.h
+index 4ec6346..74f2af3 100644
+--- a/asi/cdmodkit/core_internal.h
++++ b/asi/cdmodkit/core_internal.h
+@@ -2,9 +2,13 @@
+ // Not part of the public API: cdmodkit_api.h and core.h are what other code should use.
+ #pragma once
+ #include "core.h"
++#include "mc_resource_probe.h"
+ #include <utility>
+ 
+ namespace core {
++    // Fixed-resource diagnostic only: bounded, caught native reads on the game
++    // thread. Existing GameReadFile/Range callers retain their original behavior.
++    mc_resource_probe::ReadResult ReadResourceBounded(const std::string& path);
+     // Internal hook wrapper used by optional feature modules. It keeps the same
+     // near-image trampoline reservation/retry behavior as the core hooks.
+     bool InstallInternalHook(void* target, void* detour, void** original, const char* name);
 diff --git a/asi/cdmodkit/editor.cpp b/asi/cdmodkit/editor.cpp
 index 6daa16e..0913c0f 100644
 --- a/asi/cdmodkit/editor.cpp
@@ -43,10 +132,59 @@ index 6daa16e..0913c0f 100644
          ImGuiIO& io = ImGui::GetIO();
          io.MouseDrawCursor = !g_playMode;
 diff --git a/asi/cdmodkit/http_api.cpp b/asi/cdmodkit/http_api.cpp
-index 93f9853..d96c3a6 100644
+index 93f9853..22d4984 100644
 --- a/asi/cdmodkit/http_api.cpp
 +++ b/asi/cdmodkit/http_api.cpp
-@@ -173,6 +173,43 @@ static std::string Handle(const std::string& method, const std::string& path, co
+@@ -162,8 +162,48 @@ static bool Ready(int& status, std::string& out) {
+     if (core::HooksReady() && core::GameThreadReady()) return true;
+     status = 503; out = Error("game thread is not ready"); return false;
+ }
++static mc_resource_probe::Service& ResourceProbes() {
++    static mc_resource_probe::Service service({
++        []() { return core::BuildOk() && std::string(core::GameVersion()) == "1.0.0.2976" &&
++            core::GameThreadReady() && core::GameReadAvailable(); },
++        []() { return (uint64_t)GetTickCount64(); },
++        [](std::function<void()> job) { core::RunOnGameThread(std::move(job)); },
++        [](const std::string& path) { return core::ReadResourceBounded(path); }
++    });
++    return service;
++}
++static std::string ResourceSnapshot(const mc_resource_probe::Snapshot& s) {
++    return "{\"ticket\":" + Int(s.ticket) + ",\"resource\":" + Quote(s.resource) + ",\"path\":" + Quote(s.path) +
++        ",\"state\":" + Quote(mc_resource_probe::StateName(s.state)) + ",\"attempts\":" + std::to_string(s.attempts) +
++        ",\"length\":" + std::to_string(s.length) + ",\"head16hex\":" + Quote(s.head16hex) + ",\"fnv1a64\":" + Quote(s.fnv1a64) +
++        ",\"hashAlgorithm\":\"fnv1a64-noncryptographic\",\"storedSize\":" + std::to_string(s.storedSize) +
++        ",\"decodedSize\":" + std::to_string(s.decodedSize) + ",\"storageFlags\":" + std::to_string(s.storageFlags) +
++        ",\"handlerPresent\":" + Bool(s.handlerPresent) + ",\"handlerReleased\":" + Bool(s.handlerReleased) +
++        ",\"maxBytes\":" + std::to_string(mc_resource_probe::MAX_BYTES) + "}";
++}
+ static std::string Handle(const std::string& method, const std::string& path, const Fields& arg, int& status) {
+     status = 200;
++    if (method == "POST" && path == "/api/prototype/resource-probe") {
++        auto resource = arg.find("resource");
++        if (arg.size() != 1 || resource == arg.end()) { status = 400; return Error("one resource string required"); }
++        mc_resource_probe::Snapshot snapshot;
++        const auto admission = ResourceProbes().Submit(resource->second, snapshot);
++        if (admission == mc_resource_probe::Admission::UnknownResource) { status = 400; return Error("unknown resource enum"); }
++        if (admission == mc_resource_probe::Admission::Unavailable) { status = 503; return Error("bounded resource reader unavailable"); }
++        if (admission == mc_resource_probe::Admission::Busy) { status = 429; return Error("resource probe capacity reached"); }
++        status = 202;
++        return "{\"ticket\":" + Int(snapshot.ticket) + ",\"resource\":" + Quote(snapshot.resource) + ",\"state\":\"pending\"}";
++    }
++    if (method == "GET" && path == "/api/prototype/resource-result") {
++        auto value = arg.find("ticket"); int ticket = 0;
++        if (arg.size() != 1 || value == arg.end() || !mc_resource_probe::ParseTicket(value->second, ticket)) {
++            status = 400; return Error("one decimal ticket required");
++        }
++        mc_resource_probe::Snapshot snapshot;
++        if (!ResourceProbes().Lookup(ticket, snapshot)) { status = 410; return Error("unknown or expired resource ticket"); }
++        status = snapshot.state == mc_resource_probe::State::Pending ? 202 : 200;
++        return ResourceSnapshot(snapshot);
++    }
+     if (method == "GET" && path == "/api/status") {
+         return "{\"apiVersion\":1,\"ready\":" + Bool(core::HooksReady() && core::GameThreadReady()) +
+             ",\"gameVersion\":" + Quote(core::GameVersion()) + ",\"buildOk\":" + Bool(core::BuildOk()) +
+@@ -173,6 +213,43 @@ static std::string Handle(const std::string& method, const std::string& path, co
          Vec3 p{}; if (!core::PlayerWorldPos(&p)) { status = 503; return Error("player is not in the world"); }
          return "{\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + "}";
      }
@@ -90,6 +228,36 @@ index 93f9853..d96c3a6 100644
      if (method == "GET" && path == "/api/camera") {
          // pos + axis of the camera object; the axis sign is ambiguous, so "view" is the horizontal direction from the camera
          // towards the player (the third-person camera always looks over the character), which is what callers want
+@@ -511,7 +588,8 @@ static bool SendAll(SOCKET s, const std::string& data) {
+ }
+ static void Reply(SOCKET s, int status, const std::string& body) {
+     const char* reason = status == 200 ? "OK" : status == 202 ? "Accepted" : status == 400 ? "Bad Request" :
+-        status == 404 ? "Not Found" : status == 409 ? "Conflict" : status == 503 ? "Service Unavailable" : "Internal Server Error";
++        status == 404 ? "Not Found" : status == 409 ? "Conflict" : status == 410 ? "Gone" : status == 429 ? "Too Many Requests" :
++        status == 503 ? "Service Unavailable" : "Internal Server Error";
+     std::string head = "HTTP/1.1 " + Int(status) + " " + reason + "\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " +
+         Int((int)body.size()) + "\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n";
+     SendAll(s, head + body);
+@@ -560,6 +638,19 @@ static void Client(SOCKET s, int port) {
+     while (body.size() < length) { int n = recv(s, buf, (int)(std::min)(sizeof buf, length - body.size()), 0); if (n <= 0) return; body.append(buf, n); }
+     size_t qm = target.find('?'); std::string path = target.substr(0, qm);
+     if (path.empty() || path[0] != '/' || path.find('%') != std::string::npos) { Reply(s, 400, Error("invalid path")); return; }
++    // Validate the raw request before generic scalar flattening/query decoding.
++    if (method == "POST" && path == "/api/prototype/resource-probe") {
++        std::string resource;
++        if (qm != std::string::npos || !mc_resource_probe::ParseBody(body, resource)) {
++            Reply(s, 400, Error("one literal resource string and no query required")); return;
++        }
++    }
++    if (method == "GET" && path == "/api/prototype/resource-result") {
++        const std::string query = qm == std::string::npos ? "" : target.substr(qm + 1); int ticket = 0;
++        if (length || query.rfind("ticket=", 0) != 0 || !mc_resource_probe::ParseTicket(query.substr(7), ticket)) {
++            Reply(s, 400, Error("one literal decimal ticket and no body required")); return;
++        }
++    }
+     Fields fields = qm == std::string::npos ? Fields{} : Query(target.substr(qm + 1));
+     if (length && !JsonObject(body, fields)) { Reply(s, 400, Error("expected flat JSON object")); return; }
+     int status = 200; std::string result = Handle(method, path, fields, status); Reply(s, status, result);
 diff --git a/asi/cdmodkit/overlay.cpp b/asi/cdmodkit/overlay.cpp
 index 9784267..220c646 100644
 --- a/asi/cdmodkit/overlay.cpp

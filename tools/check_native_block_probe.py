@@ -45,6 +45,7 @@ class FakeHTTP:
         self.projects, self.editing_project = ["Untitled 1"], "Untitled 1"
         self.implicit_project_saves, self.implicit_settings_saves = [], 0
         self.mc_revision, self.change_mc = 7, False
+        self.ground_height = lambda x, z: 10.0
         state = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -92,7 +93,8 @@ class FakeHTTP:
                         return self.reply(202, {"state": "pending"})
                     if state.miss:
                         return self.reply(200, {"state": "miss"})
-                    hit = {"state": "hit", "x": query["query"]["x"], "y": 10.0, "z": query["query"]["z"]}
+                    hit = {"state": "hit", "x": query["query"]["x"],
+                           "y": state.ground_height(query["query"]["x"], query["query"]["z"]), "z": query["query"]["z"]}
                     for row in state.objects.values():
                         if not row["hidden"] and state.collision_ready and row["x"] <= hit["x"] <= row["x"] + 1 and row["z"] <= hit["z"] <= row["z"] + 1:
                             hit["y"] = row["y"] + 1
@@ -487,6 +489,33 @@ class NativeBlockProbeChecks(unittest.TestCase):
         with self.assertRaisesRegex(probe.ProbeError, "Initial project ownership"):
             self.subject.cleanup()
         self.assertFalse(self.mutations("DELETE", "/api/objects/42"))
+
+
+    def test_26_nearby_flat_candidate_is_sampled_before_one_spawn(self):
+        self.fake.ground_height = lambda x, z: 10.0 if z < 3.5 else 10.0 + x
+        result = self.subject.spawn()
+        self.assertEqual(len(result["placementAttempts"]), 2)
+        self.assertFalse(result["placementAttempts"][0]["accepted"])
+        self.assertEqual(result["position"]["z"], 2.5)
+        self.assertEqual(len(self.mutations()), 1)
+        self.assertTrue(self.subject.cleanup()["collisionRemovedVerified"])
+
+    def test_27_all_sloped_candidates_never_create_or_journal_an_object(self):
+        self.fake.ground_height = lambda x, z: 10.0 + x
+        with self.assertRaisesRegex(probe.ProbeError, "All nearby candidate"):
+            self.subject.spawn()
+        self.assertFalse(self.mutations())
+        self.assertIsNone(self.journal.read())
+
+    def test_28_existing_object_blocks_only_nearby_candidates_and_is_preserved(self):
+        self.fake.objects[7] = object_row(7, prefab="/object/foreign.prefab", project="Player Build", x=0, z=3)
+        result = self.subject.spawn()
+        self.assertTrue(any(row.get("reason") == "registered object nearby" for row in result["placementAttempts"]))
+        dx, dz = result["position"]["x"] + 0.5, result["position"]["z"] + 0.5 - 3
+        self.assertGreaterEqual(dx * dx + dz * dz, 4)
+        self.assertEqual(len(self.mutations()), 1)
+        self.subject.cleanup()
+        self.assertIn(7, self.fake.objects)
 
 
 if __name__ == "__main__":

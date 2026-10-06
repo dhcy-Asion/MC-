@@ -437,6 +437,28 @@ class NativeBlockProbe:
             time.sleep(self.interval)
         raise ProbeError("Physical ground height did not confirm the expected one-metre collision change")
 
+    def placement(self, player: dict, vx: float, vz: float, before: list) -> tuple:
+        """Sample a bounded set of nearby positions without creating objects."""
+        attempts = []
+        for forward, side in ((4, 0), (3, 0), (5, 0), (4, -1.5), (4, 1.5), (5, -1.5), (5, 1.5)):
+            cx = player["x"] + vx * forward - vz * side
+            cz = player["z"] + vz * forward + vx * side
+            if any(math.hypot(row["x"] - cx, row["z"] - cz) < 2 for row in before):
+                attempts.append({"forward": forward, "side": side, "accepted": False, "reason": "registered object nearby"})
+                continue
+            query = {"x": cx, "y": player["y"] + 5, "z": cz, "length": 12}
+            ground = self.ground(query)
+            sample = [ground]
+            for dx, dz in ((-0.35, -0.35), (-0.35, 0.35), (0.35, -0.35), (0.35, 0.35)):
+                sample.append(self.ground({**query, "x": cx + dx, "z": cz + dz}))
+            highest = max(hit["y"] for hit in sample)
+            spread = highest - min(hit["y"] for hit in sample)
+            accepted = spread <= 0.15 and abs(ground["y"] - player["y"]) <= 3
+            attempts.append({"forward": forward, "side": side, "heightSpread": spread, "accepted": accepted})
+            if accepted:
+                return cx, cz, ground, sample, highest, attempts
+        raise ProbeError("All nearby candidate positions are occupied, too sloped or too far from the player's level")
+
     def spawn(self, axis: str = "y") -> dict:
         if axis not in PREFABS:
             raise ProbeError("Only the three reviewed oak-log axes are supported")
@@ -451,24 +473,15 @@ class NativeBlockProbe:
         if any(row.get("project") == PROJECT or row.get("prefab") in PREFABS.values() for row in before):
             raise ProbeError("Existing native asset diagnostic retained; automatic duplicate spawn refused")
         player, camera, vx, vz = self.position()
-        cx, cz = player["x"] + vx * 4, player["z"] + vz * 4
-        if any(math.hypot(row["x"] - cx, row["z"] - cz) < 2 for row in before):
-            raise ProbeError("A registered object already occupies the nearby diagnostic location")
-        query = {"x": cx, "y": player["y"] + 5, "z": cz, "length": 12}
-        ground = self.ground(query)
-        sample = [ground]
-        for dx, dz in ((-0.35, -0.35), (-0.35, 0.35), (0.35, -0.35), (0.35, 0.35)):
-            sample.append(self.ground({**query, "x": cx + dx, "z": cz + dz}))
-        highest = max(hit["y"] for hit in sample)
-        if highest - min(hit["y"] for hit in sample) > 0.15 or abs(ground["y"] - player["y"]) > 3:
-            raise ProbeError("Ground is too sloped or too far from the player's level for safe nearby placement")
+        cx, cz, ground, sample, highest, attempts = self.placement(player, vx, vz, before)
         state = {"schemaVersion": 1, "runId": str(uuid.uuid4()), "createdUtc": dt.datetime.now(dt.timezone.utc).isoformat(),
                  "project": PROJECT, "axis": axis, "prefab": PREFABS[axis], "apiBase": self.api.base,
                  "gameInstance": instance,
                  "projectSettingsBefore": settings, "projectsBefore": projects,
                  "statusBefore": ready, "playerBefore": player, "cameraBefore": camera,
                  "position": {"x": cx - 0.5, "y": highest + 0.03, "z": cz - 0.5},
-                 "groundBefore": ground, "flatGroundSamples": sample, "beforeUids": [row["uid"] for row in before],
+                 "groundBefore": ground, "flatGroundSamples": sample, "placementAttempts": attempts,
+                 "beforeUids": [row["uid"] for row in before],
                  "uid": None, "phase": "prepared", "spawnSubmitted": False, "cleanupSubmitted": False,
                  "admissionConfirmed": False, "initialOwnershipConfirmed": False, "projectAssignmentSubmitted": False,
                  "registryConfirmed": False, "collisionVerified": False, "visualVerified": False,
