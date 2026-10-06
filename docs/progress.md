@@ -35,10 +35,12 @@ F8 开关及点击仍待验收。模型资产已推进为真实红沙 palette �
 0041/active receipt 已移除。下一步核对装配/实例化，不能再把目录树猜测当成根因。
 随后已在新进程复试正常原木（读回成功后仍不显示/碰撞失败），并通过 A 蓝 prefab
 别名实测：同一新逻辑路径显示蓝块且物理增量 1.1521 米。A 对象已清理，MC 不变。
-**最新状态：A 收据 `ece6ea42e8154e878fb9be88a8511944` 仍 installed，0041 仍挂载；
-退出指令后红沙 PID 69700 仍运行，窗口捕获连续显示其它游戏，已请用户正常退出后
-恢复包。不要运行中改索引，也不要重复删除已清理 UID。** B PAMI 对照已离线准备，
-尚未生成对应 overlay 或实测。详细证据与恢复顺序见末节。
+退出指令后曾因红沙 PID 69700 仍运行而暂未恢复；后续确认进程已退出，A 收据
+`ece6ea42e8154e878fb9be88a8511944` 已 restored，0041/active receipt 已移除，原始
+38 项哈希一致。B PAMI 对照已通过离线预演并实际安装，**最新收据
+`1c37bb00badf44bfb1eaca55fb36e8d8` 为 installed，0041 仍挂载，红沙 PID 70052
+（23:38:09 启动）仍运行。** 窗口捕获持续显示另一游戏，已请求手动切回红沙或正常
+退出；本次 B 尚无资源读取/生成请求。不能运行中恢复索引，不能误用此前已清理 UID。
 静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
 [native-character-feasibility.md](native-character-feasibility.md)。
 
@@ -577,7 +579,7 @@ prefab 实例没有序列化朝向变换，我方导入仅位置缩放与 UV V �
 一致；没有回滚存档。该次失败碰撞循环未保存每次 hit 数值，只保留超时结果，不能
 事后编造数值；后续探针补充有界采样证据以便准确解释失败。
 
-### A 蓝 prefab 别名已显示且通过碰撞；退出后恢复待完成
+### A 蓝 prefab 别名已显示且通过碰撞；后续已恢复
 
 普通包恢复后，`build/native-blue-alias-overlay` 按恢复后的索引重新预演：21 项解包
 逐字节一致，PAZ 56752 字节；`check_asset_overlay.py --output ... --verify-game`
@@ -606,7 +608,7 @@ true，清理后增量 0；未新增项目。不能把此结果表述为原木�
 A 清理后通过界面发送正常退出及确认，但进程仍存在。恢复器明确以“Close Crimson
 Desert before changing the asset probe”拒绝，未写索引。重新定位/激活目标窗口后捕获
 仍显示另一游戏，因此未发送进一步键鼠，已请求用户切回或正常退出。此处并非用户
-Escape 停止，也没有强制终止进程。最新 A 收据仍 installed，备份保留在
+Escape 停止，也没有强制终止进程。当时 A 收据仍 installed，备份保留在
 `backups/asset-probe-ece6ea42e8154e878fb9be88a8511944`。
 
 恢复顺序：确认红沙已关闭，运行 `py -3.12 -B tools/install_asset_probe.py --restore`，
@@ -615,3 +617,24 @@ metadataBefore 合并的 38 项原哈希。然后才按恢复后快照准备 B o
 实测。不要把已有 A 挂载收入 B 的元数据基线；不要拿已清理 UID 对新进程操作。
 本轮 ASI/JAR 没有再次改动；源/控制独立审查无阻断。46 个 Python AST、7 个公开 JSON、
 51 个 Markdown 相对链接及六项角色探针保护检查通过，资源和原始证据仍留 ignored。
+
+随后只读复核进程已退出，按上述恢复顺序执行成功：A 收据 restored，0041 与
+active receipt 消失，38 项原哈希全部匹配。无需用户再处理先前退出请求。随后按
+恢复后的元数据生成 `build/native-blue-material-overlay`（0041，21 项，PAZ 56704），
+作为 B 对照的新独立计划，未携入 A 挂载。
+
+### B PAMI 对照已安装，窗口显示受阻，尚未实测
+
+B 计划封装与真实索引检查 **13/13**、隔离安装/恢复 **16/16** 通过。确认红沙无进程
+及无窗口后实际安装 B，收据 `1c37bb00badf44bfb1eaca55fb36e8d8`，备份在
+`backups/asset-probe-1c37bb00badf44bfb1eaca55fb36e8d8`。新进程 PID 70052，
+23:38:09 启动。虽然枚举得到唯一红沙窗口，激活和重新捕获仍持续显示另一款游戏，
+没有依据向目标菜单盲发按键；本次未进行 B 资源读取或生成，没有新的诊断 UID。
+已请求用户手动切回红沙，或正常退出后恢复包；不将经过时间当作答复，也没有强杀。
+
+如果继续 B：先重新枚举真实窗口/进程并确认进入世界，再执行资源客户端
+`--assets build/native-block-blue-material-alias/native-block-report.json`，使用新的 runtime
+输出路径；成功后才单次 `--spawn`（新独立 journal），查验、清理、正常退出和恢复。
+如果先恢复：确认进程不存在后 `install_asset_probe.py --restore`，核对最新 B 收据、
+0041/active receipt 和原始 38 项哈希。旧 A/普通原木对象均已 cleaned，不可重复删除。
+本次持续目标仍 active，完整原木/Steve/装备/HUD 血量/工坊尚未完成。

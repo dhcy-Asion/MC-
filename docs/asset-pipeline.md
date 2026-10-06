@@ -243,7 +243,8 @@ py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block-blue-alia
 
 实机普通原木在新进程中读回 15 项资源后仍不显示/无预期碰撞；A prefab 别名对照则
 在同一逻辑路径显示蓝块，首次地面采样增量 1.1521 米、清理后回到 0，MC 状态保持。
-因此新 prefab 路径可用，下一步检查改过的 PAMI/模型链；B PAMI 对照目前仅离线准备。
+因此新 prefab 路径可用，下一步检查改过的 PAMI/模型链；B PAMI 对照已通过离线检查
+并安装，窗口显示受阻而尚未进行资源读取/生成，最新恢复状态见进度文件。
 对象探针最终 41 项隔离检查通过，碰撞循环现在保留首末采样、次数和 min/max 差值，
 清理阶段失败也会保存。最新临时包是否恢复以 [progress.md](progress.md) 当前状态为准。
 
