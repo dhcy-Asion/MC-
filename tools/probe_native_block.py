@@ -34,6 +34,9 @@ VERSION = "1.0.0.2976"
 PREFABS = {axis: f"/object/00_common/system/crimsonmc_oak_log_{axis}.prefab" for axis in "xyz"}
 MAX_RESPONSE = 2 * 1024 * 1024
 MAX_OBJECTS = 5000
+ASSET_OWNER = "CrimsonMC static oak-log asset probe v1"
+ASSET_MARKER = ".crimsonmc-asset-probe-owner.json"
+PROBE_VARIANTS = ("static-oak-log", "blue-template-alias", "blue-material-alias")
 
 
 class ProbeError(RuntimeError):
@@ -168,6 +171,155 @@ def project_settings(instance: dict) -> dict:
             "observation": "settings disk snapshot; HTTP does not expose the live editing project"}
 
 
+def installed_assets(instance: dict, axis: str) -> dict:
+    """Bind admission to the installed bytes, never a caller-supplied label.
+
+    This is a read-only check. Restoration/cleanup deliberately do not call it.
+    Import the candidate validator lazily because it reuses game_instance here.
+    """
+    import probe_native_resources as resources
+
+    def decode(data: bytes) -> dict:
+        def pairs(items):
+            result = {}
+            for key, value in items:
+                if key in result:
+                    raise ValueError("Duplicate asset evidence field")
+                result[key] = value
+            return result
+        try:
+            value = json.loads(data.decode("utf-8"), object_pairs_hook=pairs,
+                               parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
+        except (ValueError, UnicodeError) as error:
+            raise ProbeError("Installed asset evidence must be strict unique-field JSON") from error
+        if not isinstance(value, dict):
+            raise ProbeError("Installed asset evidence must be a JSON object")
+        return value
+
+    def read(path: Path, maximum: int = MAX_RESPONSE) -> bytes:
+        native.check_links(path)
+        if not path.is_file() or not 0 < path.stat().st_size <= maximum:
+            raise ProbeError("Installed asset evidence is missing or exceeds its bounded size: " + str(path))
+        with path.open("rb") as stream:
+            data = stream.read(maximum + 1)
+        if not 0 < len(data) <= maximum:
+            raise ProbeError("Installed asset evidence changed size while reading")
+        return data
+
+    def digest(value: object) -> str:
+        if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise ProbeError("Installed asset SHA256 is invalid")
+        return value
+
+    def build_path(value: object) -> Path:
+        if not isinstance(value, str) or not Path(value).is_absolute():
+            raise ProbeError("Installed asset plan/report must be an absolute build path")
+        path = Path(os.path.abspath(value))
+        native.check_links(path)
+        if not path.is_relative_to(ROOT / "build") or path == ROOT / "build":
+            raise ProbeError("Installed asset plan/report must remain inside ignored build")
+        return path
+
+    receipt_path = ROOT / "runtime/asset-probe-active.json"
+    raw = read(receipt_path)
+    receipt = decode(raw)
+    if (receipt.get("format") != "crimsonmc_asset_probe_v1" or receipt.get("owner") != ASSET_OWNER
+            or receipt.get("status") != "installed" or not isinstance(receipt.get("id"), str)
+            or not re.fullmatch(r"[0-9a-f]{32}", receipt["id"])):
+        raise ProbeError("A current owned installed asset receipt is required")
+    image = Path(instance["imagePath"])
+    if (instance.get("imageSha256") != native.EXE_SHA256 or image.name.casefold() != "crimsondesert.exe"
+            or image.parent.name.casefold() != "bin64"):
+        raise ProbeError("Running game installation identity is invalid")
+    game = image.parent.parent.resolve()
+    native.check_links(game)
+    root_value = receipt.get("gameRoot")
+    if not isinstance(root_value, str) or not Path(root_value).is_absolute():
+        raise ProbeError("Installed receipt gameRoot is invalid")
+    native.check_links(Path(root_value))
+    if Path(root_value).resolve() != game:
+        raise ProbeError("Installed asset receipt belongs to another gameRoot")
+    plan = build_path(receipt.get("plan"))
+    plan_raw = read(plan / "reports/overlay-report.json")
+    plan_sha = hashlib.sha256(plan_raw).hexdigest()
+    if plan_sha != digest(receipt.get("planSha256")):
+        raise ProbeError("Installed overlay plan SHA256 differs from its receipt")
+    overlay = decode(plan_raw)
+    candidate = build_path(receipt.get("candidateReport"))
+    candidate_sha = digest(receipt.get("candidateReportSha256"))
+    candidate_raw = read(candidate)
+    if hashlib.sha256(candidate_raw).hexdigest() != candidate_sha:
+        raise ProbeError("Installed candidate report SHA256 differs from its receipt")
+    declared_reports = overlay.get("candidateReports")
+    expected_report = str(candidate.relative_to(ROOT))
+    if declared_reports != {expected_report: candidate_sha}:
+        raise ProbeError("Installed overlay must bind exactly its one candidate report")
+    try:
+        assets = resources.load_assets(candidate)
+    except resources.ProbeError as error:
+        raise ProbeError("Candidate resource validation failed: " + str(error)) from error
+    variant = assets.get("probeVariant")
+    if variant not in PROBE_VARIANTS or receipt.get("probeVariant") != variant:
+        raise ProbeError("Installed probe variant differs from validated candidate resources")
+    if variant != "static-oak-log" and axis != "y":
+        raise ProbeError(f"The {variant} control supports only axis y")
+    if assets.get("reportSha256") != candidate_sha:
+        raise ProbeError("Candidate report changed during installed asset validation")
+    name = receipt.get("directoryName")
+    if (not isinstance(name, str) or not re.fullmatch(r"[0-9]{4}", name) or not 36 <= int(name) <= 9999
+            or overlay.get("directoryName") != name or overlay.get("schemaVersion") != 1
+            or overlay.get("supportedExeSha256") != native.EXE_SHA256):
+        raise ProbeError("Installed overlay directory/version differs from its receipt")
+    expected = {row["path"]: row for key, row in assets["resources"].items() if key.startswith("oak_")}
+    rows = overlay.get("resources")
+    if not isinstance(rows, list) or len(rows) != 21 or len(expected) != 21:
+        raise ProbeError("Installed overlay needs exactly the validated 21 resources")
+    seen = set()
+    for row in rows:
+        if (not isinstance(row, dict) or not isinstance(row.get("virtualPath"), str)
+                or row["virtualPath"] not in expected or row["virtualPath"] in seen):
+            raise ProbeError("Installed overlay resource set differs from candidate resources")
+        seen.add(row["virtualPath"])
+        wanted = expected[row["virtualPath"]]
+        local = row.get("localFile")
+        if (not isinstance(local, str) or Path(local).is_absolute() or ".." in Path(local).parts
+                or Path(os.path.abspath(ROOT / local)) != candidate.parent / wanted["localFile"]
+                or row.get("sha256") != wanted["sha256"]):
+            raise ProbeError("Installed overlay payload differs from validated candidate resources")
+    files = overlay.get("files")
+    package_names = (name + "/0.pamt", name + "/0.paz", name + "/" + ASSET_MARKER)
+    installed = receipt.get("installedFiles")
+    metadata = receipt.get("metadataAfter")
+    if (not isinstance(files, dict) or not isinstance(installed, dict) or set(installed) != set(package_names)
+            or not isinstance(metadata, dict) or set(metadata) != {"meta/0.pathc", "meta/0.papgt"}):
+        raise ProbeError("Installed asset file inventory is incomplete or polluted")
+    directory = game / name
+    native.check_links(directory)
+    if not directory.is_dir() or {p.name for p in directory.iterdir()} != {"0.pamt", "0.paz", ASSET_MARKER}:
+        raise ProbeError("Installed asset package contains unexpected files")
+    for relative, sha in {**installed, **metadata}.items():
+        path = game / relative
+        native.check_links(path)
+        if not path.is_file() or native.file_hash(path) != digest(sha):
+            raise ProbeError("Installed package/metadata SHA256 differs: " + relative)
+        if relative.endswith(ASSET_MARKER):
+            continue
+        source = ("package/" + relative) if relative.startswith(name + "/") else "metadata-after/" + Path(relative).name
+        if files.get(source) != sha:
+            raise ProbeError("Installed package/metadata is not the bound overlay plan")
+    marker = decode(read(directory / ASSET_MARKER, 4096))
+    if marker != {"owner": ASSET_OWNER, "id": receipt["id"], "planSha256": plan_sha}:
+        raise ProbeError("Installed asset ownership marker differs from receipt")
+    # Detect receipt/report changes across the read-only verification window.
+    if read(receipt_path) != raw or read(candidate) != candidate_raw or read(plan / "reports/overlay-report.json") != plan_raw:
+        raise ProbeError("Installed asset identity changed during verification")
+    return {"probeVariant": variant, "assetReceipt": {
+        "path": str(receipt_path), "sha256": hashlib.sha256(raw).hexdigest(), "id": receipt["id"],
+        "gameRoot": str(game), "directoryName": name, "plan": str(plan), "planSha256": plan_sha,
+        "candidateReport": str(candidate), "candidateReportSha256": candidate_sha,
+        "probeVariant": variant}}
+
+
 class LoopbackAPI:
     def __init__(self, base: str = "http://127.0.0.1:8765", role: str = "native", timeout: float = 4):
         parts = urlsplit(base)
@@ -240,6 +392,8 @@ class Journal:
             raise ProbeError("Existing evidence is not this native block diagnostic")
         if state.get("prefab") != PREFABS[state["axis"]] or state.get("visualVerified") is not False:
             raise ProbeError("Existing probe journal has an unreviewed prefab/visual claim")
+        if "probeVariant" in state or "assetReceipt" in state:
+            validate_installation_snapshot({key: state.get(key) for key in ("probeVariant", "assetReceipt")}, state["axis"])
         return state
 
     def write(self, state: dict) -> None:
@@ -250,14 +404,32 @@ class Journal:
         temporary.replace(path)
 
 
+def validate_installation_snapshot(value: object, axis: str) -> dict:
+    if not isinstance(value, dict) or set(value) != {"probeVariant", "assetReceipt"}:
+        raise ProbeError("Validated installed probe identity is required")
+    receipt = value.get("assetReceipt")
+    variant = value.get("probeVariant")
+    if (variant not in PROBE_VARIANTS or not isinstance(receipt, dict) or receipt.get("probeVariant") != variant
+            or not isinstance(receipt.get("id"), str) or not re.fullmatch(r"[0-9a-f]{32}", receipt["id"])
+            or any(not isinstance(receipt.get(key), str) or not re.fullmatch(r"[0-9a-f]{64}", receipt[key])
+                   for key in ("sha256", "planSha256", "candidateReportSha256"))):
+        raise ProbeError("Validated installed probe identity is required")
+    if variant != "static-oak-log" and axis != "y":
+        raise ProbeError(f"The {variant} control supports only axis y")
+    # A validator's mutable return object must not alias the persisted snapshot.
+    return strict_json(json.dumps(value, allow_nan=False).encode("utf-8"))
+
+
 class NativeBlockProbe:
     def __init__(self, api: LoopbackAPI, journal: Journal, mc: LoopbackAPI | None = None,
-                 timeout: float = 6, interval: float = 0.1, identity=game_instance, settings=project_settings):
+                 timeout: float = 6, interval: float = 0.1, identity=game_instance, settings=project_settings,
+                 installation_check=installed_assets):
         if api.role != "native" or mc is not None and mc.role != "mc":
             raise ProbeError("Native and MC clients have incompatible roles")
         self.api, self.journal, self.mc = api, journal, mc
         self.identity = identity
         self.settings = settings
+        self.installation_check = installation_check
         self.timeout = max(0.05, min(30, finite(timeout, "poll timeout", 30)))
         self.interval = max(0.01, min(0.5, finite(interval, "poll interval", 1)))
 
@@ -427,10 +599,21 @@ class NativeBlockProbe:
         raise ProbeError("Admitted UID did not appear in the native registry; spawn was not retried")
 
     def collision(self, state: dict, removed: bool = False) -> dict:
+        observations = {"count": 0, "first": None, "last": None, "minDelta": None, "maxDelta": None}
+        state["collisionRemovedObservations" if removed else "collisionObservations"] = observations
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             hit = self.ground(state["groundBefore"]["query"])
             delta = hit["y"] - state["groundBefore"]["y"]
+            # Keep constant-size evidence even when the loop raises on timeout.
+            observation = {"hit": {key: hit[key] for key in ("x", "y", "z", "ticket")},
+                           "deltaFromOriginalGround": delta}
+            observations["count"] += 1
+            if observations["first"] is None:
+                observations["first"] = observation
+            observations["last"] = observation
+            observations["minDelta"] = delta if observations["minDelta"] is None else min(observations["minDelta"], delta)
+            observations["maxDelta"] = delta if observations["maxDelta"] is None else max(observations["maxDelta"], delta)
             if (abs(delta) < 0.15 if removed else 0.75 < delta < 1.25):
                 return {"hit": hit, "deltaFromOriginalGround": delta,
                         "expectedBlueCubeHeight": 1.0, "verified": True}
@@ -466,6 +649,7 @@ class NativeBlockProbe:
         if old is not None and old.get("phase") != "cleaned":
             raise ProbeError("An existing probe journal remains unresolved; inspect/clean up it before spawning again")
         instance = self.identity()
+        installation = validate_installation_snapshot(self.installation_check(instance, axis), axis)
         ready = self.ready()
         settings = self.settings_snapshot(instance)
         projects = self.projects()
@@ -475,6 +659,7 @@ class NativeBlockProbe:
         player, camera, vx, vz = self.position()
         cx, cz, ground, sample, highest, attempts = self.placement(player, vx, vz, before)
         state = {"schemaVersion": 1, "runId": str(uuid.uuid4()), "createdUtc": dt.datetime.now(dt.timezone.utc).isoformat(),
+                 **installation,
                  "project": PROJECT, "axis": axis, "prefab": PREFABS[axis], "apiBase": self.api.base,
                  "gameInstance": instance,
                  "projectSettingsBefore": settings, "projectsBefore": projects,
@@ -497,6 +682,8 @@ class NativeBlockProbe:
             # Persist intent before the one allowed spawn request. A lost HTTP
             # response leaves this journal unresolved, preventing duplicates.
             self.same_instance(state)
+            if validate_installation_snapshot(self.installation_check(instance, axis), axis) != installation:
+                raise ProbeError("Installed asset receipt changed during preflight; spawn was not submitted")
             state["projectSettingsAtAdmission"] = self.settings_snapshot(instance)
             state.update(phase="spawn_submitted", spawnSubmitted=True)
             self.journal.write(state)
@@ -535,7 +722,7 @@ class NativeBlockProbe:
                 raise ProbeError("Player entered the collision sample area; physical evidence is ambiguous")
             state["collisionAfter"] = self.collision(state)
             self.same_instance(state)
-            state.update(phase="spawned", collisionVerified=True)
+            state.update(phase="spawned", collisionVerified=True, collisionVerifiedVariant=state["probeVariant"])
             self.mc_after(state)
             self.journal.write(state)
             return state
@@ -588,7 +775,12 @@ class NativeBlockProbe:
             if code == 404:
                 state["registryRemoved"] = True
                 self.journal.write(state)
-                state["collisionRemoved"] = self.collision(state, removed=True)
+                try:
+                    state["collisionRemoved"] = self.collision(state, removed=True)
+                except (ProbeError, OSError, ValueError) as error:
+                    state.update(phase="cleanup_unresolved", cleanupError=str(error))
+                    self.journal.write(state)
+                    raise
                 state.update(phase="cleaned", collisionRemovedVerified=True)
                 self.mc_after(state)
                 self.journal.write(state)
@@ -601,7 +793,7 @@ class NativeBlockProbe:
 
 
 def summary(state: dict) -> dict:
-    keys = ("runId", "phase", "uid", "prefab", "project", "initialProject", "newProjectNamesAfterAdmission", "position", "registryConfirmed", "collisionVerified",
+    keys = ("runId", "phase", "uid", "prefab", "probeVariant", "assetReceipt", "project", "initialProject", "newProjectNamesAfterAdmission", "position", "registryConfirmed", "collisionVerified", "collisionVerifiedVariant",
             "visualVerified", "registryRemoved", "collisionRemovedVerified", "mcStateUnchanged", "error")
     return {key: state[key] for key in keys if key in state}
 

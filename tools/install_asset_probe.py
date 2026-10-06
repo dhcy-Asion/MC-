@@ -149,9 +149,23 @@ def load_plan(plan: Path) -> dict:
         if native.sha256(data) != row["sha256"]:
             raise ValueError("Probe candidate checksum changed")
         payloads[row["virtualPath"]] = data
-    for path, digest in report.get("candidateReports", {}).items():
+    candidates = report.get("candidateReports", {})
+    if not isinstance(candidates, dict) or len(candidates) != 1:
+        raise ValueError("A static asset probe requires one exact candidate report")
+    for path, digest in candidates.items():
         if native.file_hash(native.output_directory(ROOT / path)) != digest:
             raise ValueError("Probe candidate report changed")
+    from probe_native_resources import load_assets
+    candidate_path, candidate_digest = next(iter(candidates.items()))
+    assets = load_assets(native.output_directory(ROOT / candidate_path))
+    if assets["reportSha256"] != candidate_digest:
+        raise ValueError("Probe candidate report changed during validation")
+    verified = {r["path"]: r for r in assets["resources"].values() if r["path"] in expected}
+    for row in rows:
+        item = verified[row["virtualPath"]]
+        if (item["sha256"] != row["sha256"] or
+                (ROOT / row["localFile"]).resolve() != (Path(assets["reportPath"]).parent / item["localFile"]).resolve()):
+            raise ValueError("Overlay resources differ from their verified candidate report")
     package = plan / "package" / name
     overlay.audit_package(package, rows, payloads)
     from cdmw.core.archive_format import parse_archive_pamt
@@ -167,6 +181,8 @@ def load_plan(plan: Path) -> dict:
         overlay.validate_candidate_dds(data)
     overlay.audit_registry(before["meta/0.pathc"], after["meta/0.pathc"], textures)
     return {"plan": plan, "report": report, "reportSha256": native.sha256(raw),
+            "probeVariant": assets["probeVariant"], "candidateReport": assets["reportPath"],
+            "candidateReportSha256": assets["reportSha256"],
             "name": name, "package": package, "payloads": payloads,
             "before": before, "after": after}
 
@@ -352,6 +368,8 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
                "status": "installing", "gameRoot": str(game.resolve()), "directoryName": name,
                "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
                "plan": str(prepared["plan"]), "planSha256": prepared["reportSha256"],
+               "probeVariant": prepared["probeVariant"], "candidateReport": prepared["candidateReport"],
+               "candidateReportSha256": prepared["candidateReportSha256"],
                "backupRoot": str(backup.resolve()), "metadataBefore": backup_files,
                "metadataAfter": {p: native.sha256(d) for p, d in prepared["after"].items()},
                "installedFiles": {p: native.sha256(d) for p, d in package_files.items()},

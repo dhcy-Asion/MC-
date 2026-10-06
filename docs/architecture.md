@@ -39,6 +39,8 @@ flowchart LR
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 关闭游戏时临时安装/恢复自有 21 项原木 overlay，核对新鲜索引、存档备份、所有权与并发锁 | 拒绝外部修改；恢复不覆盖后来存档；不安装 Steve 或接通正式 MC 映射 |
 | `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木，分别记录登记与实际碰撞证据 | 画面须另验；只清理精确自有 UID/变换，不消费 MC 材料；上游可能创建空编辑项目 |
 | `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
+| `tools/prepare_native_block_control.py`、`check_native_block_control.py` | 在独立 build 目录准备两种固定蓝块对照，分别只将 Y 轴 prefab 或 PAMI 换为对应完整原模板 | 每种对照的其余 20 项资源逐字保持；身份贯穿资源报告、安装收据与实体日志，不能视为原木显示验收 |
+| `tools/analyze_steve_rig.py`、`check_steve_rig.py` | 固定 PAB/PABC/PAC 与官方 Steve 的关节中心、独立矩阵、中立变形和坐标约定分析 | 只输出离线证据，不修改骨骼或安装角色；合成旋转不能证明引擎动画正确 |
 | `config/` | 可公开的默认服务端配置与诊断版本配置 | 不是用户运行时存档；未知 EXE 版本或 SHA 不使用诊断布局 |
 | `artifacts/` | 已成功构建的原型自身 ASI 和 Fabric JAR | M6a 更新两份产物；没有原版游戏程序／资源 |
 | `docs/`、`licenses/` | 可接手的架构、进度、检查摘要及许可证 | 未验证项和实验限制明确标记；原始进程数据不发布 |

@@ -6,6 +6,7 @@ Never contacts port 8765/8766, starts a game, writes game files or consumes MC.
 from __future__ import annotations
 
 import copy
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
@@ -17,11 +18,88 @@ from urllib.parse import urlsplit, parse_qs
 from unittest import mock
 
 import probe_native_block as probe
+import probe_native_resources as resource_probe
 
 
 IDENTITY = {"pid": 42123, "creationTime100ns": "134051756000000000",
             "imagePath": "C:\\FakeGame\\bin64\\CrimsonDesert.exe", "imageSha256": probe.native.EXE_SHA256,
             "access": "PROCESS_QUERY_LIMITED_INFORMATION"}
+
+
+def installation_snapshot(variant="static-oak-log") -> dict:
+    return {"probeVariant": variant, "assetReceipt": {
+        "id": "a" * 32, "sha256": "b" * 64, "planSha256": "c" * 64,
+        "candidateReportSha256": "d" * 64, "probeVariant": variant,
+        "path": "injected-isolated-receipt", "plan": "injected-isolated-plan",
+        "candidateReport": "injected-isolated-candidate"}}
+
+
+class InstalledFixture:
+    """Synthetic files for the receipt gate; no archive decoder or game files.
+
+    Candidate validation is an explicit test double. Its production provenance
+    validation has separate checks in check_native_resource_probe.py.
+    """
+    def __init__(self, folder: Path, variant="static-oak-log"):
+        self.root = folder / "installed-proof"
+        self.game = self.root / "build/fake-game"
+        self.candidate = self.root / "build/candidate/native-block-report.json"
+        self.plan = self.root / "build/plan"
+        self.active = self.root / "runtime/asset-probe-active.json"
+        self.rows, values = [], {}
+        for key, path in resource_probe.RESOURCES.items():
+            if key.startswith("blue_"):
+                continue
+            local = "candidate/" + path
+            data = ("isolated " + key).encode()
+            self.write(self.candidate.parent / local, data)
+            sha = hashlib.sha256(data).hexdigest()
+            values[key] = {"path": path, "localFile": local, "sha256": sha}
+            self.rows.append({"virtualPath": path, "localFile": str((self.candidate.parent / local).relative_to(self.root)), "sha256": sha})
+        candidate_raw = self.json({"probeVariant": variant, "isolated": True})
+        self.write(self.candidate, candidate_raw)
+        candidate_sha = hashlib.sha256(candidate_raw).hexdigest()
+        self.assets = {"reportPath": str(self.candidate), "reportSha256": candidate_sha,
+                       "probeVariant": variant, "resources": values}
+        files, installed, metadata = {}, {}, {}
+        for relative in ("0041/0.pamt", "0041/0.paz", "meta/0.pathc", "meta/0.papgt"):
+            data = ("isolated installed " + relative).encode()
+            self.write(self.game / relative, data)
+            sha = hashlib.sha256(data).hexdigest()
+            source = "package/" + relative if relative.startswith("0041") else "metadata-after/" + Path(relative).name
+            files[source] = sha
+            (installed if relative.startswith("0041") else metadata)[relative] = sha
+        plan_raw = self.json({"schemaVersion": 1, "supportedExeSha256": probe.native.EXE_SHA256,
+                              "directoryName": "0041", "resources": self.rows, "files": files,
+                              "candidateReports": {str(self.candidate.relative_to(self.root)): candidate_sha}})
+        self.write(self.plan / "reports/overlay-report.json", plan_raw)
+        plan_sha = hashlib.sha256(plan_raw).hexdigest()
+        marker = self.json({"owner": probe.ASSET_OWNER, "id": "a" * 32, "planSha256": plan_sha})
+        self.write(self.game / "0041" / probe.ASSET_MARKER, marker)
+        installed["0041/" + probe.ASSET_MARKER] = hashlib.sha256(marker).hexdigest()
+        self.receipt = {"format": "crimsonmc_asset_probe_v1", "owner": probe.ASSET_OWNER,
+                        "id": "a" * 32, "status": "installed", "gameRoot": str(self.game),
+                        "directoryName": "0041", "plan": str(self.plan), "planSha256": plan_sha,
+                        "candidateReport": str(self.candidate), "candidateReportSha256": candidate_sha,
+                        "probeVariant": variant, "installedFiles": installed, "metadataAfter": metadata}
+        self.save()
+        self.identity = {**IDENTITY, "imagePath": str(self.game / "bin64/CrimsonDesert.exe")}
+
+    @staticmethod
+    def json(value):
+        return json.dumps(value, sort_keys=True).encode()
+
+    @staticmethod
+    def write(path, data):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    def save(self):
+        self.write(self.active, self.json(self.receipt))
+
+    def check(self, axis="y", loader_error=None):
+        with mock.patch.object(probe, "ROOT", self.root), mock.patch.object(resource_probe, "load_assets", return_value=copy.deepcopy(self.assets), side_effect=loader_error):
+            return probe.installed_assets(self.identity, axis)
 
 
 def object_row(uid=42, prefab=None, project="Untitled 1", x=-0.5, y=10.03, z=3.5) -> dict:
@@ -178,9 +256,11 @@ class NativeBlockProbeChecks(unittest.TestCase):
         self.identity = dict(IDENTITY)
         self.api = probe.LoopbackAPI(self.fake.base, timeout=0.2)
         self.journal = probe.Journal(self.path)
+        self.installation = installation_snapshot()
         self.subject = probe.NativeBlockProbe(self.api, self.journal, probe.LoopbackAPI(self.fake.base, "mc", 0.2),
                                               timeout=0.2, interval=0.01, identity=lambda: dict(self.identity),
-                                              settings=self.fake.settings)
+                                              settings=self.fake.settings,
+                                              installation_check=lambda instance, axis: copy.deepcopy(self.installation))
 
     def tearDown(self):
         self.fake.close()
@@ -196,6 +276,8 @@ class NativeBlockProbeChecks(unittest.TestCase):
         self.assertTrue(result["registryConfirmed"] and result["collisionVerified"])
         self.assertFalse(result["visualVerified"] or result["nativeLiveStateExposed"])
         self.assertAlmostEqual(result["collisionAfter"]["deltaFromOriginalGround"], 1.03)
+        self.assertGreater(result["collisionObservations"]["count"], 0)
+        self.assertAlmostEqual(result["collisionObservations"]["last"]["deltaFromOriginalGround"], 1.03)
         self.assertEqual(result["gameInstance"], IDENTITY)
         self.assertEqual(result["initialProject"], "Untitled 1")
         self.assertEqual(result["initialObject"]["project"], "Untitled 1")
@@ -206,6 +288,8 @@ class NativeBlockProbeChecks(unittest.TestCase):
         cleaned = self.subject.cleanup()
         self.assertEqual(cleaned["phase"], "cleaned")
         self.assertTrue(cleaned["registryRemoved"] and cleaned["collisionRemovedVerified"])
+        self.assertEqual(cleaned["collisionObservations"], result["collisionObservations"])
+        self.assertEqual(cleaned["collisionRemovedObservations"]["last"]["deltaFromOriginalGround"], 0)
         self.assertEqual(len(self.mutations("DELETE", "/api/objects/42")), 1)
         self.assertFalse(self.fake.objects)
         self.assertEqual(self.subject.cleanup()["phase"], "cleaned")
@@ -259,6 +343,15 @@ class NativeBlockProbeChecks(unittest.TestCase):
         saved = self.journal.read()
         self.assertTrue(saved["registryConfirmed"])
         self.assertFalse(saved["collisionVerified"] or saved["visualVerified"])
+        observations = saved["collisionObservations"]
+        self.assertGreater(observations["count"], 0)
+        self.assertEqual(set(observations), {"count", "first", "last", "minDelta", "maxDelta"})
+        self.assertEqual(observations["minDelta"], 0)
+        self.assertEqual(observations["maxDelta"], 0)
+        for observation in (observations["first"], observations["last"]):
+            self.assertEqual(observation["hit"]["y"], saved["groundBefore"]["y"])
+            self.assertEqual(observation["deltaFromOriginalGround"], 0)
+            self.assertEqual(set(observation["hit"]), {"x", "y", "z", "ticket"})
         self.assertEqual(len(self.mutations()), 1)
         self.assertEqual(self.subject.cleanup()["phase"], "cleaned")
 
@@ -516,6 +609,177 @@ class NativeBlockProbeChecks(unittest.TestCase):
         self.assertEqual(len(self.mutations()), 1)
         self.subject.cleanup()
         self.assertIn(7, self.fake.objects)
+
+    def test_29_production_default_missing_receipt_stops_before_any_post(self):
+        self.subject.installation_check = probe.installed_assets
+        with mock.patch.object(probe, "ROOT", Path(self.temp.name)):
+            self.subject.journal = probe.Journal(Path(self.temp.name) / "runtime/missing-receipt-probe.json")
+            with self.assertRaisesRegex(probe.ProbeError, "asset evidence is missing"):
+                self.subject.spawn()
+        self.assertFalse(any(method == "POST" for method, _, _ in self.fake.calls))
+        self.assertIsNone(self.journal.read())
+        self.assertIs(probe.NativeBlockProbe.__init__.__defaults__[-1], probe.installed_assets)
+
+    def test_30_blue_alias_identity_and_collision_never_become_oak(self):
+        self.installation = installation_snapshot("blue-template-alias")
+        for axis in "xz":
+            with self.assertRaisesRegex(probe.ProbeError, "only axis y"):
+                self.subject.spawn(axis)
+            self.assertFalse(any(method == "POST" for method, _, _ in self.fake.calls))
+        result = self.subject.spawn("y")
+        self.assertEqual(result["probeVariant"], "blue-template-alias")
+        self.assertEqual(result["collisionVerifiedVariant"], "blue-template-alias")
+        self.assertEqual(probe.summary(result)["probeVariant"], "blue-template-alias")
+        self.assertEqual(probe.summary(result)["assetReceipt"], self.installation["assetReceipt"])
+        self.assertTrue(result["collisionVerified"])
+
+    def test_31_installation_changed_after_ground_queries_stops_single_spawn(self):
+        calls = []
+        def installation(instance, axis):
+            calls.append(1)
+            result = copy.deepcopy(self.installation)
+            if len(calls) > 1:
+                result["assetReceipt"]["sha256"] = "e" * 64
+            return result
+        self.subject.installation_check = installation
+        with self.assertRaisesRegex(probe.ProbeError, "changed during preflight"):
+            self.subject.spawn()
+        self.assertFalse(self.mutations())
+        self.assertFalse(self.journal.read()["spawnSubmitted"])
+        self.assertEqual(len(calls), 2)
+
+    def test_32_cleanup_survives_missing_receipt_and_legacy_journal(self):
+        self.subject.spawn()
+        saved = self.journal.read()
+        for field in ("probeVariant", "assetReceipt", "collisionVerifiedVariant"):
+            saved.pop(field)
+        self.journal.write(saved)
+        self.subject.installation_check = lambda *args: (_ for _ in ()).throw(AssertionError("cleanup must not validate installation"))
+        self.assertEqual(self.subject.cleanup()["phase"], "cleaned")
+        self.assertEqual(len(self.mutations("DELETE", "/api/objects/42")), 1)
+
+    def test_33_installed_receipt_gate_reads_and_hashes_without_writes(self):
+        fixture = InstalledFixture(Path(self.temp.name))
+        before = {str(path): path.read_bytes() for path in fixture.root.rglob("*") if path.is_file()}
+        result = fixture.check()
+        self.assertEqual(result["probeVariant"], "static-oak-log")
+        self.assertEqual(result["assetReceipt"]["id"], fixture.receipt["id"])
+        self.assertEqual(result["assetReceipt"]["sha256"], hashlib.sha256(fixture.active.read_bytes()).hexdigest())
+        after = {str(path): path.read_bytes() for path in fixture.root.rglob("*") if path.is_file()}
+        self.assertEqual(after, before)
+
+    def test_34_receipt_state_game_plan_report_and_variant_mismatches_rejected(self):
+        fixture = InstalledFixture(Path(self.temp.name))
+        original = copy.deepcopy(fixture.receipt)
+        for field, value in (("status", "installing"), ("owner", "foreign"), ("id", "../foreign"),
+                             ("gameRoot", str(fixture.root)), ("planSha256", "e" * 64),
+                             ("candidateReportSha256", "e" * 64), ("probeVariant", "blue-template-alias"),
+                             ("directoryName", "0042")):
+            fixture.receipt = {**copy.deepcopy(original), field: value}
+            fixture.save()
+            with self.subTest(field=field), self.assertRaises(probe.ProbeError):
+                fixture.check()
+        fixture.receipt = original; fixture.save()
+        self.assertEqual(fixture.check()["probeVariant"], "static-oak-log")
+
+    def test_35_installed_package_metadata_and_marker_changes_rejected(self):
+        fixture = InstalledFixture(Path(self.temp.name))
+        for relative in ("0041/0.pamt", "0041/0.paz", "meta/0.pathc", "meta/0.papgt", "0041/" + probe.ASSET_MARKER):
+            file = fixture.game / relative
+            original = file.read_bytes()
+            file.write_bytes(original + b"external change")
+            with self.subTest(relative=relative), self.assertRaisesRegex(probe.ProbeError, "SHA256 differs"):
+                fixture.check()
+            file.write_bytes(original)
+        extra = fixture.game / "0041/foreign-file"
+        extra.write_bytes(b"preserve me")
+        with self.assertRaisesRegex(probe.ProbeError, "unexpected files"):
+            fixture.check()
+        self.assertEqual(extra.read_bytes(), b"preserve me")
+
+    def test_36_overlay_payload_binding_and_inventory_tampering_rejected(self):
+        fixture = InstalledFixture(Path(self.temp.name))
+        report_path = fixture.plan / "reports/overlay-report.json"
+        original = json.loads(report_path.read_bytes())
+        def alter(report):
+            raw = fixture.json(report); report_path.write_bytes(raw)
+            fixture.receipt["planSha256"] = hashlib.sha256(raw).hexdigest(); fixture.save()
+        for field, value in (("sha256", "e" * 64), ("localFile", "build/elsewhere/file"), ("virtualPath", "object/foreign.prefab")):
+            changed = copy.deepcopy(original); changed["resources"][0][field] = value; alter(changed)
+            with self.subTest(field=field), self.assertRaises(probe.ProbeError):
+                fixture.check()
+        changed = copy.deepcopy(original); changed["resources"][1] = copy.deepcopy(changed["resources"][0]); alter(changed)
+        with self.assertRaisesRegex(probe.ProbeError, "resource set"):
+            fixture.check()
+
+    def test_37_candidate_validator_failure_never_posts(self):
+        fixture = InstalledFixture(Path(self.temp.name))
+        self.subject.installation_check = lambda instance, axis: fixture.check(axis, resource_probe.ProbeError("Local resource SHA256 differs"))
+        with self.assertRaisesRegex(probe.ProbeError, "Local resource SHA256"):
+            self.subject.spawn()
+        self.assertFalse(any(method == "POST" for method, _, _ in self.fake.calls))
+        checks = []
+        def second_fails(instance, axis):
+            checks.append(1)
+            return fixture.check(axis, resource_probe.ProbeError("Local resource SHA256 differs") if len(checks) > 1 else None)
+        self.subject.installation_check = second_fails
+        with self.assertRaisesRegex(probe.ProbeError, "Local resource SHA256"):
+            self.subject.spawn()
+        self.assertFalse(self.mutations())
+        self.assertEqual(self.journal.read()["phase"], "unresolved")
+        self.assertFalse(self.journal.read()["spawnSubmitted"])
+
+    def test_38_receipt_duplicate_keys_and_symlink_inputs_rejected(self):
+        fixture = InstalledFixture(Path(self.temp.name))
+        raw = fixture.active.read_bytes()
+        fixture.active.write_bytes(raw[:-1] + b',"status":"installed"}')
+        with self.assertRaisesRegex(probe.ProbeError, "unique-field JSON"):
+            fixture.check()
+        fixture.active.write_bytes(raw)
+        with mock.patch.object(Path, "is_symlink", autospec=True, side_effect=lambda path: path == fixture.active):
+            with self.assertRaisesRegex(ValueError, "symlinks or junctions"):
+                fixture.check()
+
+    def test_39_cleanup_collision_failure_retains_separate_observations(self):
+        spawned = self.subject.spawn()
+        prior = copy.deepcopy(spawned["collisionObservations"])
+        self.fake.ground_height = lambda x, z: 11.0
+        with self.assertRaisesRegex(probe.ProbeError, "Physical ground height"):
+            self.subject.cleanup()
+        saved = self.journal.read()
+        self.assertEqual(saved["phase"], "cleanup_unresolved")
+        self.assertTrue(saved["registryRemoved"])
+        self.assertEqual(saved["collisionObservations"], prior)
+        observations = saved["collisionRemovedObservations"]
+        self.assertGreater(observations["count"], 0)
+        self.assertEqual(observations["first"]["hit"]["y"], 11.0)
+        self.assertEqual(observations["last"]["deltaFromOriginalGround"], 1.0)
+        self.assertEqual((observations["minDelta"], observations["maxDelta"]), (1.0, 1.0))
+        self.assertEqual(len(self.mutations("DELETE", "/api/objects/42")), 1)
+
+    def test_40_blue_material_alias_identity_and_y_only(self):
+        self.installation = installation_snapshot("blue-material-alias")
+        for axis in "xz":
+            with self.assertRaisesRegex(probe.ProbeError, "blue-material-alias.*only axis y"):
+                self.subject.spawn(axis)
+            self.assertFalse(any(method == "POST" for method, _, _ in self.fake.calls))
+        result = self.subject.spawn("y")
+        self.assertEqual(result["probeVariant"], "blue-material-alias")
+        self.assertEqual(result["collisionVerifiedVariant"], "blue-material-alias")
+        self.assertEqual(probe.summary(result)["probeVariant"], "blue-material-alias")
+        self.assertEqual(probe.summary(result)["assetReceipt"], self.installation["assetReceipt"])
+        self.assertEqual(self.journal.read()["probeVariant"], "blue-material-alias")
+        self.assertTrue(result["collisionVerified"])
+        self.assertEqual(self.subject.cleanup()["phase"], "cleaned")
+
+    def test_41_installed_gate_all_controls_are_y_only(self):
+        for variant in ("blue-template-alias", "blue-material-alias"):
+            with self.subTest(variant=variant):
+                fixture = InstalledFixture(Path(self.temp.name), variant)
+                self.assertEqual(fixture.check("y")["probeVariant"], variant)
+                for axis in "xz":
+                    with self.assertRaisesRegex(probe.ProbeError, variant + ".*only axis y"):
+                        fixture.check(axis)
 
 
 if __name__ == "__main__":

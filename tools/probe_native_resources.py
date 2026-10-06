@@ -132,6 +132,11 @@ def load_assets(report_path: Path) -> dict:
         raise ProbeError("Expected a native-block-report.json input")
     raw = read_file(report_path, MAX_RESPONSE)
     report = strict_json(raw)
+    variant = report.get("probeVariant", "static-oak-log")
+    if variant not in ("static-oak-log", "blue-template-alias", "blue-material-alias"):
+        raise ProbeError("Unknown native asset probe variant")
+    if variant == "static-oak-log" and "control" in report:
+        raise ProbeError("A control report cannot claim the ordinary oak variant")
     if (type(report.get("schemaVersion")) is not int or report["schemaVersion"] != 1
             or report.get("supportedExeSha256") != native.EXE_SHA256
             or report.get("archiveIndex") != "0000/0.pamt" or report.get("archiveIndexSha256") != INDEX_SHA):
@@ -192,7 +197,14 @@ def load_assets(report_path: Path) -> dict:
             raise ProbeError("A whitelisted diagnostic asset exceeds the native 16KiB bound")
         resources[name] = {"resource": name, "path": path, "localFile": local,
                            "sha256": expected_files[local], **summary(data)}
-    return {"reportPath": str(report_path), "reportSha256": hashlib.sha256(raw).hexdigest(), "resources": resources}
+    if variant != "static-oak-log":
+        from prepare_native_block_control import validate_control
+        validate_control(report_path, report)
+    elif any(resources["oak_y_" + suffix]["sha256"] == resources["blue_" + suffix]["sha256"]
+             for suffix in ("prefab", "pami")):
+        raise ProbeError("An original blue prefab/material alias must be explicitly labelled as a control")
+    return {"reportPath": str(report_path), "reportSha256": hashlib.sha256(raw).hexdigest(),
+            "probeVariant": variant, "resources": resources}
 
 
 class LoopbackAPI:
@@ -353,7 +365,10 @@ class ResourceProbe:
         names = GROUPS[group]
         if set(assets.get("resources", {})) != set(RESOURCES):
             raise ProbeError("Input assets do not cover the exact fixed resource set")
+        if assets.get("probeVariant") not in ("static-oak-log", "blue-template-alias", "blue-material-alias"):
+            raise ProbeError("Input assets lack a verified probe variant")
         report = {"schemaVersion": 1, "project": PROJECT, "runId": uuid.uuid4().hex,
+                  "probeVariant": assets["probeVariant"],
                   "startedUtc": dt.datetime.now(dt.timezone.utc).isoformat(), "phase": "preflight", "group": group,
                   "nativeBase": self.api.base, "mcBase": self.mc.base, "sourceReport": assets["reportPath"],
                   "sourceReportSha256": assets["reportSha256"], "requestedResources": list(names), "results": [],
@@ -446,6 +461,7 @@ def main() -> int:
         probe = ResourceProbe(LoopbackAPI(), LoopbackAPI("mc"), evidence, timeout=args.timeout)
         result = probe.run(assets, args.group)
         print(json.dumps({"success": result["success"], "allReadAndMatched": result["allReadAndMatched"],
+                          "probeVariant": result["probeVariant"],
                           "resources": len(result["results"]), "report": str(evidence.path), "visualAcceptance": False}))
         return 0 if result["success"] else 1
     except (ProbeError, ValueError, OSError) as error:

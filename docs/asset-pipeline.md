@@ -168,7 +168,7 @@ PartialDDS 模板的分块存储；材料 XML 按原生 LZ4/ChaCha flags 回编�
 ```powershell
 py -3.12 -B tools/check_asset_probe.py
 python tools/check_native_block_probe.py
-# 关闭游戏后安装；只接受本项目的 21 项原木资源
+# 关闭游戏后安装；只接受本项目 21 项固定资源及已校验的普通/对照报告
 py -3.12 -B tools/install_asset_probe.py --install --plan build/native-asset-overlay
 # 启动并进入世界，等待原生 ready/buildOk，再生成一块诊断原木
 python tools/probe_native_block.py --spawn
@@ -212,5 +212,54 @@ python -B tools/probe_native_resources.py --output runtime/native-resource-probe
 这个诊断不安装包、不生成实体、不修改库存；全部文件读取一致也不能代替画面和碰撞
 验收。完整命令、检查与实机结果见 [progress.md](progress.md)。
 
+2026-10-06 默认 15 项已实测全部首次读取成功，长度/头部/FNV 与本地资源一致，前后
+游戏实例及 MC 状态保持。X/Z 两轴未在该次读取；未复试生成或验收显示/碰撞。之后
+正常退出并恢复第二次临时包，38 个原始文件哈希一致，0041/active receipt 已移除。
+
 全部原版/派生资源留在本机；Git 只发布转换代码、来源、许可证及检查摘要。
 总体进度见 [progress.md](progress.md)，分发边界见 [workshop-distribution.md](workshop-distribution.md)。
+
+## 蓝块别名对照与试验身份
+
+`prepare_native_block_control.py` 从已核验的普通原木候选生成独立目录，只将
+`oak_y.prefab` 换为完整原蓝块 prefab，仍引用原蓝块 PAMI；另 20 项候选保持字节一致。
+报告固定为 `blue-template-alias`，记录原候选报告 SHA 和唯一改动，不继承原木几何结论。
+第二种 `blue-material-alias` 保持正常原木 prefab，只换 Y 轴 PAMI 为完整原蓝块 PAMI，
+仍引用原 PAM/DDS，其余 20 项不变。两种生成及来源保护检查最终 21/21 通过。
+
+```powershell
+py -3.12 -B tools/prepare_native_block_control.py
+py -3.12 -B tools/prepare_native_block_control.py --variant blue-material-alias
+py -3.12 -B tools/check_native_block_control.py
+# 原木包恢复后，按新的游戏索引快照准备独立控制计划
+py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block-blue-alias/native-block-report.json --output build/native-blue-alias-overlay
+```
+
+生成器拒绝既有输出目录，重复运行须选新的 build 输出。安装器要求单一、完整校验的
+候选报告，并将普通 `static-oak-log` 或两种对照身份及报告 SHA 写入
+收据。资源读回日志记录该身份；实体生成前与实际已安装文件核对，对照仅允许 Y 轴。
+旧实体日志仍可按其原进程/UID 清理；清理不依赖候选报告或当前安装收据继续存在。
+蓝块别名的显示/碰撞结果只能解释对照，不能作为原木或 MC 材质验收。
+
+实机普通原木在新进程中读回 15 项资源后仍不显示/无预期碰撞；A prefab 别名对照则
+在同一逻辑路径显示蓝块，首次地面采样增量 1.1521 米、清理后回到 0，MC 状态保持。
+因此新 prefab 路径可用，下一步检查改过的 PAMI/模型链；B PAMI 对照目前仅离线准备。
+对象探针最终 41 项隔离检查通过，碰撞循环现在保留首末采样、次数和 min/max 差值，
+清理阶段失败也会保存。最新临时包是否恢复以 [progress.md](progress.md) 当前状态为准。
+
+## Steve 骨骼与朝向的离线证据
+
+```powershell
+py -3.12 -B tools/analyze_steve_rig.py
+py -3.12 -B tools/check_steve_rig.py --rebuild
+```
+
+固定九项真实输入，独立读取 447 骨 PAB、423 条 PABC 并与固定 CDMW 对照；中立变形
+最大偏移约 1.81 微米，真实重建检查 10/10 通过。六个 MC 关节与原生关节中心仍相差
+约 0.231～0.356 米；MC 头/身体中心重合，原生两中心相距 0.602756 米，所以单一
+全局仿射变换无法同时对齐。逐部位静态平移会破坏接缝并使脚底抬升，未用于资产。
+
+眼/脚趾链及左右 X 坐标支持原生模型前方为 -Z，当前 MC 导出为 +Z。下一静态候选是
+独立 Z 反射，同时反射法线、反转三角绕序并重新生成切线；这仍须验证 actor 父变换与
+引擎渲染。报告内逐关节 30 度旋转只是合成数学检查。没有修改 PAC/PAB、安装 Steve、
+取得实时姿态接口或验收动画/装备。

@@ -428,6 +428,25 @@ class ResourceChecks(unittest.TestCase):
             self.assertEqual(probe.LoopbackAPI().base, "http://127.0.0.1:8765")
             self.assertEqual(probe.LoopbackAPI("mc").base, "http://127.0.0.1:8766")
 
+    def test_23_variant_is_recorded_and_unlabelled_alias_is_rejected(self):
+        self.assertEqual(self.run_probe("blue")["probeVariant"], "static-oak-log")
+        for suffix in ("prefab", "pami"):
+            folder, output, report = self.copy_inputs()
+            row = next(row for row in report["candidateResources"] if row["virtualPath"] == probe.RESOURCES["oak_y_" + suffix])
+            blue = self.assets["resources"]["blue_" + suffix]
+            (folder / row["localFile"]).write_bytes((folder / blue["localFile"]).read_bytes())
+            row["sha256"] = blue["sha256"]
+            report["files"][row["localFile"]] = blue["sha256"]
+            output.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(suffix=suffix), self.assertRaisesRegex(probe.ProbeError, "explicitly labelled"):
+                probe.load_assets(output)
+        for variant in ("unknown", "static-oak-log"):
+            report["probeVariant"] = variant
+            report["control"] = {}
+            output.write_text(json.dumps(report), encoding="utf-8")
+            with self.assertRaises(probe.ProbeError):
+                probe.load_assets(output)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -28,10 +28,17 @@ F8 开关及点击仍待验收。模型资产已推进为真实红沙 palette �
 成功，但模型未显示、未检测到一米碰撞，原生加载验收失败。对象已清理、MC 状态不变；
 游戏正常退出后临时 0041 已恢复，38 个原索引/元数据哈希一致。下一步定位实际加载
 失败环节；不把离线解包、场景对象指针或注册表覆盖当作游戏内功能完成。
-随后为读取诊断构建并安装新 ASI、再次临时挂载原木 0041；启动后用户物理 Escape
-停止 Computer Use，已停止界面操作，**尚未请求资源读取**。最新收据
-`51159fa10a564fa392027e71af157471` 为 installed；游戏仍运行，须正常退出后恢复。
-不要把上一次收据已恢复误读为本次新包也已恢复，详见本文件最后一节。
+随后为读取诊断构建并安装新 ASI、再次临时挂载原木 0041。一次 Escape 中断后用户
+再次明确恢复授权：真实引擎读取 **15/15 项首次成功**，蓝块六项、Y 轴原木六项及三
+张纹理的长度/头部/FNV 全部与已校验本地资源一致，MC 状态不变。正常退出后第二次
+收据 `51159fa10a564fa392027e71af157471` 也已 restored，38 个原文件哈希一致，
+0041/active receipt 已移除。下一步核对装配/实例化，不能再把目录树猜测当成根因。
+随后已在新进程复试正常原木（读回成功后仍不显示/碰撞失败），并通过 A 蓝 prefab
+别名实测：同一新逻辑路径显示蓝块且物理增量 1.1521 米。A 对象已清理，MC 不变。
+**最新状态：A 收据 `ece6ea42e8154e878fb9be88a8511944` 仍 installed，0041 仍挂载；
+退出指令后红沙 PID 69700 仍运行，窗口捕获连续显示其它游戏，已请用户正常退出后
+恢复包。不要运行中改索引，也不要重复删除已清理 UID。** B PAMI 对照已离线准备，
+尚未生成对应 overlay 或实测。详细证据与恢复顺序见末节。
 静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
 [native-character-feasibility.md](native-character-feasibility.md)。
 
@@ -474,7 +481,7 @@ GameReadFile/Range 逐字与固定上游一致。结果只含长度、头部、F
 PowerShell 解析和 Git diff 格式检查通过。108 个 Git 可见文件没有 ignored 资源混入。
 安装及实机资源读取结果另记；这些离线检查不改变上一节原木加载失败的结论。
 
-### 读取诊断安装后的再次接管中断
+### 读取诊断安装后的再次接管中断（之后已恢复，见下节）
 
 独立源码审查无阻断问题。成功构建后更新 artifacts/native 与实际插件安装，三份 ASI
 SHA 均为 `ad8835ecddd4938b39ce9735e12e15ee2cbad6b269bf3c546c32277ddd39d95c`；
@@ -493,3 +500,118 @@ active receipt 为 `51159fa10a564fa392027e71af157471`，目录 0041，备份在
 若用户重新授权继续游戏接管，再获取新鲜窗口/游戏实例状态，执行资源读取客户端，
 随后退出恢复。上次 spawn journal 已 cleaned，不能把旧 UID 用于新的游戏实例。
 整个持续目标仍未完成；没有因界面接管中断将目标擅自标记暂停或完成。
+
+## 2026-10-06 原生读取实测完成，第二次临时包已恢复
+
+用户回复“恢复接管并完成诊断及恢复”后重新定位真实红沙窗口，游戏已进入法则大书库。
+执行 `py -3.12 -B tools/probe_native_resources.py --output
+runtime/native-resource-read-20261006-first.json`，退出码 0。默认 **15/15** 均第一次
+读取成功，handler 均释放；蓝块/Y 轴原木各六项与三张 DDS 的长度、头 16 字节及
+FNV-1a64 全部与本地 SHA256 校验过的模板/候选一致。gameInstanceUnchanged 与
+mcStateUnchanged 均 true。没有生成新实体，没有提交库存操作。
+
+关键实际长度：蓝块 prefab 1845、Y 轴原木 prefab 1840；meshinfo 均 3754，PAM 均
+2276，HKX 均 1512；蓝块/原木 PAMLOD 1032/1288、PAMI 727/760。PAMI 原生 flags=48，
+其余受检文件 flags=0。三张 DDS 分别 5608/11088/5608 字节。FNV 是非密码学摘要，
+本次证明当前进程可定位并读回这些资源；没有宣称引擎返回 SHA256 或验收画面/碰撞。
+X/Z 两轴此轮未读。第一次失败的 spawn 属于早先的游戏进程，不能据此证明本进程在
+显式读取之后再次 spawn 仍然失败；本轮按约定只读诊断，没有复试生成。
+
+通过游戏正常退出确认关闭，查询进程不存在后执行 `install_asset_probe.py --restore`
+成功。第二次收据 `51159fa10a564fa392027e71af157471` 为 restored，active receipt 与
+0041 不存在；原 34 份 PAMT、PAPGT/PATHC/PAPK/PAVER 共 38 文件哈希全部匹配原值。
+没有回滚后来存档，诊断版 ASI 保留正常安装，资源读取报告仅在 ignored runtime。
+
+这项实机证据将后续工作从“包能否读到”推进到“改后的 prefab/mesh/material 如何
+实例化”：不要安装此前仅用于假设检验的目录树控制包。下一对照须区分新 prefab 名称
+与改动资源内容，或从真实装配结构找到具体不一致；仍不把能读文件当作能渲染模型。
+
+## 2026-10-06 装配对照与 Steve 骨骼证据
+
+固定 EXE 静态回链显示，场景生成走独立的 ResourceReferencePath 缓存/装配流程，
+与本次原始文件读取不同。原有创建标志已经开启异步入场；没有依据修改标志或调用
+未知 ABI。非空 SceneObjectClient 仍不能证明模型完成装配。真实 prefab 只有一个
+MeshComponent，原木候选只改 PAMI 路径；逆改与原模板逐字节一致。meshinfo 的多个
+字符串数组与通用 prefab 解码器不同，其解码报错不能证明文件损坏，未修改不明字段。
+
+新增 `prepare_native_block_control.py` / `check_native_block_control.py`，在独立
+`build/native-block-blue-alias` 制作 `blue-template-alias`：只将 Y prefab 换成固定原蓝块
+1845 字节全文，原 PAMI 引用保留；另 20 项候选和所有模板字节保持。固定来源、唯一
+差异、控制伪装、源变化、已有输出及真实 NTFS junction 等 **16/16 通过**。报告删去
+原候选的几何结论，只保留来源、文件与全部 false 的集成标志。A 后续实机结果见下节。
+
+安装器现在强制单一候选报告，逐项绑定资源 SHA/本地路径，收据新增 `probeVariant`、
+`candidateReport` 和 `candidateReportSha256`。资源读回日志也记录试验身份，拒绝
+伪装为普通原木的完整蓝 prefab；客户端 **23/23**、普通包安装/恢复 **16/16** 隔离
+检查通过。对象日志的生成前安装核对与旧日志清理兼容性检查另记实际结果。
+
+新增 `analyze_steve_rig.py` / `check_steve_rig.py`，固定九项真实输入与 CDMW 源码，
+独立解析 447 骨 PAB、423 条 PABC，六个映射关节均在 PABC 覆盖内，另 24 骨未覆盖。
+全 PAB bind×inverse 最大误差 9.21e-8，local×parent 与 global 最大差 4.35e-6。
+288 顶点候选的中立变形最大位移 1.81e-6 米，与固定 CDMW 中立核心逐点一致；
+**`py -3.12 -B tools/check_steve_rig.py --rebuild` 10/10 通过**。
+
+六个关节中心仍偏离 0.231～0.356 米。MC 头/身体中心相同，原生两中心相距
+0.6027556838 米，证明单一全局仿射变换无法同时修复。逐部位平移会让五个原接触面
+分离约 0.573～0.625 米、脚底抬至 0.25448 米；没有采用此办法修改资产。报告里的
+30 度关节旋转及逐关节 retarget 公式只是合成数学证据，不是实测游戏动画。
+
+左右关节 X 符号相同，原生眼/脚趾链支持朝向 -Z，而当前 Steve 面向 +Z。原始 nude
+prefab 实例没有序列化朝向变换，我方导入仅位置缩放与 UV V 翻转；actor 父变换仍未知。
+下一静态候选应独立 Z 反射并修改法线/三角绕序、重算切线，不能用会翻左右的 Y 轴
+180 度替代。当前工具只输出 ignored 报告，没有改 PAC/PAB，没有安装或控制 Steve。
+
+### 新进程读取后再生成的实际结果
+
+普通候选第三次临时安装收据 `27f848014a544ad3ae97920ab10e9dc3`，独立进程 PID 67640
+（23:11:02 启动）进入法则大书库。资源报告
+`runtime/native-resource-read-20261006-fresh-spawn.json` 再次 **15/15 一致**。随后仅执行
+一次 `probe_native_block.py --spawn --journal runtime/native-block-fresh-read-20261006.json`，
+前方 4 米首候选五点高度差 0.11035 米，通过场地检查，生成请求 UID 1 登记成功。
+在该同一新进程中仍未看到原木，碰撞检查超时失败；这次明确是在资源读取成功之后
+复试，不能再把失败仅归于早先进程。截图保存在 ignored runtime；没有重复生成。
+
+同进程清理通过：registryRemoved/collisionRemovedVerified/mcStateUnchanged 均 true，
+清理后地面差为 0。未新增编辑项目，settings 前后 SHA 相同。正常退出后第三次收据
+已 restored，active receipt/0041 不存在，34 份原 PAMT 加四个 metadata **38/38** 哈希
+一致；没有回滚存档。该次失败碰撞循环未保存每次 hit 数值，只保留超时结果，不能
+事后编造数值；后续探针补充有界采样证据以便准确解释失败。
+
+### A 蓝 prefab 别名已显示且通过碰撞；退出后恢复待完成
+
+普通包恢复后，`build/native-blue-alias-overlay` 按恢复后的索引重新预演：21 项解包
+逐字节一致，PAZ 56752 字节；`check_asset_overlay.py --output ... --verify-game`
+**13/13**、`check_asset_probe.py --plan ...` **16/16** 隔离安装/恢复通过。
+随后实际安装 A，收据 `ece6ea42e8154e878fb9be88a8511944`，启动 PID 69700
+（23:22:32）。`runtime/native-resource-blue-alias-20261006.json` 的 15 项全部读回一致，
+明确标为 blue-template-alias；Y prefab 长度 1845，读回原蓝模板摘要。
+
+`runtime/native-block-blue-alias-20261006.json`，runId
+`8c7c46e9-bb97-477b-8d8f-be05aa7489df`，同一新逻辑 prefab 路径只生成一次 UID 1。
+位置与前次正常候选相差约 1 毫米，前方首候选五点差 0.11011 米。
+**实际看到蓝块**，截图 `runtime/native-blue-alias-visible-20261006.jpg`；原生首次
+碰撞采样地面增量 **1.152100 米**，落在原一米判定阈值内。日志的 visualVerified
+仍 false，因为 CLI 不执行画面判定；这里的显示结论来自实际截图，且仅对 A 蓝块有效。
+同进程精确清理完成，registryRemoved/collisionRemovedVerified/mcStateUnchanged 均
+true，清理后增量 0；未新增项目。不能把此结果表述为原木模型或 MC 材质已完成。
+
+这个对照证明新 prefab 路径可以实例化，失败进一步局限到改动的 PAMI/模型资源链。
+新增 B `blue-material-alias` 只将新 Y PAMI 换为原蓝块完整 727 字节，正常原木 prefab
+保持；另 20 项及所有模板不变。输出 `build/native-block-blue-material-alias`，报告 SHA
+`61dceae254482c25180c16df7b3756d4d049477dbf8fa3d74c1826e6915a84eb`。两种控制最终
+**21/21** 检查通过，A 报告仍逐字节兼容；资源客户端扩展后 **23/23**。实体检查最终
+**41/41**，包含两种对照非 Y 拒绝、真实安装收据/文件绑定、旧日志清理、加载器错误
+统一处理，以及创建/移除碰撞超时的有界实际采样摘要。B 未安装或实测。
+
+A 清理后通过界面发送正常退出及确认，但进程仍存在。恢复器明确以“Close Crimson
+Desert before changing the asset probe”拒绝，未写索引。重新定位/激活目标窗口后捕获
+仍显示另一游戏，因此未发送进一步键鼠，已请求用户切回或正常退出。此处并非用户
+Escape 停止，也没有强制终止进程。最新 A 收据仍 installed，备份保留在
+`backups/asset-probe-ece6ea42e8154e878fb9be88a8511944`。
+
+恢复顺序：确认红沙已关闭，运行 `py -3.12 -B tools/install_asset_probe.py --restore`，
+验证收据 restored、0041/active receipt 移除，以及 sourceIndexes/untouchedGameFiles/
+metadataBefore 合并的 38 项原哈希。然后才按恢复后快照准备 B overlay 并进行单次
+实测。不要把已有 A 挂载收入 B 的元数据基线；不要拿已清理 UID 对新进程操作。
+本轮 ASI/JAR 没有再次改动；源/控制独立审查无阻断。46 个 Python AST、7 个公开 JSON、
+51 个 Markdown 相对链接及六项角色探针保护检查通过，资源和原始证据仍留 ignored。

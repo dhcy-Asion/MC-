@@ -112,6 +112,9 @@ class ProbeChecks(unittest.TestCase):
     def test_01_real_package_install_decode_and_restore_preserves_later_saves(self):
         result = self.install()
         self.assertEqual(result["status"], "installed")
+        self.assertEqual(result["probeVariant"], self.reviewed["probeVariant"])
+        self.assertEqual(result["candidateReport"], self.reviewed["candidateReport"])
+        self.assertEqual(result["candidateReportSha256"], native.file_hash(Path(result["candidateReport"])))
         probe.verify_owned_directory(self.game, result)
         backup = Path(result["backupRoot"])
         self.assertEqual((backup / "saves/0/slot0.save").read_bytes(), (self.save / "slot0.save").read_bytes())
@@ -274,6 +277,28 @@ class ProbeChecks(unittest.TestCase):
                     self.fail("Concurrent probe lock was acquired")
         with probe.state_lock(self.state):
             pass
+        self.assert_original()
+
+    def test_16_plan_must_name_exactly_one_report_and_match_its_resources(self):
+        plan = self.test_root / "plan"
+        shutil.copytree(self.plan, plan)
+        report_path = plan / "reports/overlay-report.json"
+        original = json.loads(report_path.read_bytes())
+        changed = dict(original)
+        changed["candidateReports"] = {}
+        report_path.write_bytes(probe.json_bytes(changed))
+        with self.assertRaisesRegex(ValueError, "one exact candidate"):
+            probe.load_plan(plan)
+        changed = json.loads(json.dumps(original))
+        # Even a same-content file at an unrelated location cannot be relabelled
+        # as the report's input. This fails before any game publication.
+        resource = changed["resources"][0]
+        relocated = self.test_root / "relocated-resource"
+        shutil.copyfile(native.ROOT / resource["localFile"], relocated)
+        resource["localFile"] = str(relocated.relative_to(native.ROOT))
+        report_path.write_bytes(probe.json_bytes(changed))
+        with self.assertRaisesRegex(ValueError, "verified candidate report"):
+            probe.load_plan(plan)
         self.assert_original()
 
 
