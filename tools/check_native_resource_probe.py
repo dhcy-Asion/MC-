@@ -275,7 +275,15 @@ class ResourceChecks(unittest.TestCase):
                 self.folder = Path(tempfile.mkdtemp(prefix=key, dir=self.sandbox.name))
                 self.fake.calls.clear()
                 self.fake.status[key] = value
-                self.assertFalse(self.run_probe("blue")["success"])
+                result = self.run_probe("blue")
+                self.assertFalse(result["success"])
+                self.assertEqual(result["statusBefore"], self.fake.status)
+                self.assertEqual(result["statusAfter"], self.fake.status)
+                self.assertEqual(result["statusBeforeHttpStatus"], 200)
+                self.assertEqual(result["statusAfterHttpStatus"], 200)
+                saved = probe.strict_json((self.folder / "result.json").read_bytes())
+                self.assertEqual(saved["statusBefore"], self.fake.status)
+                self.assertEqual(result["results"], [])
                 self.assertEqual(self.posts(), [])
                 self.fake.status[key] = {"gameVersion": probe.VERSION, "apiVersion": 1, "buildOk": True, "ready": True}[key]
         self.folder = Path(tempfile.mkdtemp(prefix="exe", dir=self.sandbox.name))
@@ -446,6 +454,23 @@ class ResourceChecks(unittest.TestCase):
             output.write_text(json.dumps(report), encoding="utf-8")
             with self.assertRaises(probe.ProbeError):
                 probe.load_assets(output)
+
+    def test_24_unlabelled_declaration_control_is_rejected(self):
+        folder, output, report = self.copy_inputs()
+        row = next(row for row in report["candidateResources"] if row["virtualPath"] == probe.RESOURCES["oak_y_pami"])
+        path = folder / row["localFile"]
+        original = path.read_bytes()
+        prefix = b"<?xml version='1.0' encoding='utf-8'?>\n"
+        self.assertEqual(original[:len(prefix)], prefix)
+        changed = original[len(prefix):]
+        path.write_bytes(changed)
+        row["sha256"] = probe.hashlib.sha256(changed).hexdigest()
+        self.assertEqual(row["sha256"], probe.NO_DECLARATION_PAMI_SHA256)
+        report["files"][row["localFile"]] = row["sha256"]
+        output.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(probe.ProbeError, "explicitly labelled"):
+            probe.load_assets(output)
+        self.assertEqual(self.fake.calls, [])
 
 
 if __name__ == "__main__":

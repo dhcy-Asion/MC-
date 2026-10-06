@@ -32,6 +32,8 @@ MAX_RESPONSE = 2 * 1024 * 1024
 MAX_BYTES = 16384
 INDEX_SHA = "63a9286ed8712e72bd5d022a96e808bc4a10a2ed29b16bd942ce869e1a82d939"
 HASH_ALGORITHM = "fnv1a64-noncryptographic"
+PROBE_VARIANTS = ("static-oak-log", "blue-template-alias", "blue-material-alias", "oak-pami-no-declaration")
+NO_DECLARATION_PAMI_SHA256 = "13594ac365e4dcb4f52f652c4a892c845bf9524b700d1fe521a88cf9e22fa07d"
 KINDS = {"prefab": "prefab", "meshinfo": "meshInfo", "pam": "staticMesh",
          "pamlod": "staticMeshLod", "pami": "material", "hkx": "collision"}
 
@@ -133,7 +135,7 @@ def load_assets(report_path: Path) -> dict:
     raw = read_file(report_path, MAX_RESPONSE)
     report = strict_json(raw)
     variant = report.get("probeVariant", "static-oak-log")
-    if variant not in ("static-oak-log", "blue-template-alias", "blue-material-alias"):
+    if variant not in PROBE_VARIANTS:
         raise ProbeError("Unknown native asset probe variant")
     if variant == "static-oak-log" and "control" in report:
         raise ProbeError("A control report cannot claim the ordinary oak variant")
@@ -203,6 +205,8 @@ def load_assets(report_path: Path) -> dict:
     elif any(resources["oak_y_" + suffix]["sha256"] == resources["blue_" + suffix]["sha256"]
              for suffix in ("prefab", "pami")):
         raise ProbeError("An original blue prefab/material alias must be explicitly labelled as a control")
+    elif resources["oak_y_pami"]["sha256"] == NO_DECLARATION_PAMI_SHA256:
+        raise ProbeError("A PAMI declaration control must be explicitly labelled as a control")
     return {"reportPath": str(report_path), "reportSha256": hashlib.sha256(raw).hexdigest(),
             "probeVariant": variant, "resources": resources}
 
@@ -313,8 +317,12 @@ class ResourceProbe:
             raise ProbeError("Game process identity does not match the fixed EXE")
         return value
 
-    def ready(self) -> dict:
+    def ready(self, report: dict, key: str) -> dict:
         code, value = self.api.request("/api/status")
+        # Keep the actual failed readiness response too: an unloaded scene,
+        # unsupported build and HTTP failure require different next actions.
+        report[key] = value
+        report[key + "HttpStatus"] = code
         if (code != 200 or type(value.get("apiVersion")) is not int or value["apiVersion"] != 1
                 or value.get("gameVersion") != VERSION or value.get("ready") is not True or value.get("buildOk") is not True):
             raise ProbeError("Expected ready/buildOk API 1 on Crimson Desert " + VERSION)
@@ -365,7 +373,7 @@ class ResourceProbe:
         names = GROUPS[group]
         if set(assets.get("resources", {})) != set(RESOURCES):
             raise ProbeError("Input assets do not cover the exact fixed resource set")
-        if assets.get("probeVariant") not in ("static-oak-log", "blue-template-alias", "blue-material-alias"):
+        if assets.get("probeVariant") not in PROBE_VARIANTS:
             raise ProbeError("Input assets lack a verified probe variant")
         report = {"schemaVersion": 1, "project": PROJECT, "runId": uuid.uuid4().hex,
                   "probeVariant": assets["probeVariant"],
@@ -380,7 +388,7 @@ class ResourceProbe:
         self.evidence.write(report)
         try:
             report["gameBefore"] = self.instance()
-            report["statusBefore"] = self.ready()
+            self.ready(report, "statusBefore")
             report["mcBefore"] = self.mc_snapshot()
             if self.instance() != report["gameBefore"]:
                 raise ProbeError("Game instance changed during preflight")
@@ -430,7 +438,7 @@ class ResourceProbe:
             try:
                 report["gameAfter"] = self.instance()
                 report["gameInstanceUnchanged"] = report.get("gameBefore") == report["gameAfter"]
-                report["statusAfter"] = self.ready()
+                self.ready(report, "statusAfter")
             except Exception as error:
                 report["gameAfterError"] = str(error)
             try:

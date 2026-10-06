@@ -67,3 +67,28 @@ u32 `+0x38`（`0x18A38B0`）、IndexedString name `+0x40`（`0x18A3CD0`），装
 
 被动观察候选与原始反汇编留在忽略的 `vendor/research/`，尚未集成或安装。
 新聊天按本页重建必要探针；不把存在本机的研究候选当作已经发布的功能。
+
+## 2026-10-07 当前身体到外观控制器的只读路线
+
+本段服务于最新“复用当前身体的 Steve 模式”，不新增第四身份。固定 EXE 的生产
+调用者 `0x629870` 内 `0x6298DD` 代码链为 actor `+0x68` 组件表、表 `+0x40`
+ClientCharacterControlActorComponent、组件 `+0xB8` 中间结构、结构 `+0x20`
+CharacterCustomizationController；随后调用 `0x72C5D0`、`0x72C0A0`、`0x726C50`。
+这些 RVA 仅证明本 SHA 的静态调用关系，未用作本轮的原生调用入口。
+
+新只读探针从固定 World global `0x6D69190` 出发，要求三条 RIP anchor 一致、manager
+与 user 的当前身体指针一致、身体反向 user 一致，组件 `+8` 反向当前身体。控制器
+主 vtable 必须为 `0x559DD98`、RTTI 必须精确；`+0x10` owner 与 `+0x60` 弱引用
+holder 的 `+8` target 减 `0x28` 一致，target `+0x15` 失效标志为零。owner 必须为
+SceneObjectClient，`+0x210` 的组件数组在有界 count 内恰好包含该控制器一次。
+
+控制器分配大小 `0x140` 来自构造调用；mesh `+0xA0` 和 decoration `+0xB0` 选择数组
+的指针/count/capacity 分别位于容器 `+0/+8/+0xC`，字节步长由固定 resize helper
+`0x3D2BE0` 与 mesh setter `0x92F2B90` 的逐字节复制支持。只读工具仍不解释中间
+结构类型、加载的选项上界或资源对象，不写这些数组，也不调用刷新函数。
+
+工具 [probe_appearance_controller.py](../tools/probe_appearance_controller.py) 限定固定
+链、4KiB 单次读取上限和两次稳定采样，复用版本/SHA、VirtualQueryEx 可读页与只读
+进程权限。完整链任一部分不符就保留失败证据并停止解释，无任意地址参数、堆扫描或
+HTTP 写入。17 项隔离检查通过；本轮未运行真实进程观测，实际关联、应用、恢复和
+跨重载生命周期全部仍未验证。

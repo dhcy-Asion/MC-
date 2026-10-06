@@ -36,7 +36,7 @@ MAX_RESPONSE = 2 * 1024 * 1024
 MAX_OBJECTS = 5000
 ASSET_OWNER = "CrimsonMC static oak-log asset probe v1"
 ASSET_MARKER = ".crimsonmc-asset-probe-owner.json"
-PROBE_VARIANTS = ("static-oak-log", "blue-template-alias", "blue-material-alias")
+PROBE_VARIANTS = ("static-oak-log", "blue-template-alias", "blue-material-alias", "oak-pami-no-declaration")
 
 
 class ProbeError(RuntimeError):

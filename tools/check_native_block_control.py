@@ -13,6 +13,7 @@ import subprocess
 import tempfile
 import unittest
 from unittest import mock
+import xml.etree.ElementTree as ET
 
 import prepare_native_block_control as control
 import probe_native_resources as resource
@@ -30,6 +31,8 @@ class BlueAliasChecks(unittest.TestCase):
         cls.report = control.build_control(cls.source, cls.output)
         cls.material_output = cls.root / "verified-material-control"
         cls.material_report = control.build_control(cls.source, cls.material_output, control.MATERIAL_VARIANT)
+        cls.no_declaration_output = cls.root / "verified-no-declaration-control"
+        cls.no_declaration_report = control.build_control(cls.source, cls.no_declaration_output, control.NO_DECLARATION_VARIANT)
 
     @classmethod
     def tearDownClass(cls):
@@ -353,6 +356,95 @@ class BlueAliasChecks(unittest.TestCase):
             with mock.patch.object(control, "build_control", return_value=saved) as build:
                 self.assertEqual(control.main(), 0)
                 self.assertEqual(build.call_args.args, (self.source, control.ROOT / "build/native-block-blue-material-alias", control.MATERIAL_VARIANT))
+
+    def test_22_no_declaration_exact_source_suffix_and_independent_xml_semantics(self):
+        spec = control.VARIANTS[control.NO_DECLARATION_VARIANT]
+        original = (self.source.parent / ("candidate/" + spec["target"])).read_bytes()
+        actual = (self.no_declaration_output / ("candidate/" + spec["target"])).read_bytes()
+        self.assertEqual(len(control.PAMI_DECLARATION), 39)
+        self.assertEqual(original[:39], control.PAMI_DECLARATION)
+        self.assertEqual(actual, original[39:])
+        self.assertEqual(len(actual), 721)
+        self.assertNotEqual(actual, (self.source.parent / ("template/" + spec["template"])).read_bytes())
+        self.assertEqual(ET.canonicalize(original.decode(), strip_text=True), ET.canonicalize(actual.decode(), strip_text=True))
+        differences = [row["virtualPath"] for row in self.source_report["candidateResources"]
+                       if (self.source.parent / row["localFile"]).read_bytes() != (self.no_declaration_output / row["localFile"]).read_bytes()]
+        self.assertEqual(differences, [spec["target"]])
+        proof = self.no_declaration_report["control"]
+        self.assertEqual(proof["sourceResourceSha256"], control.native.sha256(original))
+        self.assertEqual(proof["removedPrefixHex"], original[:39].hex())
+        self.assertIs(proof["xmlSemanticEquivalent"], True)
+
+    def test_23_c_rebuild_loader_and_b_legacy_identity(self):
+        output = self.case / "c-rebuild"
+        report = control.build_control(self.source, output, control.NO_DECLARATION_VARIANT)
+        for relative in (*report["files"], control.REPORT_NAME):
+            self.assertEqual((output / relative).read_bytes(), (self.no_declaration_output / relative).read_bytes())
+        loaded = resource.load_assets(output / control.REPORT_NAME)
+        self.assertEqual(loaded["resources"]["oak_y_pami"]["length"], 721)
+        self.assertEqual(loaded["probeVariant"], control.NO_DECLARATION_VARIANT)
+        legacy = control.ROOT / "build/native-block-blue-material-alias" / control.REPORT_NAME
+        self.assertEqual(control.native.file_hash(legacy), "61dceae254482c25180c16df7b3756d4d049477dbf8fa3d74c1826e6915a84eb")
+        saved = resource.strict_json(legacy.read_bytes())
+        self.assertEqual(control.validate_control(legacy, saved), saved["control"])
+        self.assertEqual((self.material_output / control.REPORT_NAME).read_bytes(), legacy.read_bytes())
+
+    def test_24_c_wrong_suffix_extra_edit_and_wrong_proof_rejected(self):
+        output = self.case / "wrong-c"
+        shutil.copytree(self.no_declaration_output, output)
+        original_report = self.no_declaration_report
+        spec = control.VARIANTS[control.NO_DECLARATION_VARIANT]
+        target = output / ("candidate/" + spec["target"])
+        exact = target.read_bytes()
+        target.write_bytes(exact.replace(b" />", b"/>", 1))
+        with self.assertRaisesRegex(control.ControlError, "SHA256"):
+            control.validate_control(output / control.REPORT_NAME, original_report)
+        target.write_bytes(exact)
+        for field, value in (("removedPrefixHex", "00" * 39), ("sourceResourceSha256", "0" * 64),
+                             ("xmlSemanticEquivalent", False), ("xmlSemanticEquivalent", 1)):
+            changed = copy.deepcopy(original_report)
+            changed["control"][field] = value
+            self.save(output, changed)
+            with self.assertRaises(control.ControlError):
+                control.validate_control(output / control.REPORT_NAME, changed)
+        changed = copy.deepcopy(original_report)
+        changed["probeVariant"] = control.MATERIAL_VARIANT
+        self.save(output, changed)
+        with self.assertRaisesRegex(control.ControlError, "provenance"):
+            control.validate_control(output / control.REPORT_NAME, changed)
+
+    def test_25_wrong_source_declaration_refused_before_output(self):
+        source, _, _ = self.duplicate()
+        report = resource.strict_json(source.read_bytes())
+        row = next(row for row in report["candidateResources"] if row["virtualPath"] == control.VARIANTS[control.NO_DECLARATION_VARIANT]["target"])
+        target = source.parent / row["localFile"]
+        target.write_bytes(target.read_bytes().replace(b"version='1.0'", b'version="1.0"', 1))
+        row["sha256"] = control.native.file_hash(target)
+        report["files"][row["localFile"]] = row["sha256"]
+        source.write_text(json.dumps(report), encoding="utf-8")
+        destination = self.case / "wrong-prefix"
+        with self.assertRaisesRegex(control.ControlError, "exact 39-byte"):
+            control.build_control(source, destination, control.NO_DECLARATION_VARIANT)
+        self.assertFalse(destination.exists())
+
+    def test_26_c_labels_cannot_be_removed_or_used_as_ordinary_source(self):
+        hidden = self.case / "hidden-c"
+        shutil.copytree(self.no_declaration_output, hidden)
+        report = copy.deepcopy(self.no_declaration_report)
+        del report["control"]
+        del report["probeVariant"]
+        self.save(hidden, report)
+        with self.assertRaisesRegex((control.ControlError, resource.ProbeError), "disguised|labelled as a control"):
+            control.build_control(hidden / control.REPORT_NAME, self.case / "from-hidden-c", control.NO_DECLARATION_VARIANT)
+        with self.assertRaisesRegex(control.ControlError, "explicit"):
+            control.validate_control(hidden / control.REPORT_NAME, report)
+
+    def test_27_c_cli_default_output(self):
+        saved = self.no_declaration_report
+        with mock.patch("sys.argv", ["prepare_native_block_control.py", "--variant", control.NO_DECLARATION_VARIANT]):
+            with mock.patch.object(control, "build_control", return_value=saved) as build:
+                self.assertEqual(control.main(), 0)
+                self.assertEqual(build.call_args.args, (self.source, control.ROOT / "build/native-block-oak-no-declaration", control.NO_DECLARATION_VARIANT))
 
 
 if __name__ == "__main__":

@@ -773,13 +773,26 @@ class NativeBlockProbeChecks(unittest.TestCase):
         self.assertEqual(self.subject.cleanup()["phase"], "cleaned")
 
     def test_41_installed_gate_all_controls_are_y_only(self):
-        for variant in ("blue-template-alias", "blue-material-alias"):
+        for variant in ("blue-template-alias", "blue-material-alias", "oak-pami-no-declaration"):
             with self.subTest(variant=variant):
                 fixture = InstalledFixture(Path(self.temp.name), variant)
                 self.assertEqual(fixture.check("y")["probeVariant"], variant)
                 for axis in "xz":
                     with self.assertRaisesRegex(probe.ProbeError, variant + ".*only axis y"):
                         fixture.check(axis)
+
+    def test_42_no_declaration_control_identity_y_only_and_cleanup(self):
+        self.installation = installation_snapshot("oak-pami-no-declaration")
+        for axis in "xz":
+            with self.assertRaisesRegex(probe.ProbeError, "oak-pami-no-declaration.*only axis y"):
+                self.subject.spawn(axis)
+            self.assertFalse(any(method == "POST" for method, _, _ in self.fake.calls))
+        result = self.subject.spawn("y")
+        self.assertEqual(result["probeVariant"], "oak-pami-no-declaration")
+        self.assertEqual(result["collisionVerifiedVariant"], "oak-pami-no-declaration")
+        self.assertEqual(probe.summary(result)["probeVariant"], "oak-pami-no-declaration")
+        self.assertEqual(self.journal.read()["assetReceipt"], self.installation["assetReceipt"])
+        self.assertEqual(self.subject.cleanup()["phase"], "cleaned")
 
 
 if __name__ == "__main__":

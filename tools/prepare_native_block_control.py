@@ -1,4 +1,4 @@
-"""Build one of two fixed offline blue asset controls, changing one asset.
+"""Build one of three fixed offline asset controls, changing one asset.
 
 The new oak_y prefab key contains the original blue prefab bytes and therefore
 still references the original blue PAMI. This tests a new prefab key separately
@@ -12,6 +12,7 @@ import copy
 import json
 import os
 from pathlib import Path, PurePosixPath
+import xml.etree.ElementTree as ET
 
 import prepare_native_block as block
 import prepare_native_steve as native
@@ -26,6 +27,8 @@ TEMPLATE_SHA256 = block.TEMPLATE_HASHES[TEMPLATE]
 PURPOSE = ("Read/spawn control for the new oak_y prefab key using the complete original blue prefab "
            "and its original PAMI reference; this is not an oak appearance or collision acceptance.")
 MATERIAL_VARIANT = "blue-material-alias"
+NO_DECLARATION_VARIANT = "oak-pami-no-declaration"
+PAMI_DECLARATION = b"<?xml version='1.0' encoding='utf-8'?>\n"
 VARIANTS = {
     VARIANT: {"target": TARGET, "template": TEMPLATE, "sha256": TEMPLATE_SHA256, "length": 1845,
               "resource": "oak_y_prefab", "output": "native-block-blue-alias", "purpose": PURPOSE},
@@ -35,6 +38,13 @@ VARIANTS = {
                        "purpose": "Read/spawn control retaining the normal oak_y prefab and replacing only its new PAMI key "
                                   "with the complete original blue PAMI referencing original PAM/DDS; this is not an oak "
                                   "appearance or collision acceptance."},
+    NO_DECLARATION_VARIANT: {"target": "object/00_common/system/crimsonmc_oak_log_y.pami",
+                            "template": block.BASE + ".pami",
+                            "sha256": "13594ac365e4dcb4f52f652c4a892c845bf9524b700d1fe521a88cf9e22fa07d",
+                            "length": 721, "resource": "oak_y_pami", "output": "native-block-oak-no-declaration",
+                            "purpose": "Serialization control removing only the exact 39-byte XML declaration prefix "
+                                       "from normal oak_y PAMI; all XML semantic values and the other twenty candidates "
+                                       "remain unchanged. This is not appearance or collision acceptance."},
 }
 SOURCE_FIELDS = ("schemaVersion", "supportedExeSha256", "cdmw", "archiveIndex", "archiveIndexSha256",
                  "integration", "candidateResources", "files")
@@ -103,9 +113,40 @@ def _expected_report(source_path: Path, source: dict, source_raw: bytes, variant
     result["probeVariant"] = variant
     result["control"] = {"sourceReport": source_path.relative_to(ROOT).as_posix(),
                          "sourceReportSha256": native.sha256(source_raw), "changedResource": spec["target"],
-                         "unchangedCandidateCount": 20, "templateSha256": spec["sha256"],
+                         "unchangedCandidateCount": 20, "templateSha256": block.TEMPLATE_HASHES[spec["template"]],
                          "purpose": spec["purpose"]}
+    if variant == NO_DECLARATION_VARIANT:
+        _replacement(source_path, source, variant)
+        source_row = next(row for row in source["candidateResources"] if row["virtualPath"] == spec["target"])
+        result["control"].update(sourceResourceSha256=source_row["sha256"],
+                                 removedPrefixHex=PAMI_DECLARATION.hex(), xmlSemanticEquivalent=True)
     return result
+
+
+def _xml_semantics(data: bytes):
+    def node(element):
+        return (element.tag, tuple(sorted(element.attrib.items())), (element.text or "").strip(),
+                (element.tail or "").strip(), tuple(node(child) for child in element))
+    return node(ET.fromstring(data))
+
+
+def _replacement(source_path: Path, source: dict, variant: str) -> bytes:
+    spec = VARIANTS[variant]
+    if variant == NO_DECLARATION_VARIANT:
+        row = next(row for row in source["candidateResources"] if row["virtualPath"] == spec["target"])
+        original = _read(source_path.parent / row["localFile"])
+        if native.sha256(original) != row["sha256"]:
+            raise ControlError("Normal PAMI source bytes changed")
+        if len(PAMI_DECLARATION) != 39 or not original.startswith(PAMI_DECLARATION):
+            raise ControlError("Normal PAMI lacks the exact 39-byte declaration prefix")
+        data = original[len(PAMI_DECLARATION):]
+        if _xml_semantics(original) != _xml_semantics(data):
+            raise ControlError("Declaration-only removal changed XML semantics")
+    else:
+        data = _read(source_path.parent / ("template/" + spec["template"]))
+    if len(data) != spec["length"] or native.sha256(data) != spec["sha256"]:
+        raise ControlError("Fixed control replacement bytes differ from the verified variant")
+    return data
 
 
 def _source_reference(value: object) -> Path:
@@ -146,6 +187,10 @@ def validate_control(report_path: Path, report: dict) -> dict:
     spec = VARIANTS[variant]
     control = report["control"]
     expected_keys = {"sourceReport", "sourceReportSha256", "changedResource", "unchangedCandidateCount", "templateSha256", "purpose"}
+    if variant == NO_DECLARATION_VARIANT:
+        expected_keys |= {"sourceResourceSha256", "removedPrefixHex", "xmlSemanticEquivalent"}
+        if control.get("xmlSemanticEquivalent") is not True:
+            raise ControlError("Control XML semantic proof must be exactly true")
     if set(control) != expected_keys:
         raise ControlError("Control provenance fields differ")
     source_path = _source_reference(control["sourceReport"])
@@ -172,9 +217,9 @@ def validate_control(report_path: Path, report: dict) -> dict:
         if relative.startswith("template/") and current != _read(source_path.parent / relative, 1024 * 1024):
             raise ControlError("Control modified an original template")
     alias = _read(report_path.parent / ("candidate/" + spec["target"]))
-    template = _read(source_path.parent / ("template/" + spec["template"]))
-    if alias != template or len(alias) != spec["length"] or native.sha256(alias) != spec["sha256"]:
-        raise ControlError("Control asset must be the complete pinned blue template for its variant")
+    replacement = _replacement(source_path, source, variant)
+    if alias != replacement:
+        raise ControlError("Control asset must be the exact verified replacement for its variant")
     if native.sha256(_read(source_path)) != control["sourceReportSha256"]:
         raise ControlError("Ordinary source report changed during control verification")
     return copy.deepcopy(control)
@@ -198,7 +243,7 @@ def build_control(source_report: Path, output: Path, variant: str = VARIANT) -> 
         if native.sha256(data) != digest:
             raise ControlError("Ordinary source file changed before control copy")
         payloads[relative] = data
-    payloads["candidate/" + spec["target"]] = payloads["template/" + spec["template"]]
+    payloads["candidate/" + spec["target"]] = _replacement(source_report, source, variant)
     if len(payloads["candidate/" + spec["target"]]) != spec["length"]:
         raise ControlError("Pinned blue asset length differs for its variant")
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 # 当前状态与分阶段计划
 
-更新日期：2026-10-06（Asia/Shanghai）。当前开发目录为桌面 `CrimsonMC`，仓库为
+更新日期：2026-10-07（Asia/Shanghai）。当前开发目录为桌面 `CrimsonMC`，仓库为
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
@@ -37,10 +37,13 @@ F8 开关及点击仍待验收。模型资产已推进为真实红沙 palette �
 别名实测：同一新逻辑路径显示蓝块且物理增量 1.1521 米。A 对象已清理，MC 不变。
 退出指令后曾因红沙 PID 69700 仍运行而暂未恢复；后续确认进程已退出，A 收据
 `ece6ea42e8154e878fb9be88a8511944` 已 restored，0041/active receipt 已移除，原始
-38 项哈希一致。B PAMI 对照已通过离线预演并实际安装，**最新收据
-`1c37bb00badf44bfb1eaca55fb36e8d8` 为 installed，0041 仍挂载，红沙 PID 70052
-（23:38:09 启动）仍运行。** 窗口捕获持续显示另一游戏，已请求手动切回红沙或正常
-退出；本次 B 尚无资源读取/生成请求。不能运行中恢复索引，不能误用此前已清理 UID。
+38 项哈希一致。B PAMI 对照随后实测成功：15/15 项首次读回，正常原木 prefab 引用新
+PAMI 路径时蓝块可见、碰撞增量 1.1521 米，对象已清理且 MC 状态保持。问题继续缩小到
+正常 PAMI 内容/模型/纹理装配。用户随后正常退出，B 已恢复、原始 38 项哈希一致。
+C 仅去除 XML 声明的对照完成封装/隔离检查并短暂安装，启动接管时用户物理 Escape
+停止；确认游戏未启动后立即恢复 C，**最新收据 `c6f59e15b4a54fc1939c9b2769658ec7`
+为 restored，0041/active receipt 已移除，原始 38 项哈希一致，游戏未运行。** C 未读
+资源或生成实体。下次窗口接管须用户明确恢复；离线朝向候选及只读外观链工具已完成。
 静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
 [native-character-feasibility.md](native-character-feasibility.md)。
 
@@ -638,3 +641,97 @@ B 计划封装与真实索引检查 **13/13**、隔离安装/恢复 **16/16** �
 如果先恢复：确认进程不存在后 `install_asset_probe.py --restore`，核对最新 B 收据、
 0041/active receipt 和原始 38 项哈希。旧 A/普通原木对象均已 cleaned，不可重复删除。
 本次持续目标仍 active，完整原木/Steve/装备/HUD 血量/工坊尚未完成。
+
+## 2026-10-06 B 材质路径实测与后续单变量对照
+
+本轮确认游戏仍为 PID 70052 / 创建时间 `134357746894596369`，先执行 B 资源读取
+客户端，因主菜单 `ready=false` 在预检停止，未提交任何资源读取或生成请求。日志
+`runtime/native-resource-blue-material-20261006.json` 的 results 为空，MC 前快照尚未
+取得，因此 mcStateUnchanged=false 表示未能证明前后相同，不能解释为库存已改变。
+新增诊断记录失败时实际 status/HTTP 状态，场景未就绪与版本失败可在文件中区分。
+
+随后获得正确红沙主菜单画面，正常继续载入存档；原生 ready/buildOk 成功后执行
+`probe_native_resources.py --assets build/native-block-blue-material-alias/native-block-report.json
+--output runtime/native-resource-blue-material-ready-20261006.json`。runId
+`f45a5d3e319a456cbcf7e7edc2375070`，**15/15 首次 read 且摘要一致**，同进程、MC 状态
+保持。蓝模板/Y 原木/三张 DDS 均由本地 SHA 校验后的候选对照，不把读取当显示。
+
+确认实际世界及空地后，仅一次执行 `probe_native_block.py --spawn --journal
+runtime/native-block-blue-material-20261006.json`：runId
+`47f5f2c3-80e6-4196-9462-a23425e2a57b`、UID 1、variant `blue-material-alias`，位置
+`(-10662.134321374773, 1794.85202, -3702.0926325653973)`。实际看到蓝色立方体，截图
+`runtime/native-blue-material-visible-20261006.jpg`；首次碰撞增量 **1.152100 米**，
+hit Y=1795.86377。CLI visualVerified 仍 false，显示结论由独立画面核对给出。
+
+同进程、同日志 `--cleanup` 成功：registryRemoved/collisionRemovedVerified/
+mcStateUnchanged 均 true，清理后地面增量为 0。没有新项目，settings SHA 保持
+`f95d3f7e835d9b51f6bdf233ad8b67dda2ac7b951d7661d151299d886ea3a35e`。此结果证明
+正常原木 prefab 与新 PAMI 路径可装配原版蓝模型；还未证明正常原木 PAM/DDS 成功。
+
+只读 PAMI 差异研究记录于 ignored `build/pami-serialization-research`。普通 760 字节
+PAMI 含固定 39 字节 XML 声明；只删除该前缀得到 721 字节，独立 ET/DOM 树语义与原
+普通候选一致。原游戏模板 727 字节无声明；CDMW/WB 的工具解析器不构成游戏原生
+解析规则证据，所以 XML 声明仍是待实测因素，尚未宣布根因。
+
+新增 C `oak-pami-no-declaration` 固定对照，输出 `build/native-block-oak-no-declaration`，
+只改 Y PAMI、另 20 项及全部模板字节保持。候选 PAMI SHA
+`13594ac365e4dcb4f52f652c4a892c845bf9524b700d1fe521a88cf9e22fa07d`，记录原资源 SHA、
+精确移除前缀与语义验证；来源不能是另一对照，A/B 报告保持字节兼容。生成器实际
+检查 **27/27** 通过；资源客户端 **24/24** 通过，包含预检失败保留实际状态、零提交，
+以及拒绝将去声明候选伪装成普通原木。实体探针加入 C 身份/Y 轴限制，最终完整
+**42/42** 通过；初轮既有 test18 写临时日志遇 WinError5，单项和完整重跑通过，未
+修改该断言或放宽保护。C 报告 SHA
+`e9f91de76d859831537f74377e55aec6d0cb5959eede8da991acd8f1258b6819`。
+C 当时未封装/安装/实测，需先正常退出并恢复 B；后续恢复结果见下节。
+
+清理后红沙窗口采集又出现另一游戏画面，重新选择/激活仍未解决，未盲发退出快捷键。
+已请求用户正常退出；本轮 B 收据仍 installed、备份保留，无未清理诊断对象。
+不要将先前 A 的 restored 当作本轮 B 已恢复，也不要在游戏运行中改元数据。
+
+### Steve 独立朝向候选
+
+新增 `prepare_steve_orientation.py` 和 `check_steve_orientation.py`，固定前轮七资源
+prefab 报告、骨骼分析报告及九项真实输入，输出独立 `build/steve-orientation`。
+只修改 PAC：保持 X/Y、反射 Z、反射法线 Z、每个三角反序一次；四级 LOD 每级
+288 顶点/144 三角，共 1152 条记录和 576 个三角。原模型的对称 Z 量化范围允许用
+`qZ=32767-qZ` 做精确 15 位反射，descriptor/bounds 不变。其余六项候选、十个模板、
+骨 palette/权重/UV/不透明字段均逐字节保持。
+
+固定 CDMW 普通 writer 不写 authored tangents，不能仅设置 Python tangents 就声称
+已写入原生数据。本工具对已验证的原生记录字段重建 UV frame；真实 donor 的 packed
+方向对应 UV V 导数，bit31 对 U-from-cross 的符号关系由 11476 个唯一强样本支持
+（5 正/11471 负、无矛盾）。这是 **source-backed empirical**，不是 shader ABI 或
+实机验收；未知布局、矛盾样本、缺少顶点 frame 均停止输出。
+
+`py -3.12 -B tools/check_steve_orientation.py --rebuild` **13/13 通过**，包含独立原始
+字节 frame/几何核对、四级绕序、前后 no-edit writer 往返及真实重建逐字节一致。
+最大位置反射误差约 `2.78e-17` 米，方向编码误差约 `0.000978`。候选 PAC SHA
+`8f7b32db6063b7cc8ec71278a8ede09a9e375c2dfd80dedef13283ef77cc0539`，报告 SHA
+`368bc03aa89f6d6eeb6be8d755488d48a8ee88907c3e50fffa711e8bc5949892`。
+仍未安装 Steve，也未修复 MC/原生关节中心差异或验证实时动画/父变换/装备。
+
+### 2026-10-07 恢复结果与停止接管
+
+用户明确回复“已正常退出红沙”后，确认 PID 70052 已不存在，B 收据
+`1c37bb00badf44bfb1eaca55fb36e8d8` 恢复成功，合并 sourceIndexes/untouchedGameFiles/
+metadataBefore 的 38 个原文件全部匹配，0041/active receipt 移除。
+
+依据恢复后的游戏快照构建 `build/native-oak-no-declaration-overlay`：0041、21 项、
+PAZ 56704 字节，所有 payload 解包一致。`check_asset_overlay.py --output
+build/native-oak-no-declaration-overlay --verify-game` **13/13**，`check_asset_probe.py
+--plan build/native-oak-no-declaration-overlay` 隔离检查 **16/16**。随后安装 C 收据
+`c6f59e15b4a54fc1939c9b2769658ec7`，但启动 Computer Use 时工具报告用户物理 Escape
+停止，未再调用窗口工具或执行资源/实体诊断。只读核对无 CrimsonDesert 进程后立即
+恢复 C，最新收据 restored、0041/active receipt 消失，38 个原始哈希再次全部一致。
+因此没有待恢复临时包、没有未清理诊断实体；C 的游戏内行为仍未验证。
+
+新增 `probe_appearance_controller.py` / `check_appearance_controller.py`，只申请
+PROCESS_VM_READ/QUERY_INFORMATION，沿固定代码支持的当前身体组件链定位外观
+控制器；精确 RTTI、双向 owner 关联、代码字节和两次稳定采样均要求满足，未知布局
+停止，输出只写本机新 runtime JSON。**17/17** 隔离检查和既有角色保护 **6/6** 通过；
+还未读取真实新进程或应用/恢复外观。静态依据见 [native-character-contract.md](native-character-contract.md)。
+朝向候选独立审查与真实原始记录检查未发现阻断，仍不称动画/控制绑定完成。
+
+共同静态验证：50 个 Python AST、7 个公开 JSON、修改文档的 22 个相对链接和
+`git diff --check` 通过。本轮 ASI/JAR 未改，MC revision18/原材料保持。持续目标仍进行
+中，游戏接管需明确恢复；不以此次 Escape 将完整目标误记 complete 或 paused。

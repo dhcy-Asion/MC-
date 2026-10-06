@@ -243,10 +243,19 @@ py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block-blue-alia
 
 实机普通原木在新进程中读回 15 项资源后仍不显示/无预期碰撞；A prefab 别名对照则
 在同一逻辑路径显示蓝块，首次地面采样增量 1.1521 米、清理后回到 0，MC 状态保持。
-因此新 prefab 路径可用，下一步检查改过的 PAMI/模型链；B PAMI 对照已通过离线检查
-并安装，窗口显示受阻而尚未进行资源读取/生成，最新恢复状态见进度文件。
+因此新 prefab 路径可用；随后 B 新 PAMI 路径对照也实测蓝块可见且碰撞增量 1.1521 米，
+清理后回到 0，MC 状态保持。正常 prefab/新 PAMI 路径可用，继续检查 PAMI 内容及
+模型/纹理组合，最新恢复状态见进度文件。
 对象探针最终 41 项隔离检查通过，碰撞循环现在保留首末采样、次数和 min/max 差值，
 清理阶段失败也会保存。最新临时包是否恢复以 [progress.md](progress.md) 当前状态为准。
+
+第三种 `oak-pami-no-declaration` 仅删除正常 Y PAMI 固定的 39 字节 XML 声明，文件
+760→721 字节；保留剩余字节和其他 20 项资源，独立 XML 树语义相同。它用于区分
+序列化因素，不能预先称为修复。`prepare_native_block_control.py --variant
+oak-pami-no-declaration` 生成独立候选，报告增加原资源 SHA、删除前缀与语义验证。
+生成器 27 项检查、资源客户端 24 项检查通过；C 封装/隔离恢复通过后短暂安装，启动
+接管时 Escape 停止，确认游戏未运行后已恢复，尚未实测。资源诊断预检失败
+也保存实际状态响应，仍在 ready/buildOk 均成功后才提交读取。
 
 ## Steve 骨骼与朝向的离线证据
 
@@ -264,3 +273,17 @@ py -3.12 -B tools/check_steve_rig.py --rebuild
 独立 Z 反射，同时反射法线、反转三角绕序并重新生成切线；这仍须验证 actor 父变换与
 引擎渲染。报告内逐关节 30 度旋转只是合成数学检查。没有修改 PAC/PAB、安装 Steve、
 取得实时姿态接口或验收动画/装备。
+
+随后已生成独立 `build/steve-orientation`，原七资源链保持，只有 PAC 做 Z/法线反射、
+一次三角绕序反转及原生 UV frame 重建。四级 LOD 每级 288 顶点/144 三角，骨权重、
+palette、UV、元数据和其余六资源不变。使用原 15 位位置量化字段，未移动任何骨骼。
+
+```powershell
+py -3.12 -B tools/prepare_steve_orientation.py
+py -3.12 -B tools/check_steve_orientation.py --rebuild
+```
+
+生成器拒绝已存在的输出，重复运行需指定新的 build 目录。13 项真实重建检查通过，
+独立检查原始 frame/绕序/每级完整性及源输入不变。固定 donor 的 11476 条唯一强样本
+支持 packed V 与 bit31 符号约定，但 shader ABI、实际光照/朝向仍待实测。报告的全部
+集成标志保持 false；这项候选没有解决关节中心差异、控制身份、应用/恢复和装备。
