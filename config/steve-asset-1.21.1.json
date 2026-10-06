@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "minecraftVersion": "1.21.1",
+  "versionMetadata": {
+    "url": "https://piston-meta.mojang.com/v1/packages/22a1966494dfa4eeb5ee778c8e6ed5b774839582/1.21.1.json",
+    "sha1": "22a1966494dfa4eeb5ee778c8e6ed5b774839582"
+  },
+  "client": {
+    "url": "https://piston-data.mojang.com/v1/objects/30c73b1c5da787909b2f73340419fdf13b9def88/client.jar",
+    "sha1": "30c73b1c5da787909b2f73340419fdf13b9def88",
+    "sha256": "499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99",
+    "size": 26836906
+  },
+  "skin": {
+    "entry": "assets/minecraft/textures/entity/player/wide/steve.png",
+    "sha256": "d876e0c88f4b3de71040966ed94a614f315b888592b520b993399fd2738418d0",
+    "width": 64,
+    "height": 64
+  },
+  "sourceClasses": {
+    "fwp.class": "4d75b4c7930a104fc47f7cbb4caa28953c801a11e39eacda1b45d54eb6926ff9",
+    "fvx.class": "ff2bed3d05ca29da524fddba8d2ac8b654427587e5568e7dc6ae89cfa6902a20",
+    "fyk.class": "b6f1eea56136a1e5b78ea6dda7200bbfada8aa45a3116b1e82a7c40e3dae4c67",
+    "fyk$a.class": "c36a1d362ba172c900a1b1de3d6c83f5245d63ab671560997a8759e9c34f7590",
+    "fyk$b.class": "87f1033e00318dc7674165b435cce9fb52354b7528b4f6a68569953d932b84cd",
+    "fyk$c.class": "0c22fd1b5e3c38c86a6eb52925116f265445b26729b0c0d0609a5545f64225c5",
+    "gpo.class": "471736db277d8bafd2977005253f661184a0d6d1ee45322ae9cd3bdc6b902ba6"
+  },
+  "geometryCanonicalSha256": "ccc9f0e3ddd5cd662b72e83360ba127ae2449a2d726de50507578a257594f847",
+  "model": {
+    "thinArms": false,
+    "pixelsPerModelMeter": 16,
+    "feetPixelY": 24,
+    "playerRendererScale": 0.9375,
+    "baseHeightPixels": 32,
+    "baseHeightModelMeters": 2,
+    "baseHeightRenderedMeters": 1.875,
+    "excludedParts": ["cloak", "ear"]
+  },
+  "integration": {
+    "nativeCharacterRegistered": false,
+    "gameSkeletonMapped": false,
+    "gameAnimationRetargeted": false,
+    "armorAttached": false,
+    "heldItemsAttached": false,
+    "installed": false
+  }
+}

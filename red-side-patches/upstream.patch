@@ -91,7 +91,7 @@ index 93f9853..d96c3a6 100644
          // pos + axis of the camera object; the axis sign is ambiguous, so "view" is the horizontal direction from the camera
          // towards the player (the third-person camera always looks over the character), which is what callers want
 diff --git a/asi/cdmodkit/overlay.cpp b/asi/cdmodkit/overlay.cpp
-index 9784267..7719370 100644
+index 9784267..220c646 100644
 --- a/asi/cdmodkit/overlay.cpp
 +++ b/asi/cdmodkit/overlay.cpp
 @@ -22,6 +22,7 @@ void* CdHeapAlloc(size_t n); void* CdHeapRealloc(void* p, size_t n); void CdHeap
@@ -121,3 +121,12 @@ index 9784267..7719370 100644
          Stage("imgui render");
          ImGui::Render();
          // edit mode: every input belongs to the menu (the game keeps running but does not react); play mode / placement: everything to the game
+@@ -1145,7 +1147,7 @@ namespace overlay {
+             core::g_uiWantsKeyboard = false;
+             core::g_uiTextInput = false;
+             core::g_uiMouseOverUi = false;
+-            if (!core::DebugPointCount()) { sc->Release(); return; }   // research overlay points are drawn with the editor closed too
++            // The MC hotbar and its asynchronous inventory polling also run with the editor closed.
+         }
+ 
+         // per-buffer queues (ResizeBuffers1): our command list must run on the queue of the buffer presented now

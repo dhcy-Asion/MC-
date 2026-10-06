@@ -46,3 +46,28 @@ assets remain the property of Mojang/Microsoft. Setup verifies archive SHA-256
 and prepares 1332 ID-specific local files, including seven explicitly documented
 same-type component previews. The downloaded ZIP/PNGs are ignored and are not
 redistributed in Git or the ASI. Names/counts/components remain MC-authoritative.
+
+The offline Steve preparation tool uses the verified official Minecraft Java
+1.21.1 client and invokes its model constructors in a separate local Java process.
+Version, client/class hashes and the wide Steve skin hash are pinned in
+`config/steve-asset-1.21.1.json`. The helper and conversion code are project source;
+the client, skin, engine geometry dump and derived glTF/binary remain in ignored
+`downloads/` and `build/`. They are not included in Git, ASI or any distribution
+package. A local export is not a redistribution license or native game integration.
+See [distribution status](docs/workshop-distribution.md) for the separate release
+requirements.
+
+The offline native preparation tool downloads/uses CDMW-Full, MIT copyright
+(c) 2026 Ratrider, pinned to
+[787680f97502522e90ec3dd1ea1889ca86452985](https://github.com/Ratty123/CDMW-Full/tree/787680f97502522e90ec3dd1ea1889ca86452985).
+Its ZIP, Python source tree and license are verified before import; source/dependencies
+remain in ignored build. The MIT text is retained in `licenses/CDMW-MIT.txt`.
+Crimson Desert skeleton/model/material templates and the derived Steve PAC are
+local game assets and are not included in Git or the ASI. The block preparation
+tool uses the same verified official MC client and original model constructors;
+its blockstates, models, textures and derived glTF files likewise remain local.
+
+The development workflow references
+[universal-modder 671544554523eb3ae8048c18d4eb8973f5f19652](https://github.com/rehan-remade/universal-modder/tree/671544554523eb3ae8048c18d4eb8973f5f19652).
+Its MIT license is retained in `licenses/Universal-Modder-MIT.txt`; its checkout is
+ignored and its GTA-specific runtime is not bundled into this plugin.

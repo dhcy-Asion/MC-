@@ -57,6 +57,8 @@ std::string Request(const std::wstring& path, const std::string& body) {
 }
 void Queue(const wchar_t* path, std::string body = "") {
     if (pending.valid()) return;
+    // Completion can precede the next Tick, so invalidate when submitting a mutation.
+    if (!body.empty()) mc_inventory_ui::RequireConfirmation();
     lastPoll = GetTickCount64();
     pending = std::async(std::launch::async, [p=std::wstring(path),b=std::move(body)] {return Request(p,b);});
 }
@@ -72,7 +74,10 @@ void Draw() {
         try {summary=pending.get();} catch (...) {summary="Bridge worker failed";}
         lastPoll = GetTickCount64();
     }
-    if (!editor::IsOpen() || editor::PlayMode()) return;
+    const bool menuOpen = editor::IsOpen() && !editor::PlayMode();
+    mc_inventory_ui::Tick(menuOpen, pending.valid());
+    mc_inventory_ui::DrawHotbar(menuOpen, pending.valid());
+    if (!menuOpen) return;
     i18n::AddGlyphText(summary);
     i18n::AddGlyphText("真实我的世界版显示红沙世界构建器红沙场景资源；下方目录用于领取物品。");
     i18n::AddGlyphText("MC 物品控制台与建造建造操作无需合成直接添加物品获取一组真实规则蓝色方块为碰撞测试模型材质尚未接入材料橡木木板原木圆石泥土石头工作台在角色前方建立实验原点恢复放置指定拆除最后一块方块坐标相对到原型最多关闭菜单后继续红沙战斗实验背包由服务端保存与原有独立请在上方目录取得物品。");

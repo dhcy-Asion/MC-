@@ -1,8 +1,10 @@
 # 项目架构与接口约定
 
 本文件描述当前已实现的实验原型。分阶段目标和验收条件见 [progress.md](progress.md)，
-人物需求见 [steve-character.md](steve-character.md)。新增第四角色、生存战斗和完整背包
-仍是计划，不能根据本文推定这些功能已经存在。
+人物需求见 [steve-character.md](steve-character.md)。2026-10-06 范围调整为启用 mod 后
+持续显示 Steve，兼容两套装备；用户确认心形 UI 使用红沙真实 HP／战斗规则。
+独立第四身份仍是历史研究。角色替换、HP 行为桥接和
+具体物品用途仍未实现，不能根据本文推定这些功能已经存在。
 
 ## 模块与数据流
 
@@ -20,11 +22,15 @@ flowchart LR
 | `minecraft/src/main/java/local/crimsonmc/Authority.java` | Fabric 服务端初始化、实验库存、中文名称、方块、掉落和保存 | 使用真实 MC；当前是 36 格 `SimpleInventory`，原型合成已移除，没有 MC 玩家实体或生存战斗 |
 | `bridge/service.py` | 接收面板操作，转换坐标，调用 MC，并同步红沙代理实体 | 不计算配方／掉落；只维护 `CrimsonMCPrototype` 项目的对象 |
 | `bridge/red_side.py` | 原生 JSON HTTP 客户端、地面探针轮询 | 请求超时或未命中时报错，不猜测地面高度 |
-| `red-side-patches/mc_panel.cpp/.h` | ImGui 操作面板、异步 WinHTTP 请求 | 与桥接通信；没有第四角色、手持物模型或心形 HUD |
-| `red-side-patches/mc_inventory_ui.cpp/.h`、`mc_inventory_protocol.h` | 全物品图标目录、中文悬停、36 格选择与异步背包操作；有界 TSV 解码 | 所选槽位由 MC 返回；不是原生手持模型，异常响应不覆盖已知库存 |
+| `red-side-patches/mc_panel.cpp/.h` | ImGui 操作面板、每帧 HUD 接入、异步 WinHTTP 请求 | 保留原 UI；没有 Steve 替换、手持物模型或心形 HUD |
+| `red-side-patches/mc_inventory_ui.cpp/.h`、`mc_inventory_protocol.h`、`mc_hotbar_layout.h` | 图标目录、36 格选择、底部九格 HUD、异步背包操作和有界解码 | 九格使用真实槽 0～8，选中 9～35 不伪造高亮；离线状态不可操作；不是原生手持／生命规则 |
 | `red-side-patches/upstream.patch` | 对固定 World Builder 的 HTTP 诊断、面板接入等改动 | 是可重建的上游差异；不能只留在忽略目录 |
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断 | 只申请读和查询权限，不调用游戏函数、不创建角色或写游戏内存 |
+| `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
+| `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
+| `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
+| `tools/prepare_native_steve.py`、`check_native_steve.py` | 只读提取真实红沙 PAB/PAC 及相关模板，重建并生成真实 palette 的 Steve PAC 候选 | 所有资源仅本地 build；四个 LOD 已回读，材质、动画、装备、原生显示仍未验收 |
 | `config/` | 可公开的默认服务端配置与诊断版本配置 | 不是用户运行时存档；未知 EXE 版本或 SHA 不使用诊断布局 |
 | `artifacts/` | 已成功构建的原型自身 ASI 和 Fabric JAR | M6a 更新两份产物；没有原版游戏程序／资源 |
 | `docs/`、`licenses/` | 可接手的架构、进度、检查摘要及许可证 | 未验证项和实验限制明确标记；原始进程数据不发布 |
@@ -226,4 +232,6 @@ world-root 签名和 RTTI 链解析；多个 child 全部记录，不默认选�
 - 2026-10-04：按用户最新要求取消原型合成，增加按数量直加物品；名称改用固定官方简体中文，拒绝歧义名称，不合并变种。原版配方、库存组件和建筑保留。
 - 2026-10-04：第四角色须为独立身份；不以替换原版三人外观作为验收。
 - 2026-10-04：MC 规则继续为权威；新增生命／装备接口需要真实 MC 玩家及原生事件证据。
+- 2026-10-06：用户改为启用 mod 期间持续 Steve、禁用恢复，兼容两套装备；心形条使用红沙真实 HP，保留红沙战斗。前述独立 MC 生命规则不再作为当前要求。
+- 2026-10-06：九格与 36 格共享一份受确认／超时保护的库存；每帧 Tick 在 F8 关闭时继续异步读库存，目录只在菜单打开时请求。关闭时 NoInputs，不增加数字键／滚轮拦截；操作必须等待 MC 回读后才显示已确认选择。
 - 2026-10-04：仅修改结束后按授权提交上传；不使用定时上传。详见 [../AGENTS.md](../AGENTS.md)。
