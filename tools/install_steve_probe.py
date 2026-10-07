@@ -1,4 +1,4 @@
-"""Install/restore the fixed Steve probe or its one-head-descriptor control.
+"""Install/restore fixed Steve probes with head, registration and single-app controls.
 
 This uses the existing transaction, backup, lock and recovery implementation.
 The default oak-log installer cannot install or restore this separate probe kind.
@@ -16,7 +16,8 @@ import prepare_steve_probe_overlay as steve
 native, overlay, ROOT = transaction.native, transaction.overlay, transaction.ROOT
 KIND = "steve-mesh-parameters"
 FLAGS = {"texture": 0, "skinnedMesh": 1, "skinnedMaterial": 50,
-         "prefab": 0, "prefabDescriptor": 48, "appearanceMeshParams": 50}
+         "prefab": 0, "prefabDescriptor": 48, "appearanceMeshParams": 50,
+         "partPrefabTable": 50, "appearanceDefinition": 48}
 
 
 def build_path(value):
@@ -34,28 +35,36 @@ def load_plan(plan):
         raise ValueError("Steve probe report is too large")
     report = json.loads(raw)
     if (report.get("schemaVersion") != 1 or report.get("supportedExeSha256") != native.EXE_SHA256
-            or report.get("cdmw", {}).get("commit") != native.CDMW_COMMIT
-            or report.get("replacementPaths") != [steve.appearance.TARGET_PATH]):
-        raise ValueError("Steve probe version or exact replacement target differs")
+            or report.get("cdmw", {}).get("commit") != native.CDMW_COMMIT):
+        raise ValueError("Steve probe version differs")
     name = report.get("directoryName")
     if not isinstance(name, str) or not name.isascii() or not name.isdigit() or len(name) != 4 or not 36 <= int(name) <= 9999:
         raise ValueError("Unsafe Steve overlay directory")
     candidate_reports = report.get("candidateReports")
-    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3):
-        raise ValueError("Steve probe requires two fixed reports, optionally the fixed head descriptor")
+    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5):
+        raise ValueError("Steve probe requires the exact reviewed candidate report set")
+    required = {"steve-assembly-report.json", "steve-appearance-report.json"}
+    with_head = required | {"steve-head-descriptor-report.json"}
+    with_table = with_head | {"steve-part-table-report.json"}
+    allowed = with_table | {"steve-app-report.json"}
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
-        if file.name in by_name or native.file_hash(file) != digest:
+        if file.name not in allowed or file.name in by_name:
+            raise ValueError("Unrecognized or ambiguous Steve candidate report name")
+        if native.file_hash(file) != digest:
             raise ValueError("Steve candidate report changed or is ambiguous")
         by_name[file.name] = file
-    required = {"steve-assembly-report.json", "steve-appearance-report.json"}
-    if set(by_name) not in (required, required | {"steve-head-descriptor-report.json"}):
+    if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"}):
         raise ValueError("Unrecognized Steve candidate report names")
     models = by_name["steve-assembly-report.json"]
     appearance = by_name["steve-appearance-report.json"]
     head_descriptor = by_name.get("steve-head-descriptor-report.json")
-    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor)
+    part_table = by_name.get("steve-part-table-report.json")
+    app = by_name.get("steve-app-report.json")
+    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table)
+    if report.get("replacementPaths") != steve.replacement_paths(expected):
+        raise ValueError("Steve probe exact replacement targets differ")
     if inputs != candidate_reports:
         raise ValueError("Steve candidate provenance changed")
     rows = report.get("resources")
@@ -91,8 +100,15 @@ def load_plan(plan):
     textures = {path: data for path, data in payloads.items() if expected[path]["row"]["kind"] == "texture"}
     overlay.audit_registry(before["meta/0.pathc"], after["meta/0.pathc"], textures)
     steve.orientation.verify_snapshot(snapshot)
+    variant = "steve-kliff-head-descriptor-v1" if head_descriptor else "steve-kliff-meshparams-v1"
+    if part_table:
+        variant = "steve-kliff-part-table-v1"
+    if app:
+        path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
+        number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")
+        variant = f"steve-kliff-app-{number}-part-table-v1"
     return {"plan": plan, "report": report, "reportSha256": native.sha256(raw), "name": name,
-            "probeVariant": "steve-kliff-head-descriptor-v1" if head_descriptor else "steve-kliff-meshparams-v1",
+            "probeVariant": variant,
             "candidateReport": str(models),
             "candidateReportSha256": native.file_hash(models), "package": package,
             "payloads": payloads, "before": before, "after": after}

@@ -614,10 +614,57 @@ py -3.12 -B tools/check_steve_probe.py --head-descriptor --rebuild
 外部依赖未重复打包。原十一项 payload 和纹理注册表逐字不变，不同时修改 app、
 PAC、材质、prefab、骨架、缩放或 meshparam。
 
-安装器仅允许原两个报告或加上这一个固定报告；缺报告、多资源、错标志或字节变化
+本对照仅允许原两个报告加上这一个固定报告；缺报告、多资源、错标志或字节变化
 均拒绝。对照收据的 `probeVariant=steve-kliff-head-descriptor-v1`，沿用
 `kind=steve-mesh-parameters`、原 Steve owner 和恢复事务，绑定完整包报告及安装哈希。
 独立头描述文件的 8 项检查通过；对照包的完整事务结果见进度。
 实际试验时使用 `install_steve_probe.py --install --plan build/steve-head-descriptor-probe-overlay`；
 退出后仍用 `install_steve_probe.py --restore`，不覆盖后来存档。
-该包尚待游戏内显示验证，不代表已实现 Steve 或已确认故障原因。
+后续手动实测仍显示原角色，单独补齐头描述文件没有使外观切换通过；下一项为下述目录登记对照。
+
+## 私有部件目录登记与单 app 对照
+
+后续手动实测确认：十二资源包仍显示原角色，schema 7 双采样读到当前初始 app 为
+`character/appearance/1_pc/1_phm/cd_phm_macduff/cd_phm_macduff_00000.app_xml`。
+固定 EXE 的 Name 解析还依赖 `character/bin__/partprefabtable.pappt`；原表两段均没有
+私有 Steve stem。仅加入 prefab、descriptor 和 meshparam 没有补齐此目录依赖。
+
+```powershell
+py -3.12 -B tools/prepare_steve_part_table.py
+py -3.12 -B tools/check_steve_part_table.py --rebuild
+# 两份 app 候选分别生成，每份只修改自身两个 Name，不同时替换两个 app
+py -3.12 -B tools/prepare_steve_app.py --variant macduff-00000
+py -3.12 -B tools/prepare_steve_app.py --variant macduff-00002
+py -3.12 -B tools/check_steve_app.py --rebuild
+```
+
+PAPPT 固定源为 2130295 字节，SHA256
+`d6947dcb57d32e0503704da28edf4645baaa8faad8fbd47d09a8a8832686abed`，flags 50。
+独立有界解析限定原始 tag=01 格式，原部件数 15566、描述文件目录数 2630。克隆当前
+Body 01_0002 与 Head0001 的记录，只换 stem；原目录、socket、额外字段、flags、
+CD_Nude／CD_Underwear 及七个头部槽不变。两段各追加两行，计数变为 15568／2632，
+全部旧行字节／顺序保持。新文件 2130624 字节，增加 329 字节；逆移除逐字恢复。
+同名私有 prefab 和描述文件必须同时存在，目录登记本身不包含模型载荷。
+
+PAPPT 默认输出 `build/steve-part-table/steve-part-table-report.json`，kind 为
+`partPrefabTable`；app 默认输出分别为 `build/steve-app-macduff-00000` 和 `...00002`，
+报告名 `steve-app-report.json`，kind 为 `appearanceDefinition`，flags 48。
+三份报告均只有一项 `targetReplacements`、空 `candidateResources`；纯 loader 从固定
+源重新构造精确报告与 payload，不使用报告中的成功标记准入。两套候选检查各 **8/8**
+通过；原资产与候选保持。实际注册加载、显示、动画和装备仍未验证。
+
+资源包入口将登记和初始选择分开：十三资源先在十二资源包上只加 PAPPT；十四资源
+再加一份显式 app。app 缺注册表或头描述文件时拒绝。需先恢复当前临时包，再生成：
+
+```powershell
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table/steve-part-table-report.json
+py -3.12 -B tools/check_steve_probe.py --part-table --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table/steve-part-table-report.json --app-report build/steve-app-macduff-00000/steve-app-report.json
+py -3.12 -B tools/check_steve_probe.py --app-variant macduff-00000 --rebuild
+```
+
+默认输出依次为 `build/steve-part-table-probe-overlay` 和
+`build/steve-app-macduff-00000-probe-overlay`；原十一／十二资源包保留。安装仍通过
+Steve 专用入口，并以完整 plan SHA／文件哈希绑定收据。十三／十四资源包当前完整
+重建与事务检查状态见进度；未通过检查前不安装。初始 app 控制只用于当前已观察的
+00000，不从静态存在推断 00002 已被当前身体使用。所有资源仅存本机 ignored build。

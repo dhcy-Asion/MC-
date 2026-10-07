@@ -4,6 +4,12 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
+本轮现场状态：用户改为手动启动／退出，十二资源头描述文件包收据
+`64cefed193bc4014914e78495471dc67` 当前已安装。用户进入后确认仍为原角色；schema 7
+已稳定读到初始 app 为 `cd_phm_macduff_00000.app_xml`。只读诊断完成，等待用户正常
+退出后恢复；游戏进程在最近一次核对中仍在运行。下文旧“已恢复”指此前收据，
+不得据此绕过当前 active receipt。窗口自动接管保持停止。
+
 用户已于 2026-10-06 将剩余移植工作设为持续目标并要求开始执行，之后再次要求继续。
 目标已建立且未标记完整移植完成。此前一轮触及 usageLimited；用户继续后已恢复 active，
 当前继续原生资产与实机探针工作，没有自行改为 complete/paused/blocked。
@@ -1319,3 +1325,54 @@ appearance key，并实际验证这一单变量对照；恢复接管须用户重
 HUD／全部方块与分发均未完成。
 提交前 9 个 Python 文件语法、7 份文档的 55 条相对链接和 `git diff --check` 通过。
 本轮提交范围仅源代码与文档；游戏资源、候选包、原始证据、备份和存档均留本机忽略目录。
+
+## 2026-10-07 手动头描述文件对照、部件注册表与受控 Hp 诊断
+
+用户选择自行启动、进入存档和退出；本轮没有窗口接管调用。实际安装十二资源包的
+新收据为 `64cefed193bc4014914e78495471dc67`，不是此前已恢复的 417c 收据。用户进入后
+明确反馈仍是原角色，故头描述文件单项增补没有通过显示验收。schema 7 在该会话
+完整双采样稳定：当前初始 app 为 `cd_phm_macduff_00000.app_xml`，PAB 为原 `phm_01.pab`、
+PAC 声明为空。初始输入独立标记为 true，整体为 notReady，所有实际应用标记仍 false。
+诊断前后材料、36 格、revision 22、原点与 ASI 保持，原生对象 0。
+
+固定 EXE 的 37 个窗口／6 个字符串核对明确 Name→prefab 和描述文件依赖 PAPPT 两段
+目录。原表的两个私有 stem 都不存在。新增 `prepare_steve_part_table.py` 固定原表
+2130295 字节，两段各追加 Body／Head 两行；原 18196 行、字段、顺序及保留字节完整
+保持，只有两计数和新行不同，逆操作逐字恢复。生成 2130624 字节、flags 50 的单旧
+路径替换候选。`check_steve_part_table.py --rebuild` **8/8** 通过，包括真实固定 CDMW
+完整解析／重建与全部旧候选保持。
+
+新增显式二选一的 `prepare_steve_app.py --variant macduff-00000|macduff-00002`，每份
+报告只改自身 Nude／Head 的两个 Name，保留其他原字节。实际只观察到 00000，00002
+只是独立备用候选；不同时替换两份 app。`check_steve_app.py --rebuild` **8/8** 通过。
+
+包入口扩为严格 11／12／13／14 项：十三在十二基础上只加 PAPPT，十四再加一份显式
+app；缺头描述文件、缺注册表、未知报告、旧路径冒充私有新增均拒绝。默认十一包与
+Steve 专用恢复 kind、所有权、锁保持；新 variant 与完整 plan SHA 绑定。纯准入和
+独立源码审查通过；十三／十四包尚待当前资源恢复后完成真实封装／事务检查，不能安装。
+
+新增独立 `probe_health.py`，不再猜 Hp=0／首条记录：精确受控 ClientStatus 和回链，
+三种 metadata manager、名称 Hp key、有界单项映射、0x90 完整记录、全部依赖回读及
+同句柄身份／存活校验。初版隔离检查 **18/18**、固定 EXE **21** 窗口／4 种类型通过。
+第一次实际只读在 `Selected status metadata key differs from named Hp` 拒绝，未输出
+成功值。回查确认序列化 `_key` 与 u16 表索引来自不同来源，不能相等比较；schema 2
+保留原 DWORD 并沿固定生成链读取精确 `_stringKey=Hp`，最多 64 字节 NUL 字符串，
+全部字节及 holder 纳入回读。修正版 **21/21** 检查通过；实际双采样成功，71 项依赖
+稳定，Hp ordinal 0／serialized key 1000000／stringKey Hp，character 0、group 1、
+regenerateType 1、mappedIndex 0，stored/base 原值 300000，norm/floor/field30=0。
+投影值、最大值、单位、原子快照与 HUD 就绪始终 false。没有写游戏内存、调用原生
+函数或改变材料，旧失败证据没有覆盖。
+
+旧十一／十二包的无重建回归已执行，但本轮还不能记为全部通过：临时包仍安装，
+测试收尾要求实际 metadata 等于原始 before，因此拒绝。逐项复核 active 收据的 41
+项文件哈希均一致，没有发生测试写入游戏。十二包未知报告用例还发现新增可选集合
+使旧长度门禁不足，已修复为先白名单拒绝未知／重复报告名再读文件，严格集合不变。
+独立审查和十一／十二包的未知报告定向拒绝检查通过；等待恢复后重跑完整检查，
+不修改或绕过原始收尾要求。当前 10 个 Python 文件语法、55 条本地文档链接和
+`git diff --check` 通过；本次保存阶段性源码，不把新增包声明为可安装或显示已通过。
+
+本轮运行证据留在 ignored `runtime/steve-head-control-manual-20261007-*`、
+`runtime/steve-head-control-manual-inputs-20261007.json` 和
+`runtime/typed-health-head-control-20261007.json`（初版拒绝）及
+`runtime/typed-health-stringkey-head-control-20261007.json`（schema 2 成功）。当前安装／恢复以本文件顶部现场状态
+为准；用户手动退出请求仍待完成，不把之前的 restored 记录当成本轮已恢复。

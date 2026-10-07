@@ -205,7 +205,12 @@ def publish(output: Path, files: dict[str, bytes]) -> None:
 
 
 def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: Path,
-            *, replacement_report: Path | None = None) -> dict:
+            *, replacement_report: Path | None = None, initial_appearance_report: Path | None = None,
+            part_table_report: Path | None = None) -> dict:
+    if (initial_appearance_report is not None or part_table_report is not None) and replacement_report is None:
+        raise ValueError("Steve registration/appearance control requires its fixed mesh-parameter candidate")
+    if initial_appearance_report is not None and part_table_report is None:
+        raise ValueError("Initial Steve appearance control requires private part registration")
     output = native.output_directory(output)
     provenance = native.load_cdmw(source, deps)
     native.check_links(game)
@@ -213,8 +218,8 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
         raise ValueError("Unsupported Crimson Desert EXE SHA; overlay rehearsal stopped")
     resources, payloads, inputs = load_resources(reports)
     # The general loader/CLI remains new-name-only. A separate reviewed Steve
-    # probe may shadow exactly its fixed Kliff mesh-parameter template; this is
-    # not an arbitrary-path or in-place archive replacement interface.
+    # probe may shadow its fixed Kliff mesh-parameter template, optionally with
+    # the fixed part table and one initial app. No arbitrary replacement paths.
     replacement_paths, replacement_snapshot = set(), {}
     if replacement_report is not None:
         import prepare_steve_appearance as appearance
@@ -232,6 +237,44 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
             payloads[path] = replacement_payloads[path]
             replacement_paths.add(path)
         inputs[str(replacement_report.relative_to(ROOT))] = native.file_hash(replacement_report)
+        if len(resources) > RESOURCE_LIMIT:
+            raise ValueError("Too many candidate overlay resources")
+    if part_table_report is not None:
+        import prepare_steve_part_table as parts
+        part_table_report = native.output_directory(part_table_report)
+        candidate, table_payloads, table_snapshot = parts.load_candidate(part_table_report)
+        rows = candidate["targetReplacements"]
+        table_path = "character/bin__/partprefabtable.pappt"
+        if len(rows) != 1 or set(table_payloads) != {table_path}:
+            raise ValueError("Steve registration must replace exactly the reviewed part table")
+        row = rows[0]
+        if (row["virtualPath"] != table_path or row["templatePath"] != table_path
+                or table_path in payloads or row["kind"] != "partPrefabTable"):
+            raise ValueError("Unexpected Steve part table identity or duplicate resource")
+        resources.append(dict(row, localFile=str((part_table_report.parent / row["localFile"]).relative_to(ROOT))))
+        payloads[table_path] = table_payloads[table_path]
+        replacement_paths.add(table_path)
+        replacement_snapshot.update(table_snapshot)
+        inputs[str(part_table_report.relative_to(ROOT))] = native.file_hash(part_table_report)
+        if len(resources) > RESOURCE_LIMIT:
+            raise ValueError("Too many candidate overlay resources")
+    if initial_appearance_report is not None:
+        import prepare_steve_app as app
+        initial_appearance_report = native.output_directory(initial_appearance_report)
+        candidate, app_payloads, app_snapshot = app.load_candidate(initial_appearance_report)
+        rows = candidate["targetReplacements"]
+        if len(rows) != 1 or len(app_payloads) != 1:
+            raise ValueError("Initial Steve appearance control must replace exactly one fixed app")
+        row = rows[0]
+        path = virtual_path(row["virtualPath"])
+        if (path != row["templatePath"] or path in payloads or row["kind"] != "appearanceDefinition"
+                or path not in appearance.APPEARANCES or set(app_payloads) != {path}):
+            raise ValueError("Unexpected initial Steve appearance identity or duplicate resource")
+        resources.append(dict(row, localFile=str((initial_appearance_report.parent / row["localFile"]).relative_to(ROOT))))
+        payloads[path] = app_payloads[path]
+        replacement_paths.add(path)
+        replacement_snapshot.update(app_snapshot)
+        inputs[str(initial_appearance_report.relative_to(ROOT))] = native.file_hash(initial_appearance_report)
         if len(resources) > RESOURCE_LIMIT:
             raise ValueError("Too many candidate overlay resources")
     if any(output.is_relative_to((ROOT / relative).parent) or
@@ -392,6 +435,12 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
     if replacement_paths:
         report["replacementPaths"] = sorted(replacement_paths)
         report["replacementScope"] = "Temporary shadow of the fixed Kliff mesh-parameter file; all consumers may observe it, not an actor-local override"
+        if part_table_report is not None:
+            report["replacementScope"] = (
+                "Temporary shadow of exactly replacementPaths: the fixed Kliff mesh parameters, "
+                "the global part-prefab table with two private body/head registrations"
+                + (", and one explicitly selected shared Macduff appearance" if initial_appearance_report is not None else "")
+                + "; all consumers may observe these resources, not an actor-local override")
     files[report_file] = json.dumps(report, ensure_ascii=False, indent=2).encode()
     publish(output, files)
     return report

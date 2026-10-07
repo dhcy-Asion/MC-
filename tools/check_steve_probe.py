@@ -25,6 +25,7 @@ class SteveProbeChecks(ProbeChecks):
     rebuild = False
     resource_count = 11
     rebuild_args = ()
+    expected_replacements = (steve.steve.appearance.TARGET_PATH,)
 
     def install(self, **kwargs):
         return steve.install(self.plan, self.game, state_root=self.state, save_roots=[self.save],
@@ -40,7 +41,7 @@ class SteveProbeChecks(ProbeChecks):
         return result, path, json.loads(path.read_bytes())
 
     def test_16_plan_provenance_matches_resource_set(self):
-        # Override the oak-specific admission test: Steve requires two reports.
+        # Override oak's single-report rule with the exact selected Steve set.
         plan, path, original = self.altered_plan()
         for change in ("reports", "target", "flags", "kind", "payload-path", "report-traversal", "payload-traversal", "template"):
             report = json.loads(json.dumps(original))
@@ -98,12 +99,13 @@ class SteveProbeChecks(ProbeChecks):
         with self.assertRaisesRegex(ValueError, "crimsonmc_"):
             load_resources([file])
 
-    def test_20_exact_package_shadow_and_ten_new_resources(self):
+    def test_20_exact_package_shadow_and_private_resources(self):
         from cdmw.core.archive_format import parse_archive_pamt
         target = steve.steve.appearance.TARGET_PATH
         entries = parse_archive_pamt(self.reviewed["package"] / "0.pamt")
         self.assertEqual(len(entries), self.resource_count)
-        self.assertEqual([e.path for e in entries if not Path(e.path).name.startswith("crimsonmc_")], [target])
+        self.assertEqual(sorted(e.path for e in entries if not Path(e.path).name.startswith("crimsonmc_")),
+                         sorted(self.expected_replacements))
         old = (steve.steve.DEFAULT_APPEARANCE.parent / "template" / target).read_bytes()
         new = self.reviewed["payloads"][target]
         for a, b in steve.steve.appearance.REPLACEMENTS:
@@ -162,13 +164,99 @@ class SteveHeadDescriptorProbeChecks(SteveProbeChecks):
         self.assert_original()
 
 
+class StevePartTableProbeChecks(SteveProbeChecks):
+    plan = steve.steve.PART_TABLE_OUTPUT
+    baseline_plan = steve.steve.HEAD_DESCRIPTOR_OUTPUT
+    resource_count = 13
+    extra_path = "character/bin__/partprefabtable.pappt"
+    expected_variant = "steve-kliff-part-table-v1"
+    control_reports = ("steve-head-descriptor-report.json", "steve-part-table-report.json")
+    expected_replacements = (steve.steve.appearance.TARGET_PATH, extra_path)
+    rebuild_args = ("--head-descriptor-report", str(steve.steve.HEAD_DESCRIPTOR_REPORT),
+                    "--part-table-report", str(steve.steve.PART_TABLE_REPORT))
+
+    def test_22_control_adds_exactly_one_reviewed_resource(self):
+        old = steve.load_plan(self.baseline_plan)
+        self.assertEqual(set(self.reviewed["payloads"]) - set(old["payloads"]), {self.extra_path})
+        self.assertTrue(set(old["payloads"]).issubset(self.reviewed["payloads"]))
+        for path, data in old["payloads"].items():
+            self.assertEqual(self.reviewed["payloads"][path], data)
+        self.assertEqual(self.reviewed["probeVariant"], self.expected_variant)
+        self.assertEqual(self.reviewed["after"]["meta/0.pathc"], old["after"]["meta/0.pathc"])
+        receipt = self.install()
+        self.assertEqual(receipt["probeVariant"], self.expected_variant)
+        self.assertEqual(receipt["planSha256"], self.reviewed["reportSha256"])
+        self.restore()
+        self.assert_original()
+
+    def test_23_required_controls_and_replacement_declarations_are_inseparable(self):
+        plan, path, original = self.altered_plan()
+        for change in (*self.control_reports, "resource", "replacement-list", "unknown-report"):
+            report = json.loads(json.dumps(original))
+            if change in self.control_reports:
+                name = next(k for k in report["candidateReports"] if k.endswith(change))
+                del report["candidateReports"][name]
+            elif change == "resource":
+                report["resources"] = [r for r in report["resources"] if r["virtualPath"] != self.extra_path]
+            elif change == "replacement-list":
+                report["replacementPaths"].remove(self.extra_path)
+            else:
+                report["candidateReports"]["build/unknown-report.json"] = "0" * 64
+            path.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                steve.load_plan(plan)
+        self.assert_original()
+
+
+class SteveInitialAppProbeChecks(StevePartTableProbeChecks):
+    resource_count = 14
+    baseline_plan = steve.steve.PART_TABLE_OUTPUT
+    control_reports = (*StevePartTableProbeChecks.control_reports, "steve-app-report.json")
+    app_variant = "macduff-00000"
+
+    @classmethod
+    def select_variant(cls, variant):
+        import prepare_steve_app as app
+        spec = app.variant_spec(variant)
+        cls.app_variant = variant
+        cls.extra_path = spec["path"]
+        report = app.default_output(variant) / app.REPORT_NAME
+        cls.plan = steve.steve.app_output(report)
+        cls.expected_variant = "steve-kliff-app-" + variant.removeprefix("macduff-") + "-part-table-v1"
+        cls.expected_replacements = (*StevePartTableProbeChecks.expected_replacements, cls.extra_path)
+        cls.rebuild_args = (*StevePartTableProbeChecks.rebuild_args, "--app-report", str(report))
+
+    def test_24_cannot_add_the_other_app_or_use_old_paths_as_new_assets(self):
+        import prepare_steve_app as app
+        from prepare_asset_overlay import load_resources
+        plan, path, report = self.altered_plan()
+        other = next(variant for variant in app.VARIANTS if variant != self.app_variant)
+        other_report = app.default_output(other) / app.REPORT_NAME
+        report["candidateReports"][str(other_report.relative_to(steve.ROOT))] = steve.native.file_hash(other_report)
+        path.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            steve.load_plan(plan)
+        for candidate in (other_report, steve.steve.PART_TABLE_REPORT):
+            with self.assertRaisesRegex(ValueError, "No candidateResources"):
+                load_resources([candidate])
+        self.assertNotIn(app.variant_spec(other)["path"], self.reviewed["payloads"])
+        self.assert_original()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path)
-    parser.add_argument("--head-descriptor", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--head-descriptor", action="store_true")
+    mode.add_argument("--part-table", action="store_true")
+    mode.add_argument("--app-variant", choices=("macduff-00000", "macduff-00002"))
     parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
-    case = SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks
+    if args.app_variant:
+        case = SteveInitialAppProbeChecks
+        case.select_variant(args.app_variant)
+    else:
+        case = StevePartTableProbeChecks if args.part_table else SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks
     case.plan, case.rebuild = args.plan or case.plan, args.rebuild
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(case))
     raise SystemExit(not result.wasSuccessful())

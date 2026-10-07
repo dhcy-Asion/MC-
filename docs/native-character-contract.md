@@ -422,7 +422,7 @@ task+18 路径 holder，`0x243A340..0x243A347` 写入输出资源 +30；随后�
 顶层 `initialAppearanceInputObserved` 与 `renderInputPathsObserved` 分别表达稳定
 初始 key 和全部三项输入齐备。PAC 为空但初始 key 稳定时，前者可为 true，后者为
 false 且整体 notReady。默认及其他模式不读取 +168；默认 schema 4、links schema 5
-不变。**103/103** 隔离检查通过，新字段尚无实际游戏观测。它不证明加载完成、
+不变。**103/103** 隔离检查通过，新字段随后已实测（见下文手动十二资源记录）。它不证明加载完成、
 实际头身 PAC、装备或已执行外观替换，不提升任何 Steve／应用／descriptor 标记。
 
 ### HP 候选诊断的语义修正
@@ -449,3 +449,71 @@ current getter，并按 `0x5D736F4` 的 1000.0 换算后比较 current/base。�
 单条 0x90 记录边界，重读完整链；然后确定实际 HP 模式、投影时钟及 UI 最大值策略，
 与受伤、治疗、最大 HP 变化和切角色逐项对照。当前不导入扫描前 32 条记录等启发式，
 不调用 native getter、不写状态。历史满血快照不能替代上述行为验收。
+
+### 手动十二资源实测与 PAPPT 目录缺口
+
+用户手动进入十二资源头描述文件对照后，明确反馈仍是原角色。schema 7 的两次完整
+受控链稳定，独立 `initialAppearanceInputObserved=true`，实际输入键为
+`character/appearance/1_pc/1_phm/cd_phm_macduff/cd_phm_macduff_00000.app_xml`。
+PAC 声明仍为空、PAB 仍为 `character/model/1_pc/1_phm/phm_01.pab`，因此整体 notReady、
+`renderInputPathsObserved=false` 正确保留。运行时 Body/Head 选项仍是两私有 basename，
+raw/preset FF 回退 default 0。该观测只确定初始 app 与选项，未读最终渲染 descriptor。
+
+固定 EXE 的 `0x46CA30..0x46CA4D` 经 `0x3D0C50` 查询 World+A8 所指目录的 +70 名称表，
+缺项直接跳过这条初始 Appearance 部件。初始化 `0x2C99670→0x1099BDF0→0x2C98880`
+枚举 `character/bin__` 下 `.pappt`，按 header／part count／字符串记录建立 stem→folder
+表 +70 和部件 metadata +50；第二段建立 +90 表。世界创建代码 `0xACFA96..0xACFA9E`
+保存该目录至 World+A8，`0xACFBC6` 发布 World global；服务归属链后续补充如下，
+目前仍没有新增 live 目录解码器或原生调用。
+
+`0x2C9EDE0→0x109A8BA0` 用 +70 的 folder/stem 组成 `character/prefab/.../*.prefab`
+逻辑路径；`0x2C9EFB0→0x109A8E20` 从 +90 构成同根 `.prefabdata_xml`，缺项返回失败。
+第二段不是仅为“头模型”服务，原始身体和头部均在其中；不能只登记两个 part 行而
+遗漏两条描述文件目录行。未发现这两个解析分支的自动旧 basename 回退。
+
+真实原 `character/bin__/partprefabtable.pappt` 两段分别有 15566／2630 条记录，当前
+身体和头部原 stem 各唯一出现，两私有 stem 在两段均缺失。此前测试包未包含此表；
+添加 prefab／描述文件不等于向目录登记名称。磁盘研究 **37 个代码窗口、6 个字符串**
+及固定原表完整解析／逐字重建通过。这支持优先十三资源注册表对照；customization
+追加后是否正确覆盖原部件、实际显示／尺度／动画仍须实测。HKX 未有强制依赖证据，
+不因原 PAC 邻接 HKX 就向候选添加未经验证的物理资源。
+
+后续另核 **25 个窗口、3 个构造 vtable**：World+E0 为固定 VT `0x5D20718` 的父对象，
+其 +2B8 与 World+F0 的服务对象相同；服务构造 `0x2D14A75` 设置 VT `0x5B41078`，
+getter `0x723B90` 只返回 service+40068。该指针须与 World+A8 及 global `0x6C8CF10`
+一致，catalog[0] 须回到 service+40018 的文件接口。`0x2D16192` 分配目录 0xF0 字节，
+`0x2D162BF` 写 global，`0x2D162E0` 写 service 字段。World+F0 的赋值位于
+`0xACFB15..0xACFB1D`，不能误用 +E8。目录非多态，不把首字段解释为 vtable；这些
+匿名固定构造合同也不意味着取得标准 RTTI 类名。名称 hash 的 seed 为 0xC5EDE，
+算法、桶边界与碰撞处理仍待独立核对，不套用零 seed 的档案路径 hash 直接读取表。
+
+### 受控 Hp 单条记录的静态合同补充
+
+后续固定 EXE 研究已建立精确 ClientStatusActorComponent（vtable `0x558D868`）：
+受控 child+68 组件表的 +20 为该组件，组件+8 回 child、+18 指 root、root[0] 回组件。
+组件 +30 为 CharacterInfo key，0xFFFF 无效。StatusInfoManager（global `0x6D69AE8`）
+的 +A0 来自原生按名称 `Hp` 初始化的 u16 key，不再猜 HP=0 或首条状态就是生命。
+命名初始化 `0x25C6C00` 使用 `0x59B86C0` 的 Hp/Fatal/KnockOut 字符串表，失败为 FFFF。
+
+三种精确 metadata manager 的已加载表为 +8 keyCount、+58 指针表；必须 key<count
+且选中项非空，不能调用空槽后的 lazy loader。CharacterInfo +5B8 给出 group key；
+StatusInfo[Hp] +14 给出索引，进入 StatusGroupInfo +58 的 int32 QII 映射（count +60、
+capacity +64），再要求非负 mappedIndex<root+60 的条目数，只读取 root+58 中一条
+0x90 记录并核其 u16 key=Hp。root+64 没有 capacity 证据。group regenerate-list 的
+单项 Hp key 可以另行核对，但 rootCount=listCount 未被证明为生命周期不变量。
+加上更新计数 `0xC7EFF02` 短窗口共 21 个静态窗口、4 种 RTTI 已核对。计数 +48 的
+递增不提供原子快照保证，全部实际依赖仍须回读，随后完成第二次完整采样。
+
+初版错误地将 StatusInfo+0 serialized `_key` 与 manager 的 u16 表索引等同，首次
+实读在此拒绝。扩展 allocation 窗口 `0x584C70..0x584EA4` 明确：调用者 ordinal*8
+选中 loaded slot，反序列化原对象写入该槽；record+8 `_stringKey` 的 holder[0]
+字符串被复制、转小写并插入另一名称字典。这两种 key 没有相等合同。schema 2 保留
+原 DWORD 为 rawMetadataKeyU32，另沿该字符串链最多读取 64 字节到 NUL，严格要求
+原始串恰为 `Hp`，所有字符／终止符／holder／原 key 均加入回读；不猜低 16 位或模拟
+名称归一化以放宽准入。21 项检查包含不同 serialized key、非零 ordinal、错名和漂移。
+
+修正版实机两样本及 71 项依赖稳定：命名 Hp ordinal=0、serialized key=1000000、
+stringKey=`Hp`，characterKey=0、groupKey=1、regenerateType=1、mappedIndex=0，
+stored/base 均为 300000，norm/floor/field30 为 0，更新计数 0。这是精确身份和原始
+记录观测，不能直接宣称 300 点当前／最大生命；投影、单位、分母和受伤／治疗行为
+尚待验收。成功和首版失败报告都保留在 ignored runtime，心形 HUD 尚未接线。
