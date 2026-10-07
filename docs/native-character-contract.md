@@ -156,8 +156,8 @@ EXE 重新核对 **10 个代码窗口逐字一致**及三类 RTTI。实际新进
 
 下一步在已界定 owner `+0x210` 组件数组中，按 `0x4736A0` 的实际反射类型查找
 CharacterScene；其目标反射元数据来自 `0x4667A0` 返回的 global `0x6D6C850`，
-不能仅凭名字或扫描堆猜实例。确认归属后再建立 Scene `+0xA0` 与 `+0x78` 弱渲染
-owner、`+0xA8` 源缓冲的合同。静态更新路线 `0x726C50 → 0x72C230 → 0x7267B0
+不能仅凭名字或扫描堆猜实例。Scene `+0xA0` 与 `+0x78` 弱渲染组件、组件 `+0xA8`
+源缓冲的本轮合同及观测边界见下节。静态更新路线 `0x726C50 → 0x72C230 → 0x7267B0
 → 0x726E40` 尚未证明调用 ABI、线程或可恢复副作用，当前不得作为主动调用入口。
 
 随后从固定 `0009/0.pamt` 只读解出本次三份 meta/preset 与四个非空组 prefab，
@@ -174,3 +174,60 @@ PAC 模板建立真实资源关联；但其 prefab／SkeletonVariation 不能等
 prefab 候选。它保留 CD_Underwear；另有头／眼／牙／眉、头发和胡须输入。共享身体
 资源也被其它静态 appearance 索引引用，不能对共享 nude 全局替换并声称仅作用当前
 玩家。私有资源合成和各部分保留／隐藏／装备绑定规则仍需明确。
+
+### 2026-10-07 CharacterScene 与实际渲染组件的类型门禁
+
+schema 3 只读工具沿已验证 SceneObjectClient owner `+0x210` 的有界组件数组定位
+唯一精确 CharacterScene vtable `0x5B409A0`。其 slot `+8` 必须指向 getter
+`0x2D091C0 → 0x4667A0`，反射元数据 global `0x6D6C850` 必须通过主对象
+COL／精确 RTTI `ReflectMetaObjectBind<CharacterScene>` 与 vtable `0x557CFC0`
+门禁。Scene 自身没有有效主 MSVC COL，工具不伪造其 RTTI 名称。
+
+Scene `+0x60 → holder+8 → owner+0x28` 验证受控 owner 回链；Scene `+0xA0`
+的参数资源要求构造 vtable `0x5B38478`，只读已知 `0x58` 字节前缀，并验证资源
+`+0x50 → holder+8 → Scene+0x28`。构造分配 `0x200` 字节不是解释剩余字段的
+许可。弱目标 `+0x15` 失效标志必须为零；Scene `+0x10` 不解释为 owner。
+
+本轮实际报告 `runtime/appearance-scene-20261007.json`、
+`runtime/appearance-scene-ready-20261007.json` 及
+`runtime/appearance-scene-rejection-detail-20261007.json` 均保存首次采样的部分
+Scene／参数回链，随后在 Scene `+0x78` 渲染弱链目标的类型门禁处拒绝。
+每份报告均未完成两次稳定采样；`stableTwoSamples`、`characterSceneObserved`、
+`sceneRenderSelectorObserved` 均为 false，不能用部分前缀代替完整链验收。
+
+详细拒绝证据给出目标 vtable RVA **`0x5B4C6C0`**；其 `vtable-8` 指向
+`0x2DA79E0`，已读 24 字节与固定 EXE 逐字匹配。该位置实际是
+`sub rcx,0x28; jmp 0x2DA3FA0` 的代码跳板及填充／下一函数开头，五项 COL
+检查均失败。它不是 SceneObjectClient 的有效主 COL，也不是等待加载即可接受的
+RTTI 证据；此前将该 vtable 暂称 SceneObjectBase 的研究推测已纠正。
+
+磁盘静态核验确定该构造写入与反射类型如下，原始字节与报告仅留 ignored
+`build/steve-render-scene-research-20261007/actual-render-identity-static.json`：
+
+| 严格身份条件 | 固定 EXE 证据 |
+| --- | --- |
+| SkinnedMeshComponent 构造写入精确 vtable `0x5B4C6C0` | `0x2D96D6A..0x2D96D74` |
+| vtable slot `+8` 精确 getter／factory | `0x2D88B10` JMP `0x360220` |
+| factory 写入反射元数据 vtable `0x55739A0` | `0x36026F` |
+| factory 返回元数据 global `0x6D6A160` | `0x3602B3` |
+| 元数据有效主 COL、精确 RTTI | `ReflectMetaObjectBind<SkinnedMeshComponent>` |
+
+工具据此增加独立 SkinnedMeshComponent 分支，要求上述代码字节、精确 vtable／
+getter 和已类型验证的反射元数据，沿既有受控 owner → 唯一 CharacterScene →
+`+0x78` 弱链进入；不猜新 owner 字段。旧 SceneObjectClient 精确 RTTI 分支保留，
+其它类型仍拒绝，不将 COL 失败当作反射名称回退。SkinnedMeshComponent 自身的
+`primaryMsvcRttiVerified` 仍为 false。
+
+隔离命令 `py -3.12 -B tools/check_appearance_controller.py` **48/48 通过**；固定
+SHA EXE 重新读取的 **25/25 代码窗口逐字匹配**。检查覆盖未知／损坏类型拒绝、
+失败字段保留、反射 getter／COL／RTTI／vtable、全局边界、重复读取及部分样本
+不晋升成功。新增严格分支尚未实机完成双采样；用户退出游戏后不追加探针。
+
+通过身份后，工具最多读取组件 `+0xA8` 的不透明容器与其 `+0x18/+0x20` 两个
+资源指针、`+0x28` 的 0／1 选择字节；所选资源和缓冲不解引用，不解码 descriptor。
+实际资源类型、当前已渲染 mesh、身体／装备槽仍未验证。下一步先核对该容器的
+生产／构造类型及资源消费者：固定 `0x726E40` 在 `0x726F03` 以组件 `+0xA8`
+进入 `0x2DF0240`，返回真后在 `0x726F13` 以组件 `+0xB8` 进入 `0x2DD52D0`。
+这些函数包含资源引用更新及后续操作，不能用孤立指针替换代替完整应用／恢复合同。
+调用 ABI、游戏线程上下文、私有外观切换、恢复、跨重载持续应用及 Steve 加载均
+未验证；本轮没有调用原生函数或写入游戏内存。

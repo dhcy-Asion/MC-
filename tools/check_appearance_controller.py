@@ -18,6 +18,52 @@ ADDR = {name: 0x20000 + i * 0x1000 for i, name in enumerate(
 OPTIONS = {"meshParams": 0x100000, "preset": 0x101000, "decorationParams": 0x102000,
            "meshRows": 0x110000, "decorationRows": 0x120000, "options": 0x140000,
            "presetMesh": 0x150000, "presetDecoration": 0x151000}
+SCENE = {"scene": 0x200000, "ownerWeak": 0x201000, "parameter": 0x202000,
+         "sceneWeak": 0x203000, "renderWeak": 0x204000, "selector": 0x205000,
+         "buffer0": 0x206000, "buffer1": 0x207000}
+
+
+def scene_fixture():
+    reader = fixture()
+    for name, address in SCENE.items():
+        if name not in ("buffer0", "buffer1"):
+            reader.block(address, 0x200)
+    reader.put(ADDR["owner"] + 0x218, 2, "<I")
+    reader.put(ADDR["owner"] + 0x21C, 2, "<I")
+    reader.put(ADDR["members"] + 8, SCENE["scene"])
+    reader.put(SCENE["scene"], BASE + probe.SCENE_VTABLE)
+    reader.put(BASE + probe.SCENE_VTABLE + 8, BASE + probe.SCENE_GETTER)
+    meta, col = BASE + probe.SCENE_META, BASE + 0x60000
+    reader.block(meta, 32)
+    reader.put(meta, BASE + probe.SCENE_META_VTABLE)
+    reader.put(BASE + probe.SCENE_META_VTABLE - 8, col)
+    reader.segments[col] = bytearray(struct.pack("<6I", 1, 0, 0, 0x61000, 0x62000, col - BASE))
+    reader.names[meta] = probe.SCENE_META_TYPE
+    for field, holder, target in ((SCENE["scene"] + 0x60, SCENE["ownerWeak"], ADDR["owner"] + 0x28),
+                   (SCENE["parameter"] + 0x50, SCENE["sceneWeak"], SCENE["scene"] + 0x28),
+                   (SCENE["scene"] + 0x78, SCENE["renderWeak"], ADDR["owner"] + 0x28)):
+        reader.put(field, holder); reader.put(holder + 8, target)
+    reader.put(SCENE["scene"] + 0xA0, SCENE["parameter"])
+    reader.put(SCENE["parameter"], BASE + probe.SCENE_PARAM_VTABLE)
+    reader.put(ADDR["owner"] + 0xA8, SCENE["selector"])
+    reader.put(SCENE["selector"] + 0x18, SCENE["buffer0"])
+    reader.put(SCENE["selector"] + 0x20, SCENE["buffer1"])
+    reader.put(SCENE["selector"] + 0x28, 1, "<B")
+    return reader
+
+
+def skinned_scene_fixture():
+    reader = scene_fixture()
+    component, meta, col = 0x220000, BASE + probe.SKINNED_MESH_META, BASE + 0x80000
+    reader.block(component, 0x300); reader.put(component, BASE + probe.SKINNED_MESH_VTABLE)
+    reader.put(component + 0xA8, SCENE["selector"])
+    reader.put(SCENE["renderWeak"] + 8, component + 0x28)
+    reader.put(BASE + probe.SKINNED_MESH_VTABLE + 8, BASE + probe.SKINNED_MESH_GETTER)
+    reader.block(meta, 24); reader.put(meta, BASE + probe.SKINNED_MESH_META_VTABLE)
+    reader.put(BASE + probe.SKINNED_MESH_META_VTABLE - 8, col)
+    reader.segments[col] = bytearray(struct.pack("<6I", 1, 0, 0, 0x81000, 0x82000, col - BASE))
+    reader.names[meta] = probe.SKINNED_MESH_META_TYPE
+    return reader
 
 
 def option_fixture(reader):
@@ -502,6 +548,347 @@ class AppearanceControllerChecks(unittest.TestCase):
         self.assertEqual(len(result["samples"][0]["loadedOptions"]["decorationGroups"]), 250)
         self.assertLess(len(json.dumps(result, ensure_ascii=False, indent=2).encode()), 512 * 1024)
         self.assertTrue(all(size <= 4096 for _, size in reader.reads))
+
+    def test_29_scene_uses_reflection_constructor_and_two_owner_round_trips(self):
+        reader = scene_fixture()
+        result = collect(reader)
+        self.assertEqual(result["state"], "observed")
+        self.assertEqual(result["schemaVersion"], 3)
+        self.assertTrue(result["stableTwoSamples"] and result["characterSceneObserved"])
+        self.assertTrue(result["sceneRenderSelectorObserved"])
+        scene = result["samples"][0]["characterScene"]
+        self.assertEqual(scene["sceneOccurrences"], 1)
+        self.assertFalse(scene["primaryMsvcRttiVerified"])
+        self.assertEqual(scene["reflectionMetadata"]["rtti"], probe.SCENE_META_TYPE)
+        self.assertTrue(scene["sceneOwnerRoundTripObserved"] and scene["parameterOwnerRoundTripObserved"])
+        self.assertEqual(scene["parameterResource"]["constructorAllocationBytes"], 0x200)
+        self.assertTrue(scene["renderObject"]["equalsControlledOwner"])
+        selector = scene["renderSelector"]
+        self.assertEqual(selector["selectedResourcePointer"], hex(SCENE["buffer1"]))
+        self.assertFalse(selector["typeInterpreted"] or selector["selectedResourceDereferenced"])
+        self.assertFalse(result["renderedDescriptorVerified"] or result["appearanceApplicationVerified"])
+        self.assertFalse(any(SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x200 for address, _ in reader.reads))
+        self.assertNotIn((SCENE["scene"] + 0x10, 8), reader.reads)  # Not an invented owner field.
+
+    def test_30_scene_missing_is_distinct_from_controller_observation(self):
+        result = collect(fixture())
+        self.assertEqual(result["state"], "observed")
+        self.assertTrue(result["controlledControllerChainObserved"])
+        self.assertFalse(result["characterSceneObserved"] or result["sceneRenderSelectorObserved"])
+        self.assertEqual(result["samples"][0]["characterScene"]["sceneOccurrences"], 0)
+
+    def test_31_scene_is_exact_unique_component_not_a_name_or_pointer_scan(self):
+        reader = scene_fixture()
+        reader.put(ADDR["owner"] + 0x218, 3, "<I"); reader.put(ADDR["owner"] + 0x21C, 3, "<I")
+        reader.put(ADDR["members"] + 16, SCENE["scene"])
+        result = collect(reader)
+        self.assertIn("not unique", result["reason"])
+        self.assertNotIn((SCENE["scene"] + 0x60, 8), reader.reads)
+        reader = scene_fixture(); reader.put(SCENE["scene"], BASE + probe.SCENE_VTABLE + 8)
+        result = collect(reader)
+        self.assertFalse(result["characterSceneObserved"])
+        self.assertNotIn((SCENE["scene"] + 0x60, 8), reader.reads)
+        reader = scene_fixture(); reader.put(ADDR["members"] + 8, 0)
+        self.assertIn("owner component member", collect(reader)["reason"])
+
+    def test_32_scene_getter_and_reflection_metadata_must_agree(self):
+        for field in ("getter", "type", "vt", "offset"):
+            reader = scene_fixture()
+            meta = BASE + probe.SCENE_META
+            if field == "getter":
+                reader.put(BASE + probe.SCENE_VTABLE + 8, BASE + 0x1379980)
+            elif field == "type":
+                reader.names[meta] = ".?AVUnsupported@pa@@"
+            elif field == "offset":
+                reader.put(BASE + 0x60000 + 4, 0x28, "<I")
+            else:
+                reader.put(BASE + 0x70000 - 8, BASE + 0x60000)
+                reader.put(meta, BASE + 0x70000)
+            result = collect(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertFalse(result["characterSceneObserved"])
+            self.assertNotIn((SCENE["scene"] + 0x60, 8), reader.reads)
+
+    def test_33_scene_parameter_and_weak_round_trips_reject_before_descendants(self):
+        for address, value, fmt in ((SCENE["ownerWeak"] + 8, SCENE["scene"] + 0x28, "<Q"),
+                (SCENE["sceneWeak"] + 8, ADDR["owner"] + 0x28, "<Q"),
+                (SCENE["scene"] + 0x3D, 1, "<B"), (SCENE["parameter"] + 0x15, 2, "<B"),
+                (SCENE["parameter"], BASE + probe.SCENE_PARAM_VTABLE + 8, "<Q"),
+                (SCENE["parameter"] + 0x50, 0, "<Q")):
+            reader = scene_fixture(); reader.put(address, value, fmt)
+            result = collect(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertFalse(result["sceneRenderSelectorObserved"])
+            self.assertNotIn((SCENE["selector"] + 0x18, 17), reader.reads)
+
+    def test_34_missing_scene_resources_retain_partial_readiness_without_false_claims(self):
+        for address in (SCENE["scene"] + 0xA0, SCENE["scene"] + 0x78,
+                        SCENE["renderWeak"] + 8, ADDR["owner"] + 0xA8):
+            reader = scene_fixture(); reader.put(address, 0)
+            result = collect(reader)
+            self.assertEqual(result["state"], "observed")  # Existing controller contract remains observed.
+            self.assertTrue(result["characterSceneObserved"])
+            self.assertFalse(result["sceneRenderSelectorObserved"])
+            self.assertEqual(result["samples"][0]["characterScene"]["state"], "notReady")
+
+    def test_35_render_type_and_selector_bounds_stop_unknown_layout(self):
+        reader = scene_fixture(); reader.put(SCENE["selector"] + 0x28, 2, "<B")
+        result = collect(reader)
+        self.assertIn("two-entry pair", result["reason"])
+        self.assertFalse(result["sceneRenderSelectorObserved"])
+        reader = scene_fixture()
+        other = 0x220000
+        reader.block(other, 0x300); reader.put(other, reader.value(ADDR["owner"]))
+        reader.names[other] = ".?AVSceneObjectBase@pa@@"
+        reader.put(SCENE["renderWeak"] + 8, other + 0x28)
+        result = collect(reader)
+        self.assertIn("RTTI differs", result["reason"])
+        self.assertNotIn((other + 0xA8, 8), reader.reads)
+        reader = scene_fixture()
+        reader.segments[SCENE["selector"]] = reader.segments[SCENE["selector"]][:0x28]
+        self.assertIn("resource pair/index complete", collect(reader)["reason"])
+
+    def test_36_render_buffers_remain_opaque_even_with_valid_selection(self):
+        for index in (0, 1):
+            reader = scene_fixture(); reader.put(SCENE["selector"] + 0x28, index, "<B")
+            reader.put(SCENE["selector"] + 0x18 + index * 8, 0)
+            result = collect(reader)
+            self.assertTrue(result["sceneRenderSelectorObserved"])
+            selector = result["samples"][0]["characterScene"]["renderSelector"]
+            self.assertEqual(selector["selectedResourcePointer"], "0x0")
+            self.assertFalse(selector["selectedResourceDereferenced"])
+            self.assertFalse(result["renderedDescriptorVerified"])
+
+    def test_37_scene_fields_reread_and_second_sample_changes_are_preserved(self):
+        reader = scene_fixture(); original = reader.read; seen = []
+        def changing(address, size):
+            if address == SCENE["selector"] + 0x18 and size == 17:
+                seen.append(1)
+                if len(seen) > 1:
+                    return original(address, size)[:-1] + b"\0"
+            return original(address, size)
+        reader.read = changing
+        result = collect(reader)
+        self.assertIn("Scene interpreted fields changed", result["reason"])
+        self.assertFalse(result["controlledControllerChainObserved"])
+        self.assertIn("renderSelector", result["samples"][0]["characterScene"])
+        reader = scene_fixture()
+        def unload(_):
+            reader.put(SCENE["scene"] + 0x78, 0)
+        result = collect(reader, unload)
+        self.assertEqual(result["state"], "unstable")
+        self.assertEqual(len(result["samples"]), 2)
+        self.assertTrue(result["samples"][0]["characterScene"]["renderLinkObserved"])
+        self.assertFalse(result["samples"][1]["characterScene"]["renderLinkObserved"])
+
+    def test_38_scene_contract_bytes_and_global_bounds_are_preflight_only(self):
+        for rva in (0x2D091C0, 0x2D0AB12, 0x2C7D324, 0x7268A3):
+            reader = scene_fixture(); reader.segments[BASE + rva][0] ^= 1
+            result = collect(reader)
+            self.assertEqual(result["samples"], [])
+            self.assertIn("code bytes", result["reason"])
+        for length in (probe.SCENE_META + 23, probe.SCENE_VTABLE + 15):
+            reader = scene_fixture(); reader.reads.clear()
+            result = probe.collect(reader, BASE, length, lambda _: None)
+            self.assertEqual(result["samples"], [])
+            self.assertEqual(reader.reads, [])
+
+    def test_39_wrong_scene_weak_backlinks_are_rejected_before_target_dereference(self):
+        foreign, target = 0x240000, 0x240028
+        for holder in (SCENE["ownerWeak"], SCENE["sceneWeak"]):
+            with self.subTest(holder=hex(holder)):
+                reader = scene_fixture()
+                # Even a readable, apparently valid flag must not authorize
+                # interpreting a target outside the already verified backlink.
+                reader.block(foreign, 0x200)
+                reader.put(holder + 8, target)
+                result = collect(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertIn("weak target differs from the reviewed primary owner", result["reason"])
+                self.assertFalse(result["characterSceneObserved"] or result["sceneRenderSelectorObserved"])
+                self.assertFalse(any(foreign <= address < foreign + 0x200 for address, _ in reader.reads))
+
+    def test_40_final_module_or_digest_change_clears_scene_success_flags(self):
+        for changed in ("module", "digest"):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory(dir=probe.ROOT / "runtime") as temp:
+                reader = scene_fixture()
+                exe, output = Path(temp) / "CrimsonDesert.exe", Path(temp) / "changed.json"
+                reader.module = mock.Mock(side_effect=[(BASE, LENGTH, exe),
+                                                       (BASE + (0x1000 if changed == "module" else 0), LENGTH, exe)])
+                reader.close = mock.Mock()
+                digests = [probe.roster.SHA256, "0" * 64]
+                with mock.patch("sys.argv", ["probe", "--pid", "42123", "--output", str(output)]),\
+                        mock.patch.object(probe.core, "Reader", return_value=reader),\
+                        mock.patch.object(probe.subprocess, "check_output", return_value=probe.roster.VERSION),\
+                        mock.patch.object(probe, "file_digest", side_effect=digests),\
+                        mock.patch("builtins.print"):
+                    self.assertEqual(probe.main(), 1)
+                result = json.loads(output.read_bytes())
+                self.assertEqual(result["state"], "unstable")
+                self.assertIn("Game module changed", result["reason"])
+                for flag in ("stableTwoSamples", "controlledControllerChainObserved", "characterSceneObserved",
+                             "sceneRenderSelectorObserved", "renderedDescriptorVerified"):
+                    self.assertFalse(result[flag], flag)
+                self.assertEqual(len(result["samples"]), 2)
+                self.assertTrue(all(sample["characterScene"]["state"] == "observed" for sample in result["samples"]))
+                reader.close.assert_called_once()
+
+    def test_41_render_locator_failure_preserves_exact_existing_header_reads(self):
+        foreign, vt, col = 0x220000, BASE + 0x70000, BASE + 0x71000
+        cases = ((0, 2, "signature-equals-one"), (1, 0x28, "primary-this-offset-zero"),
+                 (3, 0, "type-descriptor-main-image-bounds"),
+                 (4, LENGTH, "class-hierarchy-main-image-bounds"), (5, 0, "locator-self-rva"))
+        for index, bad, failed in cases:
+            with self.subTest(failed=failed):
+                reader = scene_fixture()
+                reader.block(foreign, 0x300); reader.put(foreign, vt)
+                reader.put(SCENE["renderWeak"] + 8, foreign + 0x28)
+                reader.put(vt - 8, col)
+                fields = [1, 0, 37, 0x72000, 0x73000, col - BASE]
+                fields[index] = bad
+                header = struct.pack("<6I", *fields)
+                reader.segments[col] = bytearray(header)
+                reader.rtti = mock.Mock(wraps=reader.rtti)
+                result = collect(reader)
+                identity = result["samples"][0]["characterScene"]["renderObjectIdentity"]
+                self.assertEqual(result["state"], "rejected")
+                self.assertEqual(len(result["samples"]), 1)
+                self.assertFalse(result["stableTwoSamples"] or result["characterSceneObserved"])
+                self.assertEqual(identity["context"], "render-linked primary object")
+                self.assertEqual(identity["vtablePointer"], hex(vt))
+                self.assertEqual(identity["candidateLocatorPointer"], hex(col))
+                self.assertEqual(identity["candidateLocatorHeaderHex"], header.hex())
+                self.assertEqual(identity["candidateLocatorFields"]["constructorDisplacement"], 37)
+                self.assertEqual(identity["failedChecks"], [failed])
+                self.assertEqual(identity["failureReason"], result["reason"])
+                self.assertIn("render-linked primary object", result["reason"])
+                self.assertFalse(identity["typeGatePassed"] or identity["completePrimaryLocatorVerified"]
+                                 or identity["candidateLocatorFieldsInterpretedAsVerifiedRtti"])
+                self.assertNotIn("observedRtti", identity)
+                self.assertFalse(any(call.args[0] == foreign for call in reader.rtti.call_args_list))
+                self.assertNotIn((foreign + 0xA8, 8), reader.reads)
+
+    def test_42_render_identity_bounds_and_unreadable_header_keep_only_read_evidence(self):
+        foreign, vt, col = 0x220000, BASE + 0x70000, BASE + 0x71000
+        for case in ("vtable", "locator", "header"):
+            with self.subTest(case=case):
+                reader = scene_fixture()
+                reader.block(foreign, 0x300)
+                actual_vt = BASE + LENGTH if case == "vtable" else vt
+                actual_col = BASE + LENGTH if case == "locator" else col
+                reader.put(foreign, actual_vt)
+                reader.put(SCENE["renderWeak"] + 8, foreign + 0x28)
+                reader.put(vt - 8, actual_col)
+                # No header is readable for any of these cases.
+                result = collect(reader)
+                identity = result["samples"][0]["characterScene"]["renderObjectIdentity"]
+                self.assertEqual(identity["vtablePointer"], hex(actual_vt))
+                self.assertNotIn("candidateLocatorHeaderHex", identity)
+                self.assertNotIn("candidateLocatorFields", identity)
+                self.assertFalse(identity["typeGatePassed"])
+                self.assertEqual(identity["failureReason"], result["reason"])
+                if case == "vtable":
+                    self.assertEqual(identity["failedChecks"], ["vtable-main-image-bounds"])
+                    self.assertNotIn("candidateLocatorPointer", identity)
+                    self.assertNotIn((actual_vt - 8, 8), reader.reads)
+                else:
+                    self.assertEqual(identity["candidateLocatorPointer"], hex(actual_col))
+                    if case == "locator":
+                        self.assertEqual(identity["failedChecks"], ["locator-main-image-bounds"])
+                        self.assertNotIn((actual_col, 24), reader.reads)
+                    else:
+                        self.assertIn("complete readable span is unavailable", result["reason"])
+                self.assertNotIn((foreign + 0xA8, 8), reader.reads)
+
+    def test_43_render_valid_locator_unreviewed_rtti_still_stops_before_layout(self):
+        foreign = 0x220000
+        reader = scene_fixture()
+        reader.block(foreign, 0x300); reader.put(foreign, reader.value(ADDR["owner"]))
+        reader.names[foreign] = ".?AVSceneObjectBase@pa@@"
+        reader.put(SCENE["renderWeak"] + 8, foreign + 0x28)
+        result = collect(reader)
+        identity = result["samples"][0]["characterScene"]["renderObjectIdentity"]
+        self.assertTrue(identity["completePrimaryLocatorVerified"])
+        self.assertFalse(identity["typeGatePassed"])
+        self.assertEqual(identity["expectedRtti"], probe.TYPES["owner"])
+        self.assertEqual(identity["observedRtti"], reader.names[foreign])
+        self.assertEqual(identity["failedChecks"], ["exact-reviewed-rtti"])
+        self.assertNotIn((foreign + 0xA8, 8), reader.reads)
+        self.assertFalse(result["characterSceneObserved"] or result["sceneRenderSelectorObserved"])
+
+    def test_44_render_identity_evidence_retains_successful_two_sample_contract(self):
+        reader = scene_fixture()
+        result = collect(reader)
+        self.assertTrue(result["stableTwoSamples"] and result["sceneRenderSelectorObserved"])
+        self.assertEqual(len(result["samples"]), 2)
+        for sample in result["samples"]:
+            identity = sample["characterScene"]["renderObjectIdentity"]
+            self.assertTrue(identity["typeGatePassed"] and identity["completePrimaryLocatorVerified"])
+            self.assertEqual(identity["failedChecks"], [])
+            self.assertEqual(identity["observedRtti"], probe.TYPES["owner"])
+            self.assertNotIn("failureReason", identity)
+            self.assertFalse(sample["characterScene"]["selectedResourceTypeVerified"])
+        self.assertFalse(result["renderedDescriptorVerified"] or result["appearanceApplicationVerified"])
+
+    def test_45_exact_skinned_mesh_reflection_contract_observes_only_opaque_selector(self):
+        reader = skinned_scene_fixture()
+        result = collect(reader)
+        self.assertTrue(result["stableTwoSamples"] and result["sceneRenderSelectorObserved"])
+        for sample in result["samples"]:
+            scene = sample["characterScene"]
+            self.assertEqual(scene["renderObject"]["reflectionType"], "SkinnedMeshComponent")
+            self.assertFalse(scene["renderObject"]["primaryMsvcRttiVerified"])
+            self.assertTrue(scene["renderObjectIdentity"]["typeGatePassed"])
+            self.assertEqual(scene["renderObjectIdentity"]["reflectionMetadata"]["rtti"], probe.SKINNED_MESH_META_TYPE)
+            self.assertFalse(scene["renderSelector"]["selectedResourceDereferenced"])
+        self.assertFalse(any(SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x200 for address, _ in reader.reads))
+        self.assertNotIn((0x220000 + 0x10, 8), reader.reads)
+
+    def test_46_skinned_mesh_getter_metadata_and_locator_fail_before_selector(self):
+        for field in ("getter", "rtti", "vtable", "locator"):
+            with self.subTest(field=field):
+                reader = skinned_scene_fixture()
+                if field == "getter":
+                    reader.put(BASE + probe.SKINNED_MESH_VTABLE + 8, BASE + probe.SCENE_GETTER)
+                elif field == "rtti":
+                    reader.names[BASE + probe.SKINNED_MESH_META] = probe.SCENE_META_TYPE
+                elif field == "vtable":
+                    reader.put(BASE + probe.SKINNED_MESH_META, BASE + probe.SKINNED_MESH_META_VTABLE + 8)
+                else:
+                    reader.put(BASE + 0x80000 + 4, 0x28, "<I")
+                result = collect(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertFalse(result["characterSceneObserved"] or result["stableTwoSamples"])
+                identity = result["samples"][0]["characterScene"]["renderObjectIdentity"]
+                self.assertFalse(identity["typeGatePassed"])
+                self.assertEqual(identity["failureReason"], result["reason"])
+                self.assertNotIn((0x220000 + 0xA8, 8), reader.reads)
+
+    def test_47_skinned_mesh_exact_code_and_global_bounds_gate_before_chain(self):
+        for rva in (0x2D96D6A, 0x2D88B10, 0x36026F, 0x3602B3):
+            reader = skinned_scene_fixture(); reader.segments[BASE + rva][0] ^= 1
+            result = collect(reader)
+            self.assertEqual(result["samples"], [])
+            self.assertIn("code bytes", result["reason"])
+        reader = skinned_scene_fixture(); reader.reads.clear()
+        with mock.patch.object(probe, "SKINNED_MESH_META", LENGTH):
+            result = collect(reader)
+        self.assertEqual(result["samples"], [])
+        self.assertEqual(reader.reads, [])
+
+    def test_48_skinned_mesh_metadata_reread_cannot_promote_partial_success(self):
+        reader = skinned_scene_fixture(); original = reader.rtti; seen = []
+        def changing(address, base, length):
+            if address == BASE + probe.SKINNED_MESH_META:
+                seen.append(1)
+                if len(seen) > 1:
+                    return probe.SCENE_META_TYPE
+            return original(address, base, length)
+        reader.rtti = changing
+        result = collect(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertFalse(result["stableTwoSamples"] or result["sceneRenderSelectorObserved"])
+        self.assertEqual(len(result["samples"]), 1)
 
 
 if __name__ == "__main__":

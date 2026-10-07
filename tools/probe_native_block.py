@@ -620,10 +620,15 @@ class NativeBlockProbe:
             time.sleep(self.interval)
         raise ProbeError("Physical ground height did not confirm the expected one-metre collision change")
 
-    def placement(self, player: dict, vx: float, vz: float, before: list) -> tuple:
+    def placement(self, player: dict, vx: float, vz: float, before: list, prefer_side: bool = False) -> tuple:
         """Sample a bounded set of nearby positions without creating objects."""
         attempts = []
-        for forward, side in ((4, 0), (3, 0), (5, 0), (4, -1.5), (4, 1.5), (5, -1.5), (5, 1.5)):
+        candidates = ((4, 0), (3, 0), (5, 0), (4, -1.5), (4, 1.5), (5, -1.5), (5, 1.5))
+        # A third-person body can obscure the centre line. Use the same seven
+        # previously bounded positions, side candidates first, when requested.
+        if prefer_side:
+            candidates = candidates[3:] + candidates[:3]
+        for forward, side in candidates:
             cx = player["x"] + vx * forward - vz * side
             cz = player["z"] + vz * forward + vx * side
             if any(math.hypot(row["x"] - cx, row["z"] - cz) < 2 for row in before):
@@ -642,9 +647,11 @@ class NativeBlockProbe:
                 return cx, cz, ground, sample, highest, attempts
         raise ProbeError("All nearby candidate positions are occupied, too sloped or too far from the player's level")
 
-    def spawn(self, axis: str = "y") -> dict:
+    def spawn(self, axis: str = "y", *, prefer_side: bool = False) -> dict:
         if axis not in PREFABS:
             raise ProbeError("Only the three reviewed oak-log axes are supported")
+        if type(prefer_side) is not bool:
+            raise ProbeError("Side-view preference must be a boolean")
         old = self.journal.read()
         if old is not None and old.get("phase") != "cleaned":
             raise ProbeError("An existing probe journal remains unresolved; inspect/clean up it before spawning again")
@@ -657,10 +664,11 @@ class NativeBlockProbe:
         if any(row.get("project") == PROJECT or row.get("prefab") in PREFABS.values() for row in before):
             raise ProbeError("Existing native asset diagnostic retained; automatic duplicate spawn refused")
         player, camera, vx, vz = self.position()
-        cx, cz, ground, sample, highest, attempts = self.placement(player, vx, vz, before)
+        cx, cz, ground, sample, highest, attempts = self.placement(player, vx, vz, before, prefer_side)
         state = {"schemaVersion": 1, "runId": str(uuid.uuid4()), "createdUtc": dt.datetime.now(dt.timezone.utc).isoformat(),
                  **installation,
                  "project": PROJECT, "axis": axis, "prefab": PREFABS[axis], "apiBase": self.api.base,
+                 "placementPreference": "side" if prefer_side else "centre",
                  "gameInstance": instance,
                  "projectSettingsBefore": settings, "projectsBefore": projects,
                  "statusBefore": ready, "playerBefore": player, "cameraBefore": camera,
@@ -808,7 +816,10 @@ def main() -> None:
     parser.add_argument("--mc-api", default="http://127.0.0.1:8766")
     parser.add_argument("--journal", type=Path, default=ROOT / "runtime/native-block-probe.json")
     parser.add_argument("--timeout", type=float, default=6)
+    parser.add_argument("--side-view", action="store_true", help="Try the same nearby side positions first to reduce third-person occlusion")
     args = parser.parse_args()
+    if args.side_view and not args.spawn:
+        parser.error("--side-view is valid only with --spawn")
     try:
         journal = Journal(args.journal)
         if args.status:
@@ -817,7 +828,7 @@ def main() -> None:
                 raise ProbeError("No native asset probe journal exists")
         else:
             probe = NativeBlockProbe(LoopbackAPI(args.api), journal, LoopbackAPI(args.mc_api, "mc"), args.timeout)
-            state = probe.spawn(args.spawn[-1]) if args.spawn else probe.cleanup()
+            state = probe.spawn(args.spawn[-1], prefer_side=args.side_view) if args.spawn else probe.cleanup()
     except (ProbeError, OSError, ValueError, KeyError) as error:
         raise SystemExit(f"Native block probe stopped: {error}") from error
     print(json.dumps({"journal": str(journal.path), **summary(state)}, indent=2))

@@ -24,6 +24,17 @@ WORLD_GLOBAL = 0x6D69190
 WORLD_ANCHORS = (0x361B87, 0x36256A, 0x36DCEC)
 WORLD_PATTERN = "48 8B 05 ?? ?? ?? ?? 48 8B 48 30 48 8B 83 A0 00 00 00 48 39 41 58"
 CONTROLLER_VTABLE = 0x559DD98
+SCENE_VTABLE = 0x5B409A0
+SCENE_GETTER = 0x2D091C0
+SCENE_META = 0x6D6C850
+SCENE_META_VTABLE = 0x557CFC0
+SCENE_META_TYPE = ".?AV?$ReflectMetaObjectBind@VCharacterScene@pa@@$0A@@pa@@"
+SCENE_PARAM_VTABLE = 0x5B38478
+SKINNED_MESH_VTABLE = 0x5B4C6C0
+SKINNED_MESH_GETTER = 0x2D88B10
+SKINNED_MESH_META = 0x6D6A160
+SKINNED_MESH_META_VTABLE = 0x55739A0
+SKINNED_MESH_META_TYPE = ".?AV?$ReflectMetaObjectBind@VSkinnedMeshComponent@pa@@$0A@@pa@@"
 CODE_WINDOWS = {
     # Existing native callers, not entry points for this diagnostic to invoke.
     0x6298DD: bytes.fromhex("488b4708488b4868488b4140488b88b8000000488b5920488d542430488bcbe8cf2c1000488d542440488bcbe892271000488bcbe83ad30f00"),
@@ -37,6 +48,25 @@ CODE_WINDOWS = {
     0x72C2B5: bytes.fromhex("498b89100100004885c9742180791501741b8b414085c07414413bc0760f488b413841803c00ff7404b001eb0232c04180fdff751884c0740b488b4138450fb62c00eb05450fb66f1044886d7f418b4f08410fb6c53bc10f8369020000"),
     0x92ECA42: bytes.fromhex("4c8b89100100004d85c9741f41807915017418413951307612498b41284189d341803c03ff7404b001eb0530c04189d34969d398000000480353484180f8ff751784c0740b498b4128450fb60403eb08440fb68282000000"),
     0x9311225: bytes.fromhex("410fb68080000000440fb6d24c8b5c24284889cb418801410fb69081000000418813"),
+    # Scene reflection lookup/getter, constructor writes, owner weak unwrap,
+    # owned parameter constructor and the native two-buffer consumer. These
+    # bytes were re-read from the pinned EXE, not accepted from research JSON.
+    0x4736B1: bytes.fromhex("4883ec20488bf9e8e330ffff488b9f10020000488bf08b8f18020000488d3ccb483bdf744d66660f1f8400000000004c8b33498bce498b06ff5008"),
+    0x2D091C0: bytes.fromhex("e9dbd575fd"),
+    0x4667EF: bytes.fromhex("488d05ca671105"),
+    0x466833: bytes.fromhex("488d0516609006"),
+    0x2D0AB12: bytes.fromhex("488d05875ee302488901"),
+    0x2D0AB8E: bytes.fromhex("b9000200004738243e7407e8da4eae01eb05e80b4eae01488bd8"),
+    0x2D0ABD2: bytes.fromhex("488bd7488bcbe8c326f7ff488bc8eb03498bcc48898fa0000000"),
+    0x2D0B807: bytes.fromhex("498b47604885c07505498bcdeb0f488b4008488d48d84885c0490f44cd48894d408b811802000085c00f84520100004d8be5448be80f1f4000488b8110020000"),
+    0x2C7D2D8: bytes.fromhex("488d0599b1eb02488901"),
+    0x2C7D324: bytes.fromhex("4885ff7425807f3d00751f488d4f28e8387e75fd488943504885c0740d807804007405f0ff00eb02ff00"),
+    0x7268A3: bytes.fromhex("488b40784885c07413488b40084885c0740a44386015488d48d87403498bcc488b89a8000000488b4118488945e8488b4120488945f00fb641284c8b6cc5e8"),
+    # Actual Scene+78 identity, independently checked against the pinned PE.
+    0x2D96D6A: bytes.fromhex("488d054f59db02488901"),
+    0x2D88B10: bytes.fromhex("e90b775dfd"),
+    0x36026F: bytes.fromhex("488d052a372105"),
+    0x3602B3: bytes.fromhex("488d05a69ea006"),
 }
 TYPES = {
     "manager": ".?AVClientActorManager@pa@@",
@@ -78,34 +108,82 @@ def value(reader, address, name, fmt="<Q"):
     return struct.unpack(fmt, read(reader, address, struct.calcsize(fmt), name))[0]
 
 
-def typed(reader, address, base, length, name):
-    pointer(address, name)
-    vt = value(reader, address, name + " vtable")
-    if not base + 8 <= vt <= base + length - 8:
-        raise ProbeError(f"{name} vtable escaped the main image")
-    col = value(reader, vt - 8, name + " RTTI locator")
-    if not base <= col <= base + length - 24:
-        raise ProbeError(f"{name} RTTI locator escaped the main image")
-    sig, offset, ctor, desc, hierarchy, selfrva = struct.unpack("<6I", read(reader, col, 24, name + " RTTI locator"))
-    if (sig != 1 or offset != 0 or col - selfrva != base or not 0 < desc <= length - 208
-            or not 0 < hierarchy < length):
-        raise ProbeError(f"{name} RTTI does not describe a complete primary object")
-    actual = reader.rtti(address, base, length)
-    expected = TYPES[name] if name in TYPES else RESOURCE_TYPES[name][3]
-    if actual != expected:
-        raise ProbeError(f"{name} RTTI differs from the reviewed type: {actual}")
-    if name == "controller" and vt - base != CONTROLLER_VTABLE:
-        raise ProbeError("Controller vtable differs from the fixed EXE layout")
-    if name in RESOURCE_TYPES and vt - base != RESOURCE_TYPES[name][2]:
-        raise ProbeError(f"{name} vtable differs from the fixed resource class")
-    return {"pointer": hex(address), "rtti": actual, "vtableRva": hex(vt - base)}
+def typed(reader, address, base, length, name, *, context=None, evidence=None):
+    """Keep exact type gates; optional evidence records only existing identity reads.
+
+    A qword at vtable-8 is merely a candidate locator until its header passes.
+    In particular, code bytes at that address are not labelled verified RTTI.
+    """
+    label = context or name
+    expected = (SCENE_META_TYPE if name == "sceneMetadata" else SKINNED_MESH_META_TYPE
+                if name == "skinnedMeshMetadata" else TYPES[name] if name in TYPES else RESOURCE_TYPES[name][3])
+    if evidence is not None:
+        evidence.update(pointer=hex(address), context=label, expectedRtti=expected,
+            typeGatePassed=False, completePrimaryLocatorVerified=False,
+            candidateLocatorFieldsInterpretedAsVerifiedRtti=False, failedChecks=[])
+
+    def record(**fields):
+        if evidence is not None:
+            evidence.update(fields)
+
+    try:
+        pointer(address, label)
+        vt = value(reader, address, label + " vtable")
+        record(vtablePointer=hex(vt))
+        if not base + 8 <= vt <= base + length - 8:
+            record(failedChecks=["vtable-main-image-bounds"])
+            raise ProbeError(f"{label} vtable escaped the main image")
+        record(vtableRva=hex(vt - base))
+        col = value(reader, vt - 8, label + " RTTI locator")
+        record(candidateLocatorPointer=hex(col))
+        if not base <= col <= base + length - 24:
+            record(failedChecks=["locator-main-image-bounds"])
+            raise ProbeError(f"{label} RTTI locator escaped the main image")
+        record(candidateLocatorRva=hex(col - base))
+        raw = read(reader, col, 24, label + " RTTI locator")
+        sig, offset, ctor, desc, hierarchy, selfrva = struct.unpack("<6I", raw)
+        record(candidateLocatorHeaderHex=raw.hex(), candidateLocatorFields={
+            "signature": sig, "primaryThisOffset": offset, "constructorDisplacement": ctor,
+            "typeDescriptorRva": hex(desc), "classHierarchyRva": hex(hierarchy), "selfRva": hex(selfrva)})
+        failed = [key for valid, key in ((sig == 1, "signature-equals-one"),
+            (offset == 0, "primary-this-offset-zero"), (col - selfrva == base, "locator-self-rva"),
+            (0 < desc <= length - 208, "type-descriptor-main-image-bounds"),
+            (0 < hierarchy < length, "class-hierarchy-main-image-bounds")) if not valid]
+        record(failedChecks=failed)
+        if failed:
+            raise ProbeError(f"{label} RTTI does not describe a complete primary object: " + ", ".join(failed))
+        record(completePrimaryLocatorVerified=True, candidateLocatorFieldsInterpretedAsVerifiedRtti=True)
+        actual = reader.rtti(address, base, length)
+        record(observedRtti=actual)
+        if actual != expected:
+            record(failedChecks=["exact-reviewed-rtti"])
+            raise ProbeError(f"{label} RTTI differs from the reviewed type: {actual}")
+        if name == "controller" and vt - base != CONTROLLER_VTABLE:
+            record(failedChecks=["exact-controller-vtable"])
+            raise ProbeError("Controller vtable differs from the fixed EXE layout")
+        if name in RESOURCE_TYPES and vt - base != RESOURCE_TYPES[name][2]:
+            record(failedChecks=["exact-resource-vtable"])
+            raise ProbeError(f"{label} vtable differs from the fixed resource class")
+        if name == "sceneMetadata" and vt - base != SCENE_META_VTABLE:
+            record(failedChecks=["exact-scene-metadata-vtable"])
+            raise ProbeError("Scene reflection metadata vtable differs from the fixed EXE")
+        if name == "skinnedMeshMetadata" and vt - base != SKINNED_MESH_META_VTABLE:
+            record(failedChecks=["exact-skinned-mesh-metadata-vtable"])
+            raise ProbeError("Skinned mesh reflection metadata vtable differs from the fixed EXE")
+        record(typeGatePassed=True)
+        return {"pointer": hex(address), "rtti": actual, "vtableRva": hex(vt - base)}
+    except ProbeError as error:
+        record(failureReason=str(error))
+        raise
 
 
 def validate_code(reader, base, length):
     if not 0 < length <= core.MAX_IMAGE_SIZE:
         raise ProbeError("Main image exceeds the reviewed bounds")
-    if WORLD_GLOBAL > length - 8 or CONTROLLER_VTABLE > length - 8:
-        raise ProbeError("Fixed world global or controller vtable escaped the main image")
+    if any(rva > length - size for rva, size in ((WORLD_GLOBAL, 8), (CONTROLLER_VTABLE, 8),
+            (SCENE_META, 24), (SCENE_META_VTABLE, 8), (SCENE_VTABLE, 16), (SCENE_PARAM_VTABLE, 8),
+            (SKINNED_MESH_META, 24), (SKINNED_MESH_META_VTABLE, 8), (SKINNED_MESH_VTABLE, 16))):
+        raise ProbeError("Fixed world global or reviewed vtable/metadata escaped the main image")
     for rva, expected in CODE_WINDOWS.items():
         if rva > length - len(expected) or read(reader, base + rva, len(expected), "native chain code") != expected:
             raise ProbeError("Native chain code bytes differ from the fixed EXE contract")
@@ -277,6 +355,173 @@ def loaded_options(reader, base, length, controller, controller_raw, selections,
         "Names require readable 32-byte chunks; a page-end terminator can conservatively reject an otherwise valid name."]
 
 
+def character_scene(reader, base, length, owner, members, observed):
+    """Follow the exact owner's bounded components and reviewed Scene fields.
+
+    Scene and its owned parameter resource lack a valid primary MSVC RTTI
+    locator. Their identity is therefore gated by pinned constructor/getter
+    code, exact vtables, typed reflection metadata and weak-owner round trips.
+    The render selector container is deliberately opaque: only the three fields
+    consumed by 0x7268C2..0x7268DD are interpreted; no selected resource is read.
+    """
+    info = {"state": "notReady", "sceneOccurrences": 0,
+            "sceneOwnerRoundTripObserved": False, "parameterOwnerRoundTripObserved": False,
+            "renderLinkObserved": False, "renderSelectorFieldsObserved": False,
+            "selectedResourceTypeVerified": False, "renderedDescriptorVerified": False,
+            "appearanceApplicationVerified": False}
+    observed["characterScene"] = info
+    watched = {}
+
+    def get(address, size, label):
+        raw = read(reader, address, size, label)
+        watched[(address, size, label)] = raw
+        return raw
+
+    def qword(address, label):
+        return struct.unpack("<Q", get(address, 8, label))[0]
+
+    def weak_at(address, label, expected=None):
+        holder = qword(address, label + " holder")
+        if not holder:
+            return None
+        pointer(holder, label + " holder")
+        target = qword(holder + 8, label + " target")
+        if not target:
+            return {"holder": hex(holder), "target": "0x0", "present": False}
+        pointer(target, label + " target")
+        if expected is not None and target != expected + 0x28:
+            raise ProbeError(label + " weak target differs from the reviewed primary owner")
+        flag = get(target + 0x15, 1, label + " invalidation flag")[0]
+        entry = {"holder": hex(holder), "target": hex(target), "targetFlag15": flag, "present": True}
+        if flag != 0:
+            raise ProbeError(label + " is invalidated or has an unknown flag")
+        entry["primaryPointer"] = hex(target - 0x28)
+        return entry
+
+    def stable():
+        for (address, size, label), expected in watched.items():
+            if read(reader, address, size, label + " stability") != expected:
+                raise ProbeError("CharacterScene interpreted fields changed during reads")
+
+    def render_identity(primary, evidence=None):
+        vt = qword(primary, "render-linked primary vtable")
+        if vt != base + SKINNED_MESH_VTABLE:
+            # Existing exact SceneObjectClient gate is unchanged for this route;
+            # an unknown vtable cannot fall back to reflection or a type name.
+            return typed(reader, primary, base, length, "owner",
+                         context="render-linked primary object", evidence=evidence)
+        identity = evidence if evidence is not None else {}
+        identity.update(pointer=hex(primary), context="render-linked SkinnedMeshComponent",
+            vtablePointer=hex(vt), vtableRva=hex(SKINNED_MESH_VTABLE),
+            identityMode="exact-constructor-vtable/getter/typed-reflection/controlled-Scene-weak-route",
+            primaryMsvcRttiVerified=False, typeGatePassed=False, failedChecks=[])
+        try:
+            if qword(base + SKINNED_MESH_VTABLE + 8, "SkinnedMeshComponent reflection getter") != base + SKINNED_MESH_GETTER:
+                identity["failedChecks"] = ["exact-skinned-mesh-reflection-getter"]
+                raise ProbeError("SkinnedMeshComponent reflection getter differs from the fixed EXE")
+            meta_evidence = {}
+            identity["reflectionMetadataIdentity"] = meta_evidence
+            meta = typed(reader, base + SKINNED_MESH_META, base, length, "skinnedMeshMetadata",
+                         context="SkinnedMeshComponent reflection metadata", evidence=meta_evidence)
+            qword(base + SKINNED_MESH_META, "Skinned mesh metadata vtable")
+            identity.update(typeGatePassed=True, reflectionType="SkinnedMeshComponent", reflectionMetadata=meta)
+            return {"pointer": hex(primary), "vtableRva": hex(SKINNED_MESH_VTABLE),
+                "reflectionType": "SkinnedMeshComponent", "reflectionMetadata": meta,
+                "primaryMsvcRttiVerified": False, "identityMode": identity["identityMode"]}
+        except ProbeError as error:
+            identity["failureReason"] = str(error)
+            raise
+
+    scenes = []
+    # This is the already-proven +210 component array, not a heap/type scan.
+    for address in struct.unpack(f"<{len(members) // 8}Q", members):
+        pointer(address, "owner component member")
+        vt = qword(address, "owner component member vtable")
+        if vt == base + SCENE_VTABLE:
+            scenes.append(address)
+    info["sceneOccurrences"] = len(scenes)
+    if not scenes:
+        info["reason"] = "No exact CharacterScene vtable in the controlled owner's component array"
+        stable()
+        return
+    if len(scenes) != 1:
+        raise ProbeError("CharacterScene is not unique in the controlled owner's component array")
+    scene = scenes[0]
+    pointer(scene, "CharacterScene")
+    info.update(pointer=hex(scene), identityMode="exact-vtable/getter/reflection-metadata/owner-round-trip",
+                vtableRva=hex(SCENE_VTABLE), primaryMsvcRttiVerified=False)
+    if qword(base + SCENE_VTABLE + 8, "CharacterScene reflection getter") != base + SCENE_GETTER:
+        raise ProbeError("CharacterScene reflection getter differs from the fixed EXE")
+    metadata = typed(reader, base + SCENE_META, base, length, "sceneMetadata")
+    info["reflectionMetadata"] = metadata
+    get(base + SCENE_META, 8, "Scene metadata vtable")
+    flag = get(scene + 0x3D, 1, "CharacterScene weak invalidation flag")[0]
+    if flag != 0:
+        raise ProbeError("CharacterScene is invalidated or has an unknown weak flag")
+    info["weakOwner"] = weak_at(scene + 0x60, "CharacterScene owner", owner)
+    if not info["weakOwner"] or not info["weakOwner"]["present"]:
+        raise ProbeError("CharacterScene owner weak link is absent")
+    info["sceneOwnerRoundTripObserved"] = True
+
+    parameter = qword(scene + 0xA0, "CharacterScene parameter resource")
+    info["parameterResource"] = {"present": bool(parameter)}
+    if parameter:
+        pointer(parameter, "Scene parameter resource")
+        vt = qword(parameter, "Scene parameter resource vtable")
+        if vt != base + SCENE_PARAM_VTABLE:
+            raise ProbeError("Scene parameter resource vtable differs from its reviewed constructor")
+        # Constructor's allocation is 0x200; only its known prefix is read.
+        read(reader, parameter, 0x58, "Scene parameter known header")
+        parameter_flag = get(parameter + 0x15, 1, "Scene parameter invalidation flag")[0]
+        if parameter_flag != 0:
+            raise ProbeError("Scene parameter resource is invalidated or has an unknown flag")
+        parent = weak_at(parameter + 0x50, "Scene parameter Scene backlink", scene)
+        info["parameterResource"].update(pointer=hex(parameter), vtableRva=hex(vt - base),
+            identityMode="exact-constructor-vtable/Scene-weak-round-trip", primaryMsvcRttiVerified=False,
+            constructorAllocationBytes=0x200, readableKnownHeaderBytes=0x58, weakScene=parent,
+            partsOrDescriptorFieldsInterpreted=False)
+        if not parent or not parent["present"]:
+            raise ProbeError("Scene parameter Scene weak backlink is absent")
+        info["parameterOwnerRoundTripObserved"] = True
+
+    render_link = weak_at(scene + 0x78, "CharacterScene render link")
+    info["renderWeakLink"] = render_link
+    if render_link and render_link["present"]:
+        primary = pointer(int(render_link["primaryPointer"], 16), "render-linked primary object")
+        identity = {}
+        info["renderObjectIdentity"] = identity
+        render_type = render_identity(primary, identity)
+        get(primary, 8, "render-linked primary vtable")
+        info["renderObject"] = {**render_type, "equalsControlledOwner": primary == owner}
+        info["renderLinkObserved"] = True
+        selector = qword(primary + 0xA8, "render selector container")
+        info["renderSelector"] = {"present": bool(selector), "typeInterpreted": False,
+            "fieldContract": "native 0x7268C2..0x7268DD only; no constructor/type inferred"}
+        if selector:
+            pointer(selector, "render selector container")
+            fields = get(selector + 0x18, 17, "render selector resource pair/index")
+            first, second, index = struct.unpack("<QQB", fields)
+            if index not in (0, 1):
+                raise ProbeError("Render selector index is outside the native two-entry pair")
+            for candidate in (first, second):
+                if candidate:
+                    pointer(candidate, "render selector resource pointer")
+            info["renderSelector"].update(pointer=hex(selector), resourcePointers=[hex(first), hex(second)],
+                selectedIndex=index, selectedResourcePointer=hex((first, second)[index]),
+                selectedResourceDereferenced=False)
+            info["renderSelectorFieldsObserved"] = True
+    stable()
+    if typed(reader, base + SCENE_META, base, length, "sceneMetadata") != metadata:
+        raise ProbeError("CharacterScene reflection metadata changed during reads")
+    if render_link and render_link["present"] and render_identity(primary) != render_type:
+        raise ProbeError("CharacterScene render object type changed during reads")
+    info["state"] = "observed" if (parameter and info["renderSelectorFieldsObserved"]) else "notReady"
+    info["limitations"] = ["The selected buffer's resource type and descriptor fields are not decoded.",
+        "Scene and parameter identity use pinned reflection/constructor evidence; primary MSVC RTTI is unavailable.",
+        "The render-linked object must pass exact SceneObjectClient RTTI or the dedicated pinned SkinnedMeshComponent reflection contract.",
+        "These observations do not establish appearance application ABI, thread, restore or slot semantics."]
+
+
 def sample(reader, base, length, observed):
     def link(address, name):
         return pointer(value(reader, address, name), name)
@@ -343,6 +588,7 @@ def sample(reader, base, length, observed):
                             "selectionBytesHex": choices.hex(), "loadedOptionBoundsVerified": False}
     observed["selections"] = selections
     loaded_options(reader, base, length, controller, raw, selections, observed)
+    character_scene(reader, base, length, owner, members, observed)
     # Re-read only structural bytes that have a known contract, not unknown
     # holder fields or values which may legitimately change while moving.
     expected_links = ((base + WORLD_GLOBAL, root), (root + 0x30, manager), (manager + 0x58, user),
@@ -368,11 +614,13 @@ def sample(reader, base, length, observed):
 
 
 def collect(reader, base, length, pause=time.sleep):
-    report = {"schemaVersion": 2, "mode": "external-read-only", "state": "rejected", "samples": [],
+    report = {"schemaVersion": 3, "mode": "external-read-only", "state": "rejected", "samples": [],
               "nativeFunctionsInvoked": False, "gameMemoryWritten": False, "heapScanned": False,
               "appearanceApplicationVerified": False, "appearanceRestoreVerified": False,
               "steveModelLoaded": False, "snapshotAtomic": False,
               "controlledControllerChainObserved": False, "stableTwoSamples": False,
+              "characterSceneObserved": False, "sceneRenderSelectorObserved": False,
+              "renderedDescriptorVerified": False,
               "limitations": ["Stable pointer ownership is an observation, not a native appearance application contract.",
                               "Typed mesh option bounds and prefab names do not verify the currently rendered descriptors or permit writes.",
                               "Decoration final palette/mesh-dependent bounds and slot semantics are not verified.",
@@ -397,6 +645,9 @@ def collect(reader, base, length, pause=time.sleep):
         report["loadedOptionsObserved"] = options["state"] == "observed"
         report["meshGroupChoiceBoundsVerified"] = options["meshGroupChoiceBoundsVerified"]
         report["decorationComputedBoundsVerified"] = False
+        scene = report["samples"][0]["characterScene"]
+        report["characterSceneObserved"] = scene["sceneOwnerRoundTripObserved"]
+        report["sceneRenderSelectorObserved"] = scene["state"] == "observed"
         report["state"] = "observed" if report["selectionBuffersPresent"] and report["loadedOptionsObserved"] else "notReady"
         if report["state"] == "notReady":
             report["reason"] = "Controller ownership was observed but a selection buffer or loaded option table is empty"
@@ -429,6 +680,7 @@ def summary(report, output):
     return {"output": str(output), **{key: report.get(key) for key in
             ("state", "reason", "stableTwoSamples", "controlledControllerChainObserved", "selectionBuffersPresent",
              "loadedOptionsObserved", "meshGroupChoiceBoundsVerified", "decorationComputedBoundsVerified",
+             "characterSceneObserved", "sceneRenderSelectorObserved", "renderedDescriptorVerified",
              "nativeFunctionsInvoked", "gameMemoryWritten", "appearanceApplicationVerified", "steveModelLoaded")}}
 
 
@@ -467,6 +719,8 @@ def main():
         report = collect(reader, base, length)
         if reader.module() != (base, length, path) or file_digest(path) != digest:
             report.update(state="unstable", stableTwoSamples=False, controlledControllerChainObserved=False,
+                          characterSceneObserved=False, sceneRenderSelectorObserved=False,
+                          renderedDescriptorVerified=False,
                           reason="Game module changed during the read-only observation")
         report.update(timeUtc=dt.datetime.now(dt.timezone.utc).isoformat(),
                       game={"pid": pid, "path": str(path), "version": version, "sha256": digest,

@@ -15,9 +15,11 @@ from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
 from bridge.red_side import RedSide, GameAPIError
+from bridge.native_reconcile import NativeReconciler
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN_FILE = ROOT / "runtime/bridge-origin.json"
+NATIVE_JOURNAL = ROOT / "runtime/bridge-native-operations.json"
 PREFAB = "/object/00_common/system/cd_testfield_grid_box_1m.prefab"
 PROJECT = "CrimsonMCPrototype"
 ALLOWED_BLOCKS = {"minecraft:oak_log", "minecraft:oak_planks", "minecraft:cobblestone",
@@ -77,6 +79,7 @@ def mutate_mc(path, body):
 class Bridge:
     def __init__(self):
         self.red = RedSide()
+        self.reconciler = NativeReconciler(self.red, NATIVE_JOURNAL)
         self.lock = threading.Lock()
         self.message = "Start the Minecraft authority server, then set an anchor."
         self.origin = json.loads(ORIGIN_FILE.read_text()) if ORIGIN_FILE.exists() else None
@@ -88,6 +91,7 @@ class Bridge:
         return status
 
     def anchor(self):
+        self.reconciler.ensure_build_allowed()
         self.ready()
         state = mc()
         if state["blocks"]:
@@ -127,27 +131,7 @@ class Bridge:
         if self.origin is None:
             raise GameAPIError("Set the anchor before reconnecting blocks")
         state = mc() if state is None else state
-        blocks = state["blocks"]
-        if len(blocks) > 128:
-            raise GameAPIError("Native proxy limit is 128 blocks in this slice")
-        existing = [o for o in self.all_objects() if o.get("project") == PROJECT]
-        used = set()
-        for block in blocks:
-            position = self.world(self.cell(block))
-            match = next((o for o in existing if o["uid"] not in used and not o.get("hidden")
-                          and o["prefab"] == PREFAB and abs(o.get("scale", 1) - 1) < 0.001
-                          and all(abs(o[a] - position[a]) < 0.015 for a in "xyz")), None)
-            if match:
-                used.add(match["uid"])
-                continue
-            _, admitted = self.red.request("/api/objects", "POST", {"prefab": PREFAB, **position, "scale": 1})
-            uid = admitted["uid"]
-            self.red.request(f"/api/objects/{uid}/project", "POST", {"name": PROJECT})
-            used.add(uid)
-        for obj in existing:
-            if obj["uid"] not in used:
-                self.red.request(f"/api/objects/{obj['uid']}", "DELETE")
-        return state
+        return self.reconciler.reconcile(state, self.origin, mc)
 
     def action(self, path, body):
         if path not in ACTIONS:
@@ -191,8 +175,9 @@ class Bridge:
                 return
             if path == "/ui/reconnect":
                 self.sync()
-                self.message = "Native collision proxies reconciled with Minecraft."
+                self.message = "Native blue proxy registry reconciled with Minecraft; rendering/collision require game verification."
                 return
+            self.reconciler.ensure_build_allowed()
             self.ready()
             if self.origin is None:
                 raise GameAPIError("Set an anchor first")
@@ -231,6 +216,7 @@ class Bridge:
             if path in PLACEMENT_ACTIONS and "properties" in body:
                 mutation["properties"] = block_properties(body["properties"])
             if selected_placement:
+                self.reconciler.begin_mc(state, self.origin, "/api/place-selected", mutation)
                 result = mutate_mc("/api/place-selected", mutation)
                 verb = "Placed"
             elif path in {"/ui/place", "/ui/front"}:
@@ -238,9 +224,11 @@ class Bridge:
                 if block not in ALLOWED_BLOCKS:
                     raise GameAPIError("Unsupported block")
                 mutation["block"] = block
+                self.reconciler.begin_mc(state, self.origin, "/api/place", mutation)
                 result = mutate_mc("/api/place", mutation)
                 verb = "Placed"
             else:
+                self.reconciler.begin_mc(state, self.origin, "/api/break", mutation)
                 result = mutate_mc("/api/break", mutation)
                 verb = "Broke"
             # MC remains authoritative if a native spawn fails; reconnect repairs presentation.

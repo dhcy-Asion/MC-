@@ -17,57 +17,35 @@
 用户已回答范围问题：禁用／卸载 mod 后恢复原外观；心形条显示红沙真实 HP，继续
 红沙战斗规则。旧“不能穿红沙装备”和独立 MC 生存生命要求已被覆盖。
 最新完整验收在 [steve-character.md](steve-character.md)；独立第四身份不再是本轮门槛。
-本次落地小步为真实库存九格快捷栏，常驻显示、后台刷新与断线恢复已有游戏内证据，
-F8 开关及点击仍待验收。模型资产已推进为真实红沙 palette 的离线 Steve PAC 候选，
-六种基线方块的 14 项真实几何/UV/纹理已导出，详见 [asset-pipeline.md](asset-pipeline.md)。
-持续角色替换、全方块、装备、心形条和工坊仍未完成；只读身份解码、资产导出及构建
-不能替代游戏内验收。仍需实际身体到外观控制器的安全回链、刷新线程、原生资源、
-骨骼／动画／装备绑定与恢复生命周期。
-本轮已补齐原木三轴 PAM/PAMI、Steve 七资源 prefab 候选，以及官方 vanilla 注册表
-（1060 种方块、26684 个合法状态）。用户恢复授权后已实际生成一块诊断原木：登记
-成功，但模型未显示、未检测到一米碰撞，原生加载验收失败。对象已清理、MC 状态不变；
-游戏正常退出后临时 0041 已恢复，38 个原索引/元数据哈希一致。下一步定位实际加载
-失败环节；不把离线解包、场景对象指针或注册表覆盖当作游戏内功能完成。
-随后为读取诊断构建并安装新 ASI、再次临时挂载原木 0041。一次 Escape 中断后用户
-再次明确恢复授权：真实引擎读取 **15/15 项首次成功**，蓝块六项、Y 轴原木六项及三
-张纹理的长度/头部/FNV 全部与已校验本地资源一致，MC 状态不变。正常退出后第二次
-收据 `51159fa10a564fa392027e71af157471` 也已 restored，38 个原文件哈希一致，
-0041/active receipt 已移除。下一步核对装配/实例化，不能再把目录树猜测当成根因。
-随后已在新进程复试正常原木（读回成功后仍不显示/碰撞失败），并通过 A 蓝 prefab
-别名实测：同一新逻辑路径显示蓝块且物理增量 1.1521 米。A 对象已清理，MC 不变。
-退出指令后曾因红沙 PID 69700 仍运行而暂未恢复；后续确认进程已退出，A 收据
-`ece6ea42e8154e878fb9be88a8511944` 已 restored，0041/active receipt 已移除，原始
-38 项哈希一致。B PAMI 对照随后实测成功：15/15 项首次读回，正常原木 prefab 引用新
-PAMI 路径时蓝块可见、碰撞增量 1.1521 米，对象已清理且 MC 状态保持。问题继续缩小到
-正常 PAMI 内容/模型/纹理装配。用户随后正常退出，B 已恢复、原始 38 项哈希一致。
-C 仅去除 XML 声明的对照完成封装/隔离检查并短暂安装，启动接管时用户物理 Escape
-停止；确认游戏未启动后立即恢复 C，**最新收据 `c6f59e15b4a54fc1939c9b2769658ec7`
-为 restored，0041/active receipt 已移除，原始 38 项哈希一致，游戏未运行。** C 未读
-资源或生成实体。下次窗口接管须用户明确恢复；离线朝向候选及只读外观链工具已完成。
-静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
-[native-character-feasibility.md](native-character-feasibility.md)。
+当前可用的是真实 MC 库存／六类方块与蓝色原生碰撞代理，以及底部九格库存 HUD。
+常驻显示、后台刷新与断线恢复已有实机证据；F8 开关／按钮点击仍待验收。全物品官方
+中文图标、悬停、整组领取、按数量添加和 36 格选择／消耗已实现，具体手持及用途未接入。
 
-2026-10-07 继续完成方块状态前置：MC 存档升级 schema 2，保存完整 properties，
-运行状态返回实际世界的 properties／stateId，原木 x/y/z 朝向可放置并重启恢复。
-正式后台已先仅以 `-NoGame` 启动，用户库存／选择／revision／原点保持。
-全部 26684 合法状态到原版模型选择的离线映射已完成；红沙仍是六类蓝色代理。
-详细检查和边界见本文件末尾的“完整方块状态与模型映射”。
+MC 存档已升级 schema 2，保存完整 properties；原木 x/y/z 状态可放置并重启恢复。
+1060 种方块的 26684 个合法状态、原版模型选择及面几何已有离线导出，不能据此称全
+方块已进入红沙。Steve 七资源 prefab／原生 palette PAC 仍为离线候选，持续外观、
+骨骼／动画／两套装备、心形血量和工坊均未完成。
 
-随后用户明确恢复接管，本次 C 对照已实机读回 15/15、原木像素纹理可见（角色部分
-遮挡）、碰撞高度增量 1.15198 米，UID 1 已清理、地面回到 0，MC 状态保持。
-**C 收据 `c2fb925c9d2b423996d764886408cf1a` 已在确认游戏退出后恢复：38 项原始
-文件哈希一致，0041 与 active receipt 已移除，测试对象已清理。**
-本次外观控制器只读链两次稳定采样也成功；尚未写入外观或加载 Steve。
-随后准备修复后三轴包，overlay 13 项及隔离安装／恢复 16 项通过；临时收据
-`5c89c03dc0614c7ba5066598062c0711` 用于同包三轴验证。新进程 PID 59252
-已读回全部 27 项，X/Y/Z 碰撞和清理均通过；画面仍有角色遮挡，不作为完整朝向验收。
-**用户正常退出后本次新包也已 restored，38 项原始哈希一致，无 0041／active receipt，
-无未清理测试对象，MC 完整状态保持。** 外观探针已实际
-读取 7 组 mesh 选项及 250 组 decoration 声明；仍没有应用 Steve 或调用刷新函数。
+原木加载失败已定位到 PAMI XML 声明，并以单变量 C 对照验证。新一轮侧向放置消除
+角色遮挡，X/Y/Z 在相同视角可见的三个面（-X、+Y、+Z）朝向分别核对通过，27 项
+资源读回、三轴碰撞和清理通过；背面、底面、全部光照和采样仍未验收。正式建造
+仍是蓝代理；纯模型选择层没有生产准入配置。
+本轮收据 `178c07aa03734bc49e7a7395df9bafe1` 已在实际进程退出后 restored，38 项
+原始哈希一致，无 0041／active receipt／测试对象。材料、36 格与选中格保持，revision
+因四次合法建造操作由 18 增至 22。原有放置原点已逐字恢复并正常重启桥接，保留后来
+游戏存档。历次失败／对照和恢复记录保留在文末，不代表当前未恢复状态。
 
-M1 已完成并提交为 `1bb0775`。M6a 独立背包保持进行中：全物品官方中文图标目录、
-中文悬停、整组领取、控制台按数量添加、36 格选择和实际消耗已实现，兼容六种方块放置。
-用户已确认游戏内图片／悬停显示，按钮点击验收仍保留未验证；可见手持和装备用途尚未接入。
+外观探针已实机稳定读取当前身体→外观控制器→owner，以及 7 组 mesh 选项与 250 组
+装饰声明；没有写入外观、执行刷新或加载 Steve。CharacterScene 及其参数资源已获得
+部分实读证据，实际渲染组件被严格识别为 SkinnedMeshComponent；新增专门只读分支
+48 项检查和 25 个固定代码窗口通过，尚未完成该分支实机双采样。持久操作日志及
+会话／对象条件已接入正式蓝代理同步，实机放置／恢复／拆除、后台重启验证通过。
+现有观测不证明所选渲染资源、应用 ABI、刷新线程或恢复生命周期。
+
+资产细节见 [asset-pipeline.md](asset-pipeline.md)，静态／只读证据见
+[native-character-contract.md](native-character-contract.md)，路线见
+[native-character-feasibility.md](native-character-feasibility.md)。M1 基线提交为 `1bb0775`，
+M4a 与 M6a 保持进行中，完整移植目标仍为 active。
 
 ## 已有可用基线
 
@@ -979,3 +957,105 @@ runtime/appearance-options-20261007.json` 成功，两次稳定采样完全相�
 另有原头／眼／牙、头发／胡须。原文将七组命名为身体／头／毛发等，不含已证明的
 护甲／武器槽，详见 [native-character-contract.md](native-character-contract.md)。
 收尾四个 Python AST、修改文档相对链接、11 个本地证据 JSON 与 diff 检查通过。
+
+## 2026-10-07 侧向三轴显示、持久同步与原生条件实测
+
+在前次包恢复后，正常停止 MC／桥接，将 19 个世界文件逐项备份并验证哈希，再更新
+后端。更新后完整 MC API 与原 revision 18 相同，备份位于本机
+`backups/native-sync-20261007-114124-ceb0d31a`，不是回滚后续存档的来源。
+
+新增 `bridge/native_identity.py` 以 QUERY_LIMITED_INFORMATION 查询实际进程时间、
+路径和固定 EXE 摘要，HTTP 写携带 PID 与创建时间组合的会话标识。原生 status 发布
+两个条件能力；创建／项目归属／删除在分派前检查会话。归属与删除在项目、地面操作、
+注册表锁内比较最后 GET 的项目、prefab、全部变换及 hidden，成功才修改并返回
+conditional；删除在解锁后派发已有游戏线程清理。旧无 header 诊断兼容，正式桥接
+不接受缺少条件能力的旧插件。原生接口保留 busy／unsupported／object_changed 的
+区别，动态／standin／C5 及不适合安全删除的已移动对象明确拒绝。
+
+`bridge/native_reconcile.py` 已接入正式蓝代理同步：材料写前持久化 MC 意图，创建／
+归属／删除前保存对应原生操作，flush/fsync 后原子替换；新对象集合确认后才清理旧
+对象。未知 MC 结果阻止再次建造，Restore 只重新读取权威，不重发扣料；丢失创建
+响应没有可靠 UID 时保持阻断，不按位置猜对象。进程重启不沿用旧 UID；同进程对象
+属性冲突保留日志，不重新认领。繁忙拒绝可重新读回再评估；非 404 错误不等于删除。
+独立领取／选格不因建造未决而锁住。这里确认对象注册表，不能替代碰撞或视觉验收。
+
+本轮相关检查（均已实际运行，隔离测试不使用用户 MC 世界）：
+
+| 命令（`py -3.12 -B tools/` 前缀） | 结果／范围 |
+| --- | --- |
+| `check_native_identity.py` | 12/12；实际生产 MSYS Python 也通过，覆盖权限／句柄、创建时间、HTTP 条件及拒绝 |
+| `check_native_reconcile.py` | 38/38；部分完成、丢响应、保存失败、MC 变化、会话和对象竞争 |
+| `check_inventory_bridge.py` | 27/27；未决建造阻断、库存独立及不重发材料操作 |
+| `check_native_session.py` | 13 组；生产 HTTP 条件解析、重复／空 header、同 PID 不同创建时间、六文件补丁重建 |
+| `check_native_objects.py` | 12 组；生产条件变更、十字段/单 ULP、真实锁竞争、零错误写入与解锁后清理 |
+| `check_native_resources.py` | 22 组；既有资源队列及释放不回归 |
+| `check_native_block_probe.py` | 45/45；新增侧向位置优先、坡地回退和失败零生成 |
+| `check_appearance_controller.py` | 48/48；精确 Scene／SkinnedMesh 类型、弱回链、边界与失败标记 |
+
+完整 ASI 构建成功并安装，产物 SHA256
+`49353e088b04549c6aa15487914ba3230ba612ef9a68572a1ad179db12f51649`，12,766,720 字节；
+仓库和实际安装逐字摘要相同，1332 图标安装核对通过，原插件备份保留。固定上游仍为
+`4dcedc8dfe1592fdee0528894389221291900b8d`，不是改动上游版本。
+
+临时侧向显示检查复用固定候选与包摘要（见前节），安装前
+`check_asset_overlay.py --output build/native-declaration-fixed-overlay --verify-game`
+13/13 通过。本轮收据 `178c07aa03734bc49e7a7395df9bafe1`，游戏
+`instanceId=57868:134358187330630563`；原生 status 的两个条件能力都为 true。
+27/27 原生资源首次读回匹配，证据 `runtime/native-resource-side-view-20261007.json`。
+
+`probe_native_block.py --spawn axis=x --side-view`（依次使用 x/y/z）在同一平坦候选点逐轴生成，
+每次只留一块并在截图后清理。相对原地面碰撞增量 1.05311 m，相对放置点顶面
+1.01187 m；前者包含原地面与放置点高差。UID 1/2/3 全部删除，碰撞回到 0，
+三个探针的 MC 完整 API 均不变。
+
+| 轴 | runId | 相同视角可见面核对 |
+| --- | --- | --- |
+| x | `0a8444a0-54ec-4de4-b9de-59abaa8aae59` | -X 端面，+Y 与 +Z 树皮 |
+| y | `223eebe0-75ed-48df-86e3-ee570ba2c8b2` | +Y 端面，两竖侧面树皮 |
+| z | `654f0161-9105-4fd3-899b-23d4303e012b` | +Z 端面，-X 横向树皮，顶部树皮 |
+
+原始截图 `runtime/native-oak-side-view-{x,y,z}-20261007.jpg` 均无角色遮挡，逐轴
+人工观察在同名 `*-visual-20261007.json`，绑定原始截图和自动日志摘要。
+`axisAppearanceVerifiedForVisibleFaces=true`，但 allSixFacesVerified、全部 UV/光照
+与 formalProfileEnabled 仍 false；自动日志 visualVerified 不会因截图存在而置 true。
+正式桥接仍不准入材质资产，其他五类外观和全方块也不据此称已完成。
+
+真实 `check_bridge.py` 放置木板 UID 4，碰撞增量 1.04187 m，恢复复用同一个 UID；
+针对本测试对象验证四个请求：旧创建时间 DELETE→409 sessionMismatch，错误项目
+DELETE 和错误 X 的 project POST→409 object_changed/零修改，缺十字段的会话
+DELETE→400。每次完整对象及 MC 状态均不变，随后合法拆除归还材料并消除碰撞。
+证据 `runtime/bridge-checks.json` 及 `bridge-sync-conditional-20261007.stdout.json`。
+
+真实 `check_restart.py prepare` 放置圆石 UID 5，再正常停止 MC 和桥接、保持游戏
+运行，`start_prototype.ps1 -NoGame` 后 `check_restart.py verify` 通过。保存的 MC
+状态完整恢复，原生对象在后台停止前后快照相同，Restore 仍复用 UID 5，拆除归还圆石。
+这是同一游戏内的后台重启，不宣称本轮实际重新启动了游戏来检验 UID 竞争。
+最终 revision 18→20→22，除 revision 外完整 API 与最初相同：原木 14、圆石 64、
+泥土 32、木板 2、木棍 4、工作台 1，selectedSlot=1，blocks=[]；原生对象 total=0，
+碰撞回到原地面。重启证据 `runtime/restart-checks.json`；总体前后状态、19 文件
+备份及原点恢复证据在 `runtime/native-sync-validation-20261007-context.json`。
+
+外观初次及稳定画面重试均在渲染类型检查处拒绝。详细报告证明原 controlled owner、
+唯一 CharacterScene 及 params 弱回链已获得部分实读，而 Scene+0x78 实际指向
+SkinnedMeshComponent；该 VT 前面的指针是代码跳板，不是标准 primary COL。
+新增分支限定 exact VT、slot-8 getter、固定 factory/构造窗口和 typed reflection
+metadata；固定 EXE 的 25 个代码窗口全部一致。新分支尚未做实机双采样，原报告
+顶部稳定／Scene／selector 标记均为 false，不把部分样本升级为通过。selected 资源
+不解引用，没有执行外观 ABI、刷新、装备或 Steve 切换。具体证据与下一消费者在
+[native-character-contract.md](native-character-contract.md)。
+
+所有对象清理后正常退出自动短按仍停在确认框。用户第一次答复后独立发现游戏还在
+运行，保持资源不动；用户再次确认窗口完全关闭后，实际进程消失，再执行
+`install_asset_probe.py --restore`。收据已 restored，34 个原索引、2 个未改元数据、
+2 个恢复元数据共 38 个原始 SHA256 全部一致，无 0041／active receipt。
+原锚点逐字恢复后只正常重启桥接，MC API 保持 revision 22；未恢复旧 MC 世界或旧
+红沙存档。证据 `runtime/asset-probe-restore-side-view-20261007-checks.json`。
+
+收尾 14 个变更 Python 的 AST、6 个变更 Markdown 的 40 处相对文件链接、变更 JSON、
+三轴视觉证据与清理状态、恢复上下文及 `git diff --check` 通过。并行只读审查未发现
+同步／原生条件或新增渲染类型分支的阻塞问题。原始地址、资源、截图、备份和世界
+仍在 ignored 路径，只有项目自建 ASI 及其构建摘要作为原生产物更新。
+
+下一步先在合适的正常游戏会话做精确 SkinnedMesh 分支双采样，再沿已定位的渲染
+消费者研究可逆应用和刷新生命周期；方块仍需其余面、正式安装／验证适配器以及其它
+种类的独立验收。持续目标保持 active，完整 Steve、装备、心形 HP 和分发仍未完成。

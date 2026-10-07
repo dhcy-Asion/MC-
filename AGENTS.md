@@ -72,6 +72,7 @@ the earlier copy under Desktop/Git.
 | 方块属性／存档迁移 | `py -3.12 -B tools/check_block_states.py` 使用独立世界；与 `check_inventory.py` 顺序运行（共用 8768／25580）；桥接转发运行 `check_inventory_bridge.py`；原生实际显示仍须另验收 |
 | 背包 | MC 构建；`python tools/check_inventory.py` 使用独立测试世界；`python tools/check_inventory_bridge.py`；`python tools/check_inventory_ui.py`；原生构建和游戏内面板检查 |
 | 跨游戏方块同步 | `tools/check_bridge.py`；保存／重启改动再运行 `tools/check_restart.py` |
+| 持久同步／原生条件 | `py -3.12 -B tools/check_native_identity.py`、`check_native_reconcile.py`、`check_inventory_bridge.py`；原生条件运行 `check_native_session.py`、`check_native_objects.py` 并回建 ASI，相关实机往返见上一项；隔离检查不修改用户世界 |
 | 独立方块模型选择层 | `py -3.12 -B tools/check_native_block_models.py`；当前仅纯状态／证据范围匹配，未接默认桥接，不能替代实际安装、加载和显示验证 |
 | 原生源码 | 准备固定上游、构建、补丁可重建检查及相关游戏内行为验证；更新插件前关闭游戏 |
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |

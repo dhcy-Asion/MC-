@@ -600,6 +600,34 @@ class NativeBlockProbeChecks(unittest.TestCase):
         self.assertFalse(self.mutations())
         self.assertIsNone(self.journal.read())
 
+    def test_side_view_uses_existing_side_position_and_precise_cleanup(self):
+        result = self.subject.spawn("z", prefer_side=True)
+        self.assertEqual(result["placementPreference"], "side")
+        self.assertEqual((result["position"]["x"], result["position"]["z"]), (1.0, 3.5))
+        self.assertEqual(result["placementAttempts"][0]["side"], -1.5)
+        self.assertEqual(len(self.mutations()), 1)
+        cleaned = self.subject.cleanup()
+        self.assertTrue(cleaned["registryRemoved"] and cleaned["collisionRemovedVerified"])
+        self.assertTrue(cleaned["mcStateUnchanged"])
+
+    def test_side_view_preserves_ground_rejection_and_centre_fallback(self):
+        self.fake.ground_height = lambda x, z: 10.0 if abs(x) < 0.5 else 10.0 + x
+        result = self.subject.spawn(prefer_side=True)
+        self.assertEqual(len(result["placementAttempts"]), 5)
+        self.assertTrue(all(not row["accepted"] for row in result["placementAttempts"][:4]))
+        self.assertEqual((result["position"]["x"], result["position"]["z"]), (-0.5, 3.5))
+        self.assertTrue(self.subject.cleanup()["collisionRemovedVerified"])
+
+    def test_side_view_all_sloped_or_invalid_preference_never_spawns(self):
+        self.fake.ground_height = lambda x, z: 10.0 + x
+        with self.assertRaisesRegex(probe.ProbeError, "All nearby candidate"):
+            self.subject.spawn(prefer_side=True)
+        for value in (1, "side", None):
+            with self.assertRaisesRegex(probe.ProbeError, "boolean"):
+                self.subject.spawn(prefer_side=value)
+        self.assertFalse(self.mutations())
+        self.assertIsNone(self.journal.read())
+
     def test_28_existing_object_blocks_only_nearby_candidates_and_is_preserved(self):
         self.fake.objects[7] = object_row(7, prefab="/object/foreign.prefab", project="Player Build", x=0, z=3)
         result = self.subject.spawn()

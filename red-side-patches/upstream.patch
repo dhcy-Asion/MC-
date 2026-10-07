@@ -1,5 +1,5 @@
 diff --git a/asi/cdmodkit/cdmodkit.cpp b/asi/cdmodkit/cdmodkit.cpp
-index 99718d9..0af6598 100644
+index 99718d9..612aec4 100644
 --- a/asi/cdmodkit/cdmodkit.cpp
 +++ b/asi/cdmodkit/cdmodkit.cpp
 @@ -7,6 +7,7 @@
@@ -81,7 +81,68 @@ index 99718d9..0af6598 100644
  // ---- game call tracing (reverse engineering aid, console "trace on|off"): logs the game's own setWorldTransform / setEnable calls
  // with the caller RVA, every object the game creates, and transform changes of the most recently created game object per tick.
  static SetWorldTransformFn g_origSetXf = nullptr; static SetEnableFn g_origSetEnable = nullptr;
-@@ -6392,7 +6457,8 @@ static DWORD WINAPI InitThread(LPVOID) {
+@@ -1812,6 +1877,60 @@ void AssignProject(int uid, int proj) {
+     int i = IndexOfUidLocked(uid); if (i >= 0) g_reg[i].proj = proj;
+ }
+ 
++// CrimsonMC atomic object preconditions. Never call the legacy Hide/Forget paths:
++// they can defer a UID-only mutation beyond the snapshot that authorized it.
++const char* ConditionalObjectMutation(int uid, const ObjectExpected& expected, const std::string* project) {
++    uintptr_t object = 0; int oldProject = 0;
++    {
++        // Names precede registry access everywhere; ground admission precedes registry.
++        // No engine call, queue dispatch or project helper runs while these locks are held.
++        std::lock_guard<std::mutex> names(g_projMutex);
++        std::lock_guard<std::mutex> operation(g_groundOpMutex);
++        REG_LOCK;
++        if (!GameThreadReady()) return "busy";
++        if (g_groundWorldWriting || g_groundLeases.count(uid) || g_groundMutationPending.count(uid)) return "busy";
++        for (auto& w : g_groundOps) if (auto op = w.lock())
++            if (!op->view.terminal() && GroundTouches(op, { uid })) return "busy";
++        const int index = IndexOfUidLocked(uid);
++        if (index < 0) return "object_changed";
++        SpawnedObj& e = g_reg[(size_t)index];
++        // ObjectJson emits nine significant digits: its finite float32 values round
++        // trip exactly. A later move by even one float ULP must reject the old read.
++        if (e.proj < 0 || e.proj >= (int)g_projNames.size() || g_projNames[(size_t)e.proj] != expected.project ||
++            e.prefab != expected.prefab || e.hidden != expected.hidden ||
++            e.pos.x != expected.pos.x || e.pos.y != expected.pos.y || e.pos.z != expected.pos.z ||
++            e.rot.yaw != expected.rot.yaw || e.rot.pitch != expected.rot.pitch || e.rot.roll != expected.rot.roll ||
++            e.scale != expected.scale) return "object_changed";
++        if (e.prefab != "/object/00_common/system/cd_testfield_grid_box_1m.prefab" ||
++            e.gimmick || e.standin || e.actor || e.placeRow != -1 || !e.placeReq.expired() || (e.hidden && e.obj)) return "unsupported";
++        // Assignment of an ordinary pending spawn is safe: DoSpawn's attachment
++        // preserves its current project. A visible pending delete waits for obj.
++        if (!project && !e.hidden && !e.obj) return "busy";
++        // A legacy move can own the old handle outside REG_LOCK in DoReplace.
++        // Its poseGen is incremented before dispatch; do not risk a second remove.
++        if (!project && e.poseGen) return "unsupported";
++        oldProject = e.proj;
++        if (project) {
++            int id = 0;
++            if (!project->empty()) {
++                for (size_t i = 1; i < g_projNames.size(); ++i) if (_stricmp(g_projNames[i].c_str(), project->c_str()) == 0) { id = (int)i; break; }
++                if (!id) { g_projNames.push_back(*project); id = (int)g_projNames.size() - 1; }
++            }
++            e.proj = id; MarkDirtyLocked(oldProject); MarkDirtyLocked(id);
++        } else {
++            object = e.obj; e.hidden = true; e.obj = 0; e.gen = NewGenLocked();
++            MarkDirtyLocked(oldProject); ForgetCopyValueLocked(uid);
++            g_reg.erase(g_reg.begin() + index); // queued UID/generation work can no longer attach
++        }
++    }
++    if (object) {
++        auto work = TrackProjectNativeWork(oldProject);
++        RunOnGameThread([object, work]() { DoRemove(object); });
++    }
++    return nullptr;
++}
++// End CrimsonMC atomic object preconditions.
++
+ struct LibraryNameLess {
+     bool operator()(const std::wstring& a, const std::wstring& b) const {
+         return CompareStringOrdinal(a.data(), (int)a.size(), b.data(), (int)b.size(), TRUE) == CSTR_LESS_THAN;
+@@ -6392,7 +6511,8 @@ static DWORD WINAPI InitThread(LPVOID) {
      overlay::Install();          // first: must be in place before the game creates its swapchain
      LoadPrefabs();
      if (g_httpEnabled) httpapi::Start(g_httpPort);   // opt-in; before ResolveGame on purpose: /api/status reports a failed build, writes answer 503
@@ -91,6 +152,22 @@ index 99718d9..0af6598 100644
      g_buildOk = ResolveGame();
      if (!g_buildOk) { Log("signature resolution failed; game functions will NOT be hooked or called"); return 0; }
      ReleaseHookGap();
+diff --git a/asi/cdmodkit/core.h b/asi/cdmodkit/core.h
+index b3d08df..b9b1e41 100644
+--- a/asi/cdmodkit/core.h
++++ b/asi/cdmodkit/core.h
+@@ -342,6 +342,11 @@ namespace core {
+     int  ProjectObjectCount(int id);               // visible objects + visible managed NPCs + terrain strokes (upstream scene-count semantics); 0 = new/unassigned
+     bool ProjectDirty(int id);                     // an entity/metadata item changed since the last load/save
+     void AssignProject(int uid, int proj);
++    // CrimsonMC: compare and mutate an ordinary static proxy atomically. No deferred
++    // admission: a conflict returns a static reason and leaves the registry untouched.
++    struct ObjectExpected { std::string project, prefab; Vec3 pos{}; Rot rot{}; float scale = 1; bool hidden = false; };
++    // project=nullptr deletes; otherwise assigns that name. nullptr result means admitted.
++    const char* ConditionalObjectMutation(int uid, const ObjectExpected& expected, const std::string* project);
+     // Save is validate-first and transactional: the whole document (values, copy envelopes, bounds) is built
+     // from the live records and re-parsed before the destination is replaced through a same-directory temporary
+     // file. A failure leaves the previous bytes, the membership and the dirty stars untouched. Adoption (the
 diff --git a/asi/cdmodkit/core_internal.h b/asi/cdmodkit/core_internal.h
 index 4ec6346..74f2af3 100644
 --- a/asi/cdmodkit/core_internal.h
@@ -132,13 +209,92 @@ index 6daa16e..0913c0f 100644
          ImGuiIO& io = ImGui::GetIO();
          io.MouseDrawCursor = !g_playMode;
 diff --git a/asi/cdmodkit/http_api.cpp b/asi/cdmodkit/http_api.cpp
-index 93f9853..22d4984 100644
+index 93f9853..50de6c8 100644
 --- a/asi/cdmodkit/http_api.cpp
 +++ b/asi/cdmodkit/http_api.cpp
-@@ -162,8 +162,48 @@ static bool Ready(int& status, std::string& out) {
+@@ -38,6 +38,38 @@ static std::string Num(double x) { char b[64]; snprintf(b, sizeof b, "%.9g", x);
+ static std::string Int(int x) { return std::to_string(x); }
+ static std::string Bool(bool x) { return x ? "true" : "false"; }
+ static std::string Error(const char* s) { return "{\"error\":" + Quote(s) + "}"; }
++// CrimsonMC session preconditions are checked inside this server before any
++// protected object write is dispatched. A caller-side PID check cannot prevent
++// a replacement process from accepting a stale UID between HTTP requests.
++static const std::string& InstanceId() {
++    static const std::string value = []() {
++        FILETIME created{}, exited{}, kernel{}, user{};
++        const DWORD pid = GetCurrentProcessId();
++        if (!pid || !GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) return std::string{};
++        const uint64_t ticks = (uint64_t(created.dwHighDateTime) << 32) | created.dwLowDateTime;
++        if (!ticks) return std::string{};
++        return std::to_string(pid) + ":" + std::to_string(ticks);
++    }();
++    return value;
++}
++static bool SessionObjectWrite(const std::string& method, const std::string& path) {
++    if (method == "POST" && path == "/api/objects") return true;
++    if (path.rfind("/api/objects/", 0) != 0) return false;
++    const std::string tail = path.substr(13); const size_t slash = tail.find('/');
++    const std::string action = slash == std::string::npos ? "" : tail.substr(slash + 1);
++    return (method == "DELETE" && action.empty()) || (method == "POST" && action == "project");
++}
++static bool CheckSession(const std::string& method, const std::string& path, bool supplied,
++                         const std::string& expected, int& status, std::string& out) {
++    if (!supplied || !SessionObjectWrite(method, path)) return true; // Existing clients remain compatible.
++    const std::string& actual = InstanceId();
++    if (!actual.empty() && expected == actual) return true;
++    status = 409;
++    out = "{\"error\":\"Game process session mismatch\",\"sessionMismatch\":true,\"instanceId\":" + Quote(actual) + "}";
++    return false;
++}
++// End CrimsonMC session preconditions.
++static const char* const kObjectExpectedKeys[] = { "expectedProject", "expectedPrefab", "expectedX", "expectedY", "expectedZ", "expectedYaw", "expectedPitch", "expectedRoll", "expectedScale", "expectedHidden" };
+ static void Space(const std::string& s, size_t& p) { while (p < s.size() && (s[p] == ' ' || s[p] == '\r' || s[p] == '\n' || s[p] == '\t')) ++p; }
+ static bool Hex(char c, unsigned& n) {
+     if (c >= '0' && c <= '9') n = c - '0';
+@@ -162,17 +194,135 @@ static bool Ready(int& status, std::string& out) {
      if (core::HooksReady() && core::GameThreadReady()) return true;
      status = 503; out = Error("game thread is not ready"); return false;
  }
++// CrimsonMC conditional object request: any expected* field opts into the full
++// snapshot contract. A partial condition must never fall back to a legacy write.
++static bool ConditionalObjectRequest(int uid, const std::string& method, const std::string& action,
++                                     const Fields& arg, int& status, std::string& out) {
++    bool supplied = false;
++    for (const auto& field : arg) if (field.first.rfind("expected", 0) == 0) supplied = true;
++    if (!supplied) return false;
++    const bool assign = method == "POST" && action == "project";
++    if (!assign && !(method == "DELETE" && action.empty())) {
++        status = 400; out = Error("object preconditions require project or delete"); return true;
++    }
++    core::ObjectExpected expected;
++    const auto project = arg.find("expectedProject"), prefab = arg.find("expectedPrefab"), hidden = arg.find("expectedHidden");
++    bool unknown = false;
++    for (const auto& field : arg) if (field.first.rfind("expected", 0) == 0 &&
++        std::find(std::begin(kObjectExpectedKeys), std::end(kObjectExpectedKeys), field.first) == std::end(kObjectExpectedKeys)) unknown = true;
++    std::string name;
++    if (unknown || project == arg.end() || prefab == arg.end() || hidden == arg.end() ||
++        (hidden->second != "true" && hidden->second != "false") || project->second.size() > 100 ||
++        prefab->second.empty() || prefab->second.size() > 600 ||
++        !Number(arg, "expectedX", expected.pos.x, true) || !Number(arg, "expectedY", expected.pos.y, true) ||
++        !Number(arg, "expectedZ", expected.pos.z, true) || !Number(arg, "expectedYaw", expected.rot.yaw, true) ||
++        !Number(arg, "expectedPitch", expected.rot.pitch, true) || !Number(arg, "expectedRoll", expected.rot.roll, true) ||
++        !Number(arg, "expectedScale", expected.scale, true) || expected.scale <= 0 || expected.scale > 20 || (assign && !Name(arg, name))) {
++        status = 400; out = Error("complete valid object preconditions required"); return true;
++    }
++    expected.project = project->second; expected.prefab = prefab->second; expected.hidden = hidden->second == "true";
++    if (!Ready(status, out)) return true;
++    const char* reason = core::ConditionalObjectMutation(uid, expected, assign ? &name : nullptr);
++    if (reason) {
++        status = 409;
++        out = "{\"error\":\"Object precondition failed\",\"objectMismatch\":" + Bool(std::string(reason) == "object_changed") + ",\"mutationApplied\":false,\"reason\":" + Quote(reason) + "}";
++    } else if (assign) {
++        status = 200; out = "{\"uid\":" + Int(uid) + ",\"project\":" + Quote(name) + ",\"conditional\":true}";
++    } else {
++        status = 202; out = "{\"uid\":" + Int(uid) + ",\"queued\":true,\"conditional\":true}";
++    }
++    return true;
++}
++// End CrimsonMC conditional object request.
 +static mc_resource_probe::Service& ResourceProbes() {
 +    static mc_resource_probe::Service service({
 +        []() { return core::BuildOk() && std::string(core::GameVersion()) == "1.0.0.2976" &&
@@ -184,7 +340,10 @@ index 93f9853..22d4984 100644
      if (method == "GET" && path == "/api/status") {
          return "{\"apiVersion\":1,\"ready\":" + Bool(core::HooksReady() && core::GameThreadReady()) +
              ",\"gameVersion\":" + Quote(core::GameVersion()) + ",\"buildOk\":" + Bool(core::BuildOk()) +
-@@ -173,6 +213,43 @@ static std::string Handle(const std::string& method, const std::string& path, co
++            ",\"instanceId\":" + Quote(InstanceId()) + ",\"sessionPreconditions\":" + Bool(!InstanceId().empty()) + ",\"objectPreconditions\":true" +
+             ",\"buildMessage\":" + Quote(core::BuildMessage()) + ",\"pending\":" + Int(core::PendingSpawns()) + "}";
+     }
+     if (method == "GET" && path == "/api/player") {
          Vec3 p{}; if (!core::PlayerWorldPos(&p)) { status = 503; return Error("player is not in the world"); }
          return "{\"x\":" + Num(p.x) + ",\"y\":" + Num(p.y) + ",\"z\":" + Num(p.z) + "}";
      }
@@ -228,7 +387,20 @@ index 93f9853..22d4984 100644
      if (method == "GET" && path == "/api/camera") {
          // pos + axis of the camera object; the axis sign is ambiguous, so "view" is the horizontal direction from the camera
          // towards the player (the third-person camera always looks over the character), which is what callers want
-@@ -511,7 +588,8 @@ static bool SendAll(SOCKET s, const std::string& data) {
+@@ -442,9 +592,11 @@ static std::string Handle(const std::string& method, const std::string& path, co
+         std::string tail = path.substr(13); size_t slash = tail.find('/');
+         std::string idText = tail.substr(0, slash); int uid = 0;
+         Fields idField{ { "id", idText } }; if (!Integer(idField, "id", uid, true) || uid <= 0) { status = 400; return Error("invalid uid"); }
++        std::string action = slash == std::string::npos ? "" : tail.substr(slash + 1), conditional;
++        if (ConditionalObjectRequest(uid, method, action, arg, status, conditional)) return conditional;
+         int index = core::IndexOfUid(uid); if (index < 0) { status = 404; return Error("object not found"); }
+         auto list = core::Spawned(); if (index >= (int)list.size() || list[index].uid != uid) { status = 409; return Error("scene changed; retry"); }
+-        const auto& o = list[index]; std::string action = slash == std::string::npos ? "" : tail.substr(slash + 1);
++        const auto& o = list[index];
+         if (method == "GET" && action.empty()) return ObjectJson(o);
+         std::string out; if (!Ready(status, out)) return out;
+         if (method == "PATCH" && action.empty()) {
+@@ -511,7 +663,8 @@ static bool SendAll(SOCKET s, const std::string& data) {
  }
  static void Reply(SOCKET s, int status, const std::string& body) {
      const char* reason = status == 200 ? "OK" : status == 202 ? "Accepted" : status == 400 ? "Bad Request" :
@@ -238,10 +410,38 @@ index 93f9853..22d4984 100644
      std::string head = "HTTP/1.1 " + Int(status) + " " + reason + "\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " +
          Int((int)body.size()) + "\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n";
      SendAll(s, head + body);
-@@ -560,6 +638,19 @@ static void Client(SOCKET s, int port) {
+@@ -529,7 +682,8 @@ static void Client(SOCKET s, int port) {
+     if (a == std::string::npos || b == std::string::npos || line.substr(b + 1).rfind("HTTP/1.", 0) != 0) { Reply(s, 400, Error("invalid request line")); return; }
+     std::string method = line.substr(0, a), target = line.substr(a + 1, b - a - 1);
+     if (method != "GET" && method != "POST" && method != "PATCH" && method != "DELETE") { Reply(s, 400, Error("unsupported method")); return; }
+-    size_t length = 0; bool seenLength = false, seenHost = false;
++    size_t length = 0; bool seenLength = false, seenHost = false, seenSession = false;
++    std::string expectedSession;
+     for (size_t p = lineEnd + 2; p < end;) {
+         size_t q = request.find("\r\n", p); if (q == std::string::npos || q > end) break;
+         std::string h = request.substr(p, q - p); p = q + 2;
+@@ -546,6 +700,13 @@ static void Client(SOCKET s, int port) {
+         }
+         if (key == "origin") { Reply(s, 400, Error("browser origin requests are unsupported")); return; }
+         if (key == "transfer-encoding") { Reply(s, 400, Error("transfer encoding is unsupported")); return; }
++        if (key == "x-crimsonmc-session") {
++            if (seenSession) { Reply(s, 400, Error("duplicate session precondition")); return; }
++            seenSession = true;
++            expectedSession = h.substr(colon + 1);
++            const size_t first = expectedSession.find_first_not_of(" \t"), last = expectedSession.find_last_not_of(" \t");
++            expectedSession = first == std::string::npos ? "" : expectedSession.substr(first, last - first + 1);
++        }
+         if (key == "content-length") {
+             if (seenLength) { Reply(s, 400, Error("duplicate content length")); return; }
+             seenLength = true; std::string val = h.substr(colon + 1); char* stop = nullptr; unsigned long n = strtoul(val.c_str(), &stop, 10);
+@@ -560,8 +721,30 @@ static void Client(SOCKET s, int port) {
      while (body.size() < length) { int n = recv(s, buf, (int)(std::min)(sizeof buf, length - body.size()), 0); if (n <= 0) return; body.append(buf, n); }
      size_t qm = target.find('?'); std::string path = target.substr(0, qm);
      if (path.empty() || path[0] != '/' || path.find('%') != std::string::npos) { Reply(s, 400, Error("invalid path")); return; }
++    int sessionStatus = 200; std::string sessionFailure;
++    if (!CheckSession(method, path, seenSession, expectedSession, sessionStatus, sessionFailure)) {
++        Reply(s, sessionStatus, sessionFailure); return;
++    }
 +    // Validate the raw request before generic scalar flattening/query decoding.
 +    if (method == "POST" && path == "/api/prototype/resource-probe") {
 +        std::string resource;
@@ -257,7 +457,14 @@ index 93f9853..22d4984 100644
 +    }
      Fields fields = qm == std::string::npos ? Fields{} : Query(target.substr(qm + 1));
      if (length && !JsonObject(body, fields)) { Reply(s, 400, Error("expected flat JSON object")); return; }
++    if (seenSession && SessionObjectWrite(method, path) && path != "/api/objects") {
++        for (const char* key : kObjectExpectedKeys) if (fields.find(key) == fields.end()) {
++            Reply(s, 400, Error("complete object preconditions required with session header")); return;
++        }
++    }
      int status = 200; std::string result = Handle(method, path, fields, status); Reply(s, status, result);
+ }
+ // The listener is owned by Start/Stop, not by the server thread: Stop closes it, which makes the blocked accept() fail and
 diff --git a/asi/cdmodkit/overlay.cpp b/asi/cdmodkit/overlay.cpp
 index 9784267..220c646 100644
 --- a/asi/cdmodkit/overlay.cpp

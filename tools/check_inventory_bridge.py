@@ -9,7 +9,9 @@ import json
 from pathlib import Path
 import sys
 import threading
+import tempfile
 import unittest
+import uuid
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -18,8 +20,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from bridge import service
 from bridge.red_side import GameAPIError
+from bridge.native_identity import EXE_SHA256
+from bridge.native_reconcile import NativeReconciler
 
 PLACEMENT_ROUTES = ("/ui/place", "/ui/front", "/ui/place-selected", "/ui/front-selected")
+CONDITION_FIELDS = {"expectedProject": "project", "expectedPrefab": "prefab", "expectedHidden": "hidden",
+                    "expectedX": "x", "expectedY": "y", "expectedZ": "z", "expectedYaw": "yaw",
+                    "expectedPitch": "pitch", "expectedRoll": "roll", "expectedScale": "scale"}
 
 
 class FakeMC:
@@ -35,7 +42,7 @@ class FakeMC:
         self.fill(0, self.items[0], 2)
         self.fill(1, self.items[1], 1)
         self.blocks = []
-        self.placement_metadata = {}
+        self.placement_metadata = {"properties": {}}
         self.timeout_after_commit = False
 
     def fill(self, index, item, count):
@@ -104,23 +111,54 @@ class FakeRed:
         self.calls, self.objects = [], []
         self.available, self.fail_spawn = False, False
 
-    def request(self, path, method="GET", body=None):
+    def session_identity(self):
+        if not self.available:
+            raise GameAPIError("Game closed")
+        return {"pid": 123, "creationTime100ns": "123456", "imagePath": "C:/fixture/CrimsonDesert.exe",
+                "imageSha256": EXE_SHA256, "access": "PROCESS_QUERY_LIMITED_INFORMATION"}
+
+    def request(self, path, method="GET", body=None, *, expected_session=None):
         self.calls.append((path, method, deepcopy(body)))
+        if method in {"POST", "DELETE"} and expected_session != self.session_identity():
+            raise GameAPIError("fixture session precondition failed", status=409)
         if path == "/api/status":
             if not self.available: raise GameAPIError("Game closed")
-            return 200, {"ready": True, "buildOk": True, "gameVersion": "1.0.0.2976"}
+            return 200, {"apiVersion": 1, "ready": True, "buildOk": True, "gameVersion": "1.0.0.2976",
+                         "sessionPreconditions": True, "objectPreconditions": True, "instanceId": "123:123456"}
         if path == "/api/player": return 200, {"x": 0, "y": 0, "z": 0}
         if path == "/api/camera": return 200, {"view": {"x": 1, "z": 0}}
-        if path.startswith("/api/objects?"): return 200, {"items": deepcopy(self.objects), "nextOffset": None}
+        if path.startswith("/api/objects?"):
+            return 200, {"items": deepcopy(self.objects), "nextOffset": None,
+                         "offset": 0, "limit": 500, "total": len(self.objects)}
         if path == "/api/objects" and method == "POST":
             if self.fail_spawn: raise GameAPIError("Native object creation failed")
             uid = len(self.objects) + 1
-            self.objects.append({"uid": uid, **body})
-            return 202, {"uid": uid}
+            self.objects.append({"uid": uid, "hidden": False, "project": "Fixture", **body})
+            return 202, {"uid": uid, "queued": True}
         if path.endswith("/project"):
-            self.objects[-1]["project"] = body["name"]
-            return 200, {}
+            uid = int(path.split("/")[-2])
+            row = next(row for row in self.objects if row["uid"] == uid)
+            self.check_condition(row, body)
+            row["project"] = body["name"]
+            return 200, {"uid": uid, "project": body["name"], "conditional": True}
+        if path.startswith("/api/objects/"):
+            uid = int(path.rsplit("/", 1)[-1])
+            row = next((row for row in self.objects if row["uid"] == uid), None)
+            if row is None:
+                raise GameAPIError("object not found", status=404)
+            if method == "GET":
+                return 200, deepcopy(row)
+            if method == "DELETE":
+                self.check_condition(row, body)
+                self.objects.remove(row)
+                return 202, {"uid": uid, "queued": True, "conditional": True}
         raise GameAPIError("Unexpected fake red request")
+
+    @staticmethod
+    def check_condition(row, body):
+        if any(key not in body or body[key] != row[field] for key, field in CONDITION_FIELDS.items()):
+            raise GameAPIError("Object precondition failed", status=409,
+                               details={"objectMismatch": True, "mutationApplied": False, "reason": "object_changed"})
 
     def ground(self, x, y, z):
         self.calls.append(("ground", "READ", {"x": x, "y": y, "z": z}))
@@ -133,6 +171,8 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.bridge = service.Bridge.__new__(service.Bridge)
         self.bridge.red, self.bridge.origin = self.red, None
         self.bridge.lock, self.bridge.message = threading.Lock(), "Isolated bridge fixture"
+        self.directory = tempfile.TemporaryDirectory(prefix="crimsonmc-bridge-check-")
+        self.bridge.reconciler = NativeReconciler(self.red, Path(self.directory.name) / "journal.json", timeout=0)
         self.patch = patch.object(service, "mc", self.mc)
         self.patch.start()
         handler = type("IsolatedHandler", (service.Handler,), {"bridge": self.bridge, "log_message": lambda *_: None})
@@ -146,6 +186,7 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.server.server_close()
         self.worker.join()
         self.patch.stop()
+        self.directory.cleanup()
 
     def request(self, path, body=None, method=None):
         request = Request(self.base + path, data=None if body is None else json.dumps(body).encode(),
@@ -162,6 +203,8 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.bridge.origin = {"x": 0, "y": 0.03, "z": 0}
 
     def prepare_property_placement(self):
+        # Every subtest is an independent fake world/process, including its journal.
+        self.bridge.reconciler = NativeReconciler(self.red, Path(self.directory.name) / (str(uuid.uuid4()) + ".json"), timeout=0)
         self.enable_building()
         self.mc.calls.clear()
         self.mc.blocks.clear()
@@ -324,6 +367,37 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.assertIn("do not repeat", text)
         self.assertEqual(self.mc.slots[0]["count"], 1)
         self.assertEqual(len([path for path, body in self.mc.calls if body is not None]), 1)
+
+    def test_unresolved_native_spawn_blocks_next_click_but_inventory_remains_independent(self):
+        self.enable_building()
+        self.red.fail_spawn = True
+        self.assertEqual(self.request("/ui/place-selected", {"x": 0})[0], 400)
+        before = self.mc.slots[0]["count"]
+        self.red.fail_spawn = False
+        self.assertEqual(self.request("/ui/place-selected", {"x": 1})[0], 400)
+        self.assertEqual(self.mc.slots[0]["count"], before)
+        self.assertEqual(len([p for p, b in self.mc.calls if b is not None]), 1)
+        self.red.calls.clear()
+        self.assertEqual(self.request("/ui/grant", {"item": "minecraft:diamond_sword"})[0], 200)
+        self.assertEqual(self.red.calls, [])
+        self.assertEqual(self.request("/ui/reconnect", {})[0], 400)
+        self.assertFalse(any(method == "POST" for _, method, _ in self.red.calls))
+
+    def test_lost_mc_response_requires_read_only_restore_before_next_build(self):
+        self.enable_building()
+        self.mc.timeout_after_commit = True
+        self.assertEqual(self.request("/ui/place-selected", {"x": 0})[0], 400)
+        self.mc.timeout_after_commit = False
+        # Reconstruct the persistent component as after a bridge restart.
+        self.bridge.reconciler = NativeReconciler(self.red, self.bridge.reconciler.path, timeout=0)
+        self.assertEqual(self.request("/ui/place-selected", {"x": 1})[0], 400)
+        self.assertEqual(self.mc.slots[0]["count"], 1)
+        self.assertEqual(self.request("/ui/reconnect", {})[0], 200)
+        self.assertEqual(len([p for p, b in self.mc.calls if b is not None]), 1)
+        self.assertEqual(len(self.red.objects), 1)
+        self.assertIsNone(self.bridge.reconciler._load()["mcPending"])
+        self.assertEqual(self.request("/ui/place-selected", {"x": 1})[0], 200)
+        self.assertEqual(len(self.red.objects), 2)
 
     def test_all_placement_routes_forward_properties_and_preserve_mc_state(self):
         for route in PLACEMENT_ROUTES:

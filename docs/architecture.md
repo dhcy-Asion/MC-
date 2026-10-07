@@ -22,6 +22,8 @@ flowchart LR
 | `minecraft/src/main/java/local/crimsonmc/Authority.java` | Fabric 服务端初始化、实验库存、中文名称、方块、掉落和保存 | 使用真实 MC；当前是 36 格 `SimpleInventory`，原型合成已移除，没有 MC 玩家实体或生存战斗 |
 | `bridge/service.py` | 接收面板操作，转换坐标，调用 MC，并同步红沙代理实体 | 不计算配方／掉落；只维护 `CrimsonMCPrototype` 项目的对象 |
 | `bridge/red_side.py` | 原生 JSON HTTP 客户端、地面探针轮询 | 请求超时或未命中时报错，不猜测地面高度 |
+| `bridge/native_identity.py` | 查询实际游戏 PID、创建时间、映像路径与固定 EXE SHA；生成原生会话条件 | 仅申请 `PROCESS_QUERY_LIMITED_INFORMATION`，只缓存文件摘要，进程身份每次重新查询 |
+| `bridge/native_reconcile.py` | 正式蓝代理同步、MC 提交意图与原生操作的持久日志、部分完成恢复 | 先确认新对象全集合再删旧对象；未知创建不猜 UID／不重试，不等于渲染、碰撞或跨进程事务 |
 | `bridge/native_block_models.py` | 未接线的纯模型选择层：完整 block/properties、确切原木轴、候选／包身份与当前会话范围 | 只检查验证适配器提供的输入关系，不读取证据或自带生产准入；正式 service.py 仍用蓝代理 |
 | `red-side-patches/mc_panel.cpp/.h` | ImGui 操作面板、每帧 HUD 接入、异步 WinHTTP 请求 | 保留原 UI；没有 Steve 替换、手持物模型或心形 HUD |
 | `red-side-patches/mc_inventory_ui.cpp/.h`、`mc_inventory_protocol.h`、`mc_hotbar_layout.h` | 图标目录、36 格选择、底部九格 HUD、异步背包操作和有界解码 | 九格使用真实槽 0～8，选中 9～35 不伪造高亮；离线状态不可操作；不是原生手持／生命规则 |
@@ -29,7 +31,7 @@ flowchart LR
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断 | 只申请读和查询权限，不调用游戏函数、不创建角色或写游戏内存 |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
-| `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner 回链，以及精确类型的 mesh/preset/decoration 选项两次有界只读采样 | 区分真实 group、未映射尾部、FF 回退与未核对的最终 decoration 上界；不调用刷新、不写选择、不将候选资源名称称为已渲染 Steve |
+| `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 每段独立成功标记；未知渲染资源不解引用，不调用刷新、不写选择，不将候选名称称为已渲染 Steve |
 | `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
 | `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
 | `tools/build_block_registry.py`、`check_block_registry.py` | 在隔离 build 目录运行固定官方 vanilla 数据生成器，核对 1060 种方块、26684 个合法状态及客户端资源 | 不启动世界；不是 Fabric 实际运行注册表，不表示原生模型/碰撞/特殊渲染已接通 |
@@ -41,7 +43,7 @@ flowchart LR
 | `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 去声明 Y 轴对照已显示纹理并通过碰撞/清理；三轴完整验收、原生光照/采样仍未完成；单位立方碰撞不适用于特殊形状 |
 | `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 只写 ignored build；预演不安装，也不证明引擎渲染 |
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 关闭游戏时临时安装/恢复自有 21 项原木 overlay，核对新鲜索引、存档备份、所有权与并发锁 | 拒绝外部修改；恢复不覆盖后来存档；不安装 Steve 或接通正式 MC 映射 |
-| `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木，分别记录登记与实际碰撞证据 | 画面须另验；只清理精确自有 UID/变换，不消费 MC 材料；上游可能创建空编辑项目 |
+| `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木；`--side-view` 优先现有侧方候选以减少遮挡 | 默认取点不变、不移动角色／相机；画面须另验，只清理自有 UID／变换，不消费 MC 材料 |
 | `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
 | `tools/prepare_native_block_control.py`、`check_native_block_control.py` | 在独立 build 目录准备三种单资源对照：原蓝 prefab、原蓝 PAMI、仅去除原木 Y PAMI 的 XML 声明 | 每种对照的其余 20 项资源逐字保持；身份贯穿资源报告、安装收据与实体日志，不能视为原木显示验收 |
 | `tools/analyze_steve_rig.py`、`check_steve_rig.py` | 固定 PAB/PABC/PAC 与官方 Steve 的关节中心、独立矩阵、中立变形和坐标约定分析 | 只输出离线证据，不修改骨骼或安装角色；合成旋转不能证明引擎动画正确 |
@@ -89,8 +91,11 @@ HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 4
 | `POST /ui/shutdown` | `{}` | 停止桥接 HTTP 服务；不停止 MC 或拆除原生实体 |
 
 桥接以互斥锁串行执行操作／摘要读取，给 MC 修改生成 UUID `operationId`。
-目前没有客户端重试票据，也没有跨进程事务。背包读取／领取／选择／消耗只需要 MC，
-不依赖红沙或实验原点；方块放置仍须原生就绪和原点。结果未知时不会自动重试。
+目前没有客户端重试票据，也没有跨进程事务。放置／拆除提交前把 UUID、路径、正文和
+原状态写入本机日志；未解决的建造动作阻止后续放置／拆除及移动原点。背包读取／领取／
+选择／消耗仍只需要 MC，不受该建造保护锁定；结果未知时不会自动重试原修改。
+Restore Blocks 读取最新 MC 状态并恢复原生表示，不重发材料修改，也不保证任意客户端
+重复点击具有 exactly-once 语义。MC 收据仍只有下述内存生命周期。
 
 背包 TSV 约定（UTF-8 纯文本，名称中的 Tab／CR／LF 替换为空格）：
 
@@ -179,6 +184,19 @@ Gradle 启动参数 `crimsonmc.languageFile` 传入绝对路径。权威服务�
 ## 桥接 → 原生适配器：8765
 
 JSON API；`/api/status` 中 `apiVersion=1`、`ready` 和 `buildOk` 必须先检查。
+正式同步还要求 `sessionPreconditions=true`，且 `instanceId` 等于本机查询得到的
+`PID:creationTime100ns`。创建、归属分配和删除请求携带 `X-CrimsonMC-Session`。
+原生服务器在分派／入队前核对该条件，进程不符返回 409、`sessionMismatch:true` 和
+当前 `instanceId`；客户端请求前后检查不能代替这个服务器条件。没有 header 的旧诊断
+客户端保持兼容；新桥接遇到旧 ASI 会在消费建造材料前拒绝。
+归属与删除还要求 `objectPreconditions=true`，带最后 GET 回读的十个平铺条件字段：
+`expectedProject,expectedPrefab,expectedX,expectedY,expectedZ,expectedYaw,expectedPitch,
+expectedRoll,expectedScale,expectedHidden`。有会话 header 却缺完整条件返回 400。
+原生在同一注册表临界区精确比较 float32 回读值、项目、prefab 和 hidden 后才修改，
+成功返回 `conditional:true`。409 的 `object_changed` 表示字段已变化，保留冲突记录；
+`busy`／`unsupported` 不执行或延迟该变更，Restore 可重新读取后评估。当前只接受普通
+蓝代理，拒绝动态／standin／C5 来源；删除还拒绝已有移动代次的对象，以免与旧移动任务
+重复操作物理句柄。多个对象的整体同步仍不是一个场景事务。
 本项目使用以下上游／补丁接口，不等于全部上游 API：
 
 | 方法／路径 | 当前用途 |
@@ -215,7 +233,14 @@ MC 坐标为 `(x,y+64,z)`，红沙位置为 `origin + (x,y,z)`，一格约一米
 
 MC 修改先成功，桥接随后同步显示。原生创建失败时 MC 可能已扣材料／保存；应读取
 MC 状态后执行恢复，不能重复发送一次新的放置来“补显示”。桥接按项目归属、prefab、
-比例和坐标匹配代理，复用已有 UID，清理多余代理；不修改原版地图物体、NPC 或地形。
+完整位置／旋转／缩放匹配代理；新对象全部登记并回读后才清理多余代理。每个原生写
+先持久记录意图，排队 UID 必须在同一游戏实例再次查询和确认归属，不能把 202 当完成。
+明确会话拒绝可在 Restore 时重新评估；丢失创建响应且没有可靠 UID 时保留阻断，不按
+相似位置认领。游戏重启时不沿用旧 UID；尚未解决的旧进程创建需要保留日志进一步诊断。
+删除的未知结果只按同实例精确 GET/404 判断；其他 HTTP 错误不当作已删除。计划执行中
+MC 方块／属性变化会停止旧计划，独立库存 revision 变化不改变目标。这里确认的是登记，
+实际显示与碰撞仍需游戏内测试。对象条件检查解决单次变更与编辑器的竞争；若后续
+对象再次变化，后续操作会重新核对并保留失败记录，不能将其称为全场景原子事务。
 
 ## 状态和兼容约定
 
@@ -224,6 +249,7 @@ MC 状态后执行恢复，不能重复发送一次新的放置来“补显示�
 | MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`schemaVersion:2,selectedSlot,revision,slots,touched`；36 格 ItemStack.CODEC，每个 touched 保存 block 与完整 properties，包含空气墓碑 |
 | MC 实际区块 | 同目录中的原版世界文件；正常停止时保存 |
 | 红沙锚点 | `runtime/bridge-origin.json`：红沙世界坐标 `x,y,z` |
+| 原生同步日志 | `runtime/bridge-native-operations.json`：schema 1、MC 未决意图及带游戏实例的计划；历史计划保存在相邻 `bridge-native-operations-history/`，原子替换前 flush/fsync，拒绝坏格式 |
 | 安装归属 | `runtime/installation.json`：游戏路径、备份路径及已安装文件的 SHA |
 | 诊断输出 | `runtime/character-*.json`：原始指针／本机路径，只留本机 |
 
