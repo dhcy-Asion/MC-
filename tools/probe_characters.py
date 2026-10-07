@@ -89,6 +89,26 @@ def validate_build(profile, version, digest):
 def agreeing_slot(slots, required=4):
     return slots[0] if len(slots) == required and len(set(slots)) == 1 else None
 
+def decode_health_candidate(raw):
+    """Decode a stored entry candidate, not live/projected HP or a HUD maximum.
+
+    The fixed-build stat commit permits injured current < base with norm == 0.
+    Its current getter can project from timing fields outside this read. Entry
+    ID zero alone does not prove the owner's health mapping or the value units.
+    The numeric guard only bounds diagnostic data; it is not a health invariant.
+    """
+    if not isinstance(raw, (bytes, bytearray)) or len(raw) != 0x38:
+        return None
+    if struct.unpack_from("<i", raw)[0] != 0:
+        return None
+    values = [struct.unpack_from("<q", raw, offset)[0]
+              for offset in (8, 0x18, 0x20, 0x28, 0x30)]
+    return dict(zip(("current_stored_raw", "base_raw", "norm_raw", "floor_raw", "field_30_raw"), values),
+                entry_id=0, plausible=all(0 <= value <= 10**12 for value in values),
+                plausibility_scope="bounded_raw_fields_only",
+                health_identity_verified=False, projected_current_verified=False,
+                maximum_verified=False, units_verified=False, hud_ready=False)
+
 def position_signature(reader, body, realm, base, length):
     table = reader.value(body + 0x68)
     transform = reader.value(table + 0x1a0) if table else None
@@ -251,16 +271,9 @@ def inspect_manager(reader, slot, base, length):
         root = reader.value(marker + 0x18) if marker else None
         arr = reader.value(root + 0x58) if root else None
         stat = reader.read(arr, 0x38) if arr else None
-        hp = None
+        hp = decode_health_candidate(stat)
         vital_back = bool(root and marker and reader.value(root) == marker)
         owner_back = bool(marker and reader.value(marker + 8) == owner)
-        if stat and struct.unpack_from("<i", stat)[0] == 0:
-            current, hp_base, norm, floor, cap = [struct.unpack_from("<q", stat, off)[0] for off in (8, 0x18, 0x20, 0x28, 0x30)]
-            maximum = max(hp_base, cap)
-            plausible = 0 <= current <= maximum <= 10**12 and maximum > 0 and current == hp_base + norm
-            hp = {"current_raw": current, "base_raw": hp_base, "norm_raw": norm,
-                  "floor_raw": floor, "cap_raw": cap, "maximum_candidate_raw": maximum,
-                  "plausible": plausible}
         if round_trip or (tag in (1, 9)) or (hp and hp["plausible"] and vital_back and owner_back and "ChildOnlyInGameActor" in cls):
             records.append({"list_index": idx, "owner": hex(owner), "rtti": cls, "type_tag": tag,
                             "possessor": hex(possessor) if possessor else None,

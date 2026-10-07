@@ -587,5 +587,37 @@ py -3.12 -B tools/install_steve_probe.py --restore
 实机结果另记 [progress.md](progress.md)，隔离故障检查不代替原生显示／恢复验收。
 当前没有已验收的 Steve 游戏内显示、装备覆盖或实际外观恢复；临时共享资源包也
 不满足启用 mod 后跨重载自动持续 Steve 的完整目标。一次真实安装／启动后，受控
-选项表已读到两私有 basename，但接管再次被物理 Escape 停止，显示未确认。用户
-退出后已恢复原始文件，最新存档和 MC 状态保持，无待恢复项；详情见进度记录。
+选项表已读到两私有 basename，但接管再次被物理 Escape 停止。用户随后明确反馈
+仍是原角色，因此外观切换未通过。退出后已恢复原始文件，最新存档和 MC 状态保持，
+无待恢复项；详情见进度记录。
+
+## 私有头描述文件的单变量对照
+
+首测用户实际仍看到原角色。原版头 prefab 有同 basename 的 `.prefabdata_xml`，
+此前十资源 assembly 只有身体描述文件；固定 CDMW 的 Name 关系解析也会枚举这类
+配套文件。这支持补齐依赖的对照，但尚不能证明缺失文件导致首测失败。
+
+```powershell
+py -3.12 -B tools/prepare_steve_head_descriptor.py
+py -3.12 -B tools/check_steve_head_descriptor.py --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json
+py -3.12 -B tools/check_steve_probe.py --head-descriptor --rebuild
+```
+
+描述文件输出为 `build/steve-head-descriptor`，对照包为独立的
+`build/steve-head-descriptor-probe-overlay`。两个生成器均拒绝覆盖已有输出。
+默认十一资源包保留；新包恰好增加一项：
+`character/prefab/1_pc/01_phm/head/head/crimsonmc_steve_head_1_21_1.prefabdata_xml`。
+内容逐字复制固定原头 Head0001 的 466 字节，SHA256 为
+`d69be68d7e5592b40c601f98899465a69694eeff7213809b0063217a9faee56b`，flags 为 48。
+原七个字段、BOM／换行和六个文件引用保持，EmotionAnimationSet 保持原命名集；
+外部依赖未重复打包。原十一项 payload 和纹理注册表逐字不变，不同时修改 app、
+PAC、材质、prefab、骨架、缩放或 meshparam。
+
+安装器仅允许原两个报告或加上这一个固定报告；缺报告、多资源、错标志或字节变化
+均拒绝。对照收据的 `probeVariant=steve-kliff-head-descriptor-v1`，沿用
+`kind=steve-mesh-parameters`、原 Steve owner 和恢复事务，绑定完整包报告及安装哈希。
+独立头描述文件的 8 项检查通过；对照包的完整事务结果见进度。
+实际试验时使用 `install_steve_probe.py --install --plan build/steve-head-descriptor-probe-overlay`；
+退出后仍用 `install_steve_probe.py --restore`，不覆盖后来存档。
+该包尚待游戏内显示验证，不代表已实现 Steve 或已确认故障原因。

@@ -30,6 +30,8 @@ INPUT_PATHS = ({"property": 0x240000, "holder": 0x242000, "chars": 0x244003,
                 "text": "synthetic/controlled/declared_body.pac"},
                {"property": 0x241000, "holder": 0x243000, "chars": 0x245005,
                 "text": "synthetic/controlled/declared_skeleton.pab"})
+INITIAL_APPEARANCE_PATH = {"holder": 0x246000, "chars": 0x247003,
+                           "text": "synthetic/initial/declared_appearance.app_xml"}
 
 
 def input_path_scene_fixture():
@@ -46,6 +48,12 @@ def input_path_scene_fixture():
         reader.put(prop + 0x28, holder)
         reader.put(holder, chars)
         reader.segments[chars] = bytearray(row["text"].encode("ascii") + b"\0")
+    initial = INITIAL_APPEARANCE_PATH
+    reader.put(0x220000 + probe.INITIAL_APPEARANCE_INPUT_OFFSET, initial["holder"])
+    # Only the producer-proven held pointer and holder[0] are available. A
+    # fabricated property vtable/owner or resource prefix must not be read.
+    reader.put(initial["holder"], initial["chars"])
+    reader.segments[initial["chars"]] = bytearray(initial["text"].encode("ascii") + b"\0")
     reader.reads.clear()
     return reader
 
@@ -1486,7 +1494,7 @@ class AppearanceControllerChecks(unittest.TestCase):
     def test_77_declared_inputs_have_exact_owner_paths_and_no_rendered_equivalence(self):
         reader = input_path_scene_fixture()
         result = collect_input_paths(reader)
-        self.assertEqual((result["schemaVersion"], result["state"]), (6, "observed"))
+        self.assertEqual((result["schemaVersion"], result["state"]), (7, "observed"))
         self.assertTrue(result["renderInputPathsRequested"] and result["renderInputPathsObserved"]
                         and result["stableTwoSamples"])
         self.assertEqual(result["samples"][0], result["samples"][1])
@@ -1519,11 +1527,12 @@ class AppearanceControllerChecks(unittest.TestCase):
         reader = input_path_scene_fixture()
         result = collect(reader)
         self.assertEqual((result["schemaVersion"], result["state"]), (4, "observed"))
-        self.assertFalse(result["renderInputPathsRequested"] or result["renderInputPathsObserved"])
+        self.assertFalse(result["renderInputPathsRequested"] or result["renderInputPathsObserved"]
+                         or result["initialAppearanceInputObserved"])
         self.assertNotIn("renderInputPaths", result["samples"][0]["characterScene"])
         excluded = {BASE + rva for rva in probe.INPUT_PATH_WINDOWS}
-        excluded.update((0x220000 + 0xD8, 0x220000 + 0xE8))
-        self.assertFalse(any(at in excluded or 0x240000 <= at < 0x246000 for at, _ in reader.reads))
+        excluded.update((0x220000 + 0xD8, 0x220000 + 0xE8, 0x220000 + probe.INITIAL_APPEARANCE_INPUT_OFFSET))
+        self.assertFalse(any(at in excluded or 0x240000 <= at < 0x248000 for at, _ in reader.reads))
 
     def test_79_unknown_property_vtable_stops_its_fields_and_retains_peer(self):
         reader = input_path_scene_fixture(); prop = INPUT_PATHS[0]["property"]
@@ -1721,7 +1730,8 @@ class AppearanceControllerChecks(unittest.TestCase):
                     self.assertEqual(probe.main(), 1)
                 report = json.loads(output.read_bytes())
                 self.assertEqual(report["state"], "unstable")
-                self.assertFalse(report["renderInputPathsObserved"] or report["stableTwoSamples"])
+                self.assertFalse(report["renderInputPathsObserved"] or report["stableTwoSamples"]
+                                 or report["initialAppearanceInputObserved"])
                 self.assertTrue(report["samples"][0]["characterScene"]["renderInputPathsObserved"])
                 self.assertEqual(report["source"]["staticChainRvas"], [hex(x) for x in probe.code_windows(render_input_paths=True)])
                 reader.close.assert_called_once()
@@ -1741,7 +1751,164 @@ class AppearanceControllerChecks(unittest.TestCase):
             reader = input_path_scene_fixture(); reader.put(field, 0)
             result = collect_input_paths(reader)
             self.assertEqual(result["state"], "notReady")
-            self.assertFalse(result["renderInputPathsObserved"])
+            self.assertFalse(result["renderInputPathsObserved"] or result["initialAppearanceInputObserved"])
+
+    def test_94_initial_appearance_key_has_only_producer_proven_reads_and_no_render_claim(self):
+        reader = input_path_scene_fixture(); expected = INITIAL_APPEARANCE_PATH
+        result = collect_input_paths(reader)
+        self.assertEqual((result["schemaVersion"], result["state"]), (7, "observed"))
+        self.assertTrue(result["initialAppearanceInputObserved"] and result["stableTwoSamples"])
+        for sample in result["samples"]:
+            row = sample["characterScene"]["renderInputPaths"]["initialAppearanceInput"]
+            self.assertEqual((row["componentOffset"], row["path"]), ("0x168", expected["text"]))
+            self.assertTrue(row["initialAppearanceInputObserved"] and row["nulTerminated"])
+            self.assertEqual(row["pathBytesIncludingNulHex"], (expected["text"].encode() + b"\0").hex())
+            self.assertEqual(row["bytesRead"], len(expected["text"]) + 1)
+            for flag in ("loadedAppearanceResourceVerified", "selectedRenderResourceEquivalenceVerified",
+                         "renderedDescriptorVerified", "appearanceApplicationVerified"):
+                self.assertIs(row[flag], False)
+        holder, chars = expected["holder"], expected["chars"]
+        self.assertIn((0x220000 + 0x168, 8), reader.reads)
+        self.assertEqual({(at, size) for at, size in reader.reads if holder <= at < holder + 0x40}, {(holder, 8)})
+        self.assertEqual({(at, size) for at, size in reader.reads if chars <= at < chars + 512},
+                         {(chars + i, 1) for i in range(len(expected["text"]) + 1)})
+        self.assertFalse(result["renderedDescriptorVerified"] or result["steveModelLoaded"])
+        self.assertTrue(probe.summary(result, Path("synthetic.json"))["initialAppearanceInputObserved"])
+
+    def test_95_initial_key_observation_survives_empty_declared_pac_without_promoting_mode(self):
+        reader = input_path_scene_fixture()
+        reader.segments[INPUT_PATHS[0]["chars"]][:] = b"\0"
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "notReady")
+        self.assertTrue(result["stableTwoSamples"] and result["initialAppearanceInputObserved"])
+        self.assertFalse(result["renderInputPathsObserved"] or result["renderedDescriptorVerified"])
+        self.assertEqual(result["samples"][0]["characterScene"]["renderInputPaths"][
+            "initialAppearanceInput"]["path"], INITIAL_APPEARANCE_PATH["text"])
+
+    def test_96_absent_initial_holder_chars_or_empty_key_preserves_not_ready(self):
+        for absent in ("holder", "chars", "text"):
+            with self.subTest(absent=absent):
+                reader = input_path_scene_fixture(); row = INITIAL_APPEARANCE_PATH
+                if absent == "holder": reader.put(0x220000 + 0x168, 0)
+                elif absent == "chars": reader.put(row["holder"], 0)
+                else: reader.segments[row["chars"]][:] = b"\0"
+                result = collect_input_paths(reader)
+                self.assertEqual(result["state"], "notReady")
+                self.assertTrue(result["stableTwoSamples"])
+                self.assertFalse(result["initialAppearanceInputObserved"] or result["renderInputPathsObserved"])
+                evidence = result["samples"][0]["characterScene"]["renderInputPaths"]
+                self.assertTrue(all(item["declaredPathObserved"] for item in evidence["inputs"]))
+                self.assertEqual(evidence["initialAppearanceInput"]["state"], "notReady")
+                self.assertFalse(any(at < 0x10000 for at, _ in reader.reads))
+
+    def test_97_initial_holder_and_character_pointer_bounds_fail_closed(self):
+        row = INITIAL_APPEARANCE_PATH
+        for invalid in (1, 0x10003, 2**47):
+            reader = input_path_scene_fixture(); reader.put(0x220000 + 0x168, invalid)
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertNotIn((invalid, 8), reader.reads)
+            self.assertFalse(result["initialAppearanceInputObserved"] or result["stableTwoSamples"])
+        for invalid in (1, 2**47):
+            reader = input_path_scene_fixture(); reader.put(row["holder"], invalid)
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            evidence = result["samples"][0]["characterScene"]["renderInputPaths"]["initialAppearanceInput"]
+            self.assertEqual(evidence["failedChecks"], ["character-byte-address-bounds"])
+            self.assertNotIn((invalid, 1), reader.reads)
+
+    def test_98_initial_key_termination_ascii_and_byte_span_are_bounded(self):
+        row = INITIAL_APPEARANCE_PATH; chars = row["chars"]
+        for raw, failure in ((b"x" * 512, "bounded-NUL-termination"),
+                             (b"x\xff\0", "printable-ASCII-initial-Appearance-input"),
+                             (b"x\x01\0", "printable-ASCII-initial-Appearance-input")):
+            reader = input_path_scene_fixture(); reader.segments[chars] = bytearray(raw)
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            evidence = result["samples"][0]["characterScene"]["renderInputPaths"]["initialAppearanceInput"]
+            self.assertEqual(evidence["failedChecks"], [failure])
+            self.assertFalse(result["initialAppearanceInputObserved"] or result["renderInputPathsObserved"])
+            self.assertNotIn((chars + 512, 1), reader.reads)
+        reader = input_path_scene_fixture(); reader.segments[chars] = bytearray(b"x" * 511 + b"\0")
+        self.assertEqual(collect_input_paths(reader)["state"], "observed")
+        reader = input_path_scene_fixture(); reader.segments[chars] = bytearray(b"x")
+        self.assertIn("complete readable span", collect_input_paths(reader)["reason"])
+        reader = input_path_scene_fixture(); reader.put(row["holder"], 2**47 - 1)
+        reader.segments[2**47 - 1] = bytearray(b"x")
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertNotIn((2**47, 1), reader.reads)
+
+    def test_99_initial_held_pointer_and_character_pointer_are_reread(self):
+        for field, replacement in ((0x220000 + 0x168, INPUT_PATHS[0]["holder"]),
+                                   (INITIAL_APPEARANCE_PATH["holder"], INPUT_PATHS[0]["chars"])):
+            reader = input_path_scene_fixture(); original = reader.read; changed = False
+            def changing(at, size):
+                nonlocal changed
+                raw = original(at, size)
+                if at == field and not changed:
+                    changed = True; reader.put(field, replacement)
+                return raw
+            reader.read = changing
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertIn("interpreted fields changed", result["reason"])
+            self.assertFalse(result["initialAppearanceInputObserved"] or result["stableTwoSamples"])
+
+    def test_100_initial_characters_and_nul_are_reread_before_promotion(self):
+        row = INITIAL_APPEARANCE_PATH
+        for offset in (0, len(row["text"])):
+            reader = input_path_scene_fixture(); original = reader.read; changed = False
+            def changing(at, size):
+                nonlocal changed
+                raw = original(at, size)
+                if at == row["chars"] + len(row["text"]) and not changed:
+                    changed = True; reader.segments[row["chars"]][offset] = ord("X")
+                return raw
+            reader.read = changing
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertIn("interpreted fields changed", result["reason"])
+            self.assertFalse(result["initialAppearanceInputObserved"] or result["stableTwoSamples"])
+
+    def test_101_initial_key_change_between_samples_stays_unstable(self):
+        reader = input_path_scene_fixture()
+        result = collect_input_paths(reader, lambda _: reader.segments[INITIAL_APPEARANCE_PATH[
+            "chars"]].__setitem__(0, ord("X")))
+        self.assertEqual(result["state"], "unstable")
+        self.assertEqual(len(result["samples"]), 2)
+        self.assertFalse(result["initialAppearanceInputObserved"] or result["stableTwoSamples"])
+        self.assertNotEqual(result["samples"][0], result["samples"][1])
+
+    def test_102_initial_key_never_relaxes_type_control_or_content_contracts(self):
+        reader = input_path_scene_fixture()
+        reader.put(SCENE["renderWeak"] + 8, ADDR["owner"] + 0x28)
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertNotIn((ADDR["owner"] + 0x168, 8), reader.reads)
+        self.assertFalse(any(INITIAL_APPEARANCE_PATH["holder"] <= at < 0x248000 for at, _ in reader.reads))
+        reader = input_path_scene_fixture()
+        reader.segments[INITIAL_APPEARANCE_PATH["chars"]] = bytearray(b"synthetic/opaque.input-key\0")
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "observed")
+        evidence = result["samples"][0]["characterScene"]["renderInputPaths"]["initialAppearanceInput"]
+        self.assertEqual(evidence["path"], "synthetic/opaque.input-key")
+        self.assertNotIn("expectedNativeExtension", evidence)
+        self.assertFalse(evidence["loadedAppearanceResourceVerified"])
+
+    def test_103_initial_key_late_control_owner_change_prevents_success(self):
+        reader = input_path_scene_fixture(); original = reader.read; changed = False
+        row = INITIAL_APPEARANCE_PATH
+        def changing(at, size):
+            nonlocal changed
+            raw = original(at, size)
+            if at == row["chars"] + len(row["text"]) and not changed:
+                changed = True; reader.put(SCENE["ownerWeak"] + 8, ADDR["actor"] + 0x28)
+            return raw
+        reader.read = changing
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertFalse(result["initialAppearanceInputObserved"] or result["stableTwoSamples"])
 
 
 if __name__ == "__main__":

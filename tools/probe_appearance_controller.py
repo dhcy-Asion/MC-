@@ -37,6 +37,7 @@ SKINNED_MESH_META_VTABLE = 0x55739A0
 SKINNED_MESH_META_TYPE = ".?AV?$ReflectMetaObjectBind@VSkinnedMeshComponent@pa@@$0A@@pa@@"
 ANONYMOUS_RESOURCE_VTABLE = 0x5B3FC58
 RENDER_INPUT_PROPERTIES = {"pac": (0xD8, 0x5B37368), "pab": (0xE8, 0x5B43050)}
+INITIAL_APPEARANCE_INPUT_OFFSET = 0x168
 MAX_RENDER_INPUT_PATH_BYTES = 512
 # Constructor/owner/string consumers prove declared inputs only. These are not
 # assumed to be the paths consumed by the selected render resource/descriptor.
@@ -54,6 +55,15 @@ INPUT_PATH_WINDOWS = {
     0x47B6EA: bytes.fromhex("488b39488bd9488b0a488d1546a25e0648890b483bca740b8b411085c07804f0ff4110"),
     0x5B36F38: b"pac\0",
     0x5B41E58: b"pab\0",
+    # Initial Appearance loader key: callback output+30 is copied into the
+    # newly constructed exact Skinned +168 held string. This is an input key,
+    # not a loaded prefab list, selected PAC or rendered descriptor.
+    0x2D97018: bytes.fromhex("48c787580100000000803f4889af600100004c89b7680100004889af70010000"),
+    0x46B1D3: bytes.fromhex("4885db740a488bcbe870bb9202eb03488bc648894588"),
+    0x46B278: bytes.fromhex("498b57384885d274144883c230488b4d884881c168010000e84b040100"),
+    0x2439DB6: bytes.fromhex("4c8be9488b71104889b5581e0000488d5918488b412848833800"),
+    0x243A340: bytes.fromhex("488d4e30488bd3e8941304fe"),
+    0x243A389: bytes.fromhex("4c8d85d0150000488d5580488bcee8a4e6ffff"),
 }
 # Separate opt-in contract: the constructor and consumers prove only the +68
 # held reference, not a complete resource class, descriptor or native ABI.
@@ -505,13 +515,74 @@ def linked_resource_header(reader, address, base, length, evidence, *, watch=Non
         raise
 
 
+def initial_appearance_input(get, component, evidence):
+    """Read the initial Appearance loader key from an already exact Skinned.
+
+    Constructor and producer pins prove a direct held string at +168. No
+    property, weak owner, resource members or file-content interpretation is
+    applicable to this field. Characters remain byte addresses.
+    """
+    evidence.update(kind="initialAppearance", componentOffset=hex(INITIAL_APPEARANCE_INPUT_OFFSET),
+        state="notReady", initialAppearanceInputObserved=False, nulTerminated=False,
+        bytesRead=0, failedChecks=[], maxPathBytes=MAX_RENDER_INPUT_PATH_BYTES,
+        identityMode="exact-Skinned/direct-held-string/initial-Appearance-key-producer",
+        loadedAppearanceResourceVerified=False, selectedRenderResourceEquivalenceVerified=False,
+        renderedDescriptorVerified=False, appearanceApplicationVerified=False,
+        scope="initial Appearance loader input key only; not selected PAC or assembled prefab identity")
+    text_raw = bytearray()
+    label = "Skinned initial Appearance loader input"
+    try:
+        holder = struct.unpack("<Q", get(component + INITIAL_APPEARANCE_INPUT_OFFSET, 8,
+                                         label + " held string"))[0]
+        evidence.update(stringHolderPointer=hex(holder), present=bool(holder))
+        if not holder:
+            evidence["reason"] = "Initial Appearance string holder is absent"
+            return None
+        pointer(holder, label + " string holder")
+        chars = struct.unpack("<Q", get(holder, 8, label + " character pointer"))[0]
+        evidence["charactersPointer"] = hex(chars)
+        if not chars:
+            evidence["reason"] = "Initial Appearance character pointer is absent"
+            return None
+        if not 0x10000 <= chars < 2**47:
+            evidence["failedChecks"] = ["character-byte-address-bounds"]
+            raise ProbeError(label + " character pointer escaped the reviewed byte-address bounds")
+        for index in range(MAX_RENDER_INPUT_PATH_BYTES):
+            if chars + index >= 2**47:
+                evidence["failedChecks"] = ["character-byte-address-bounds"]
+                raise ProbeError(label + " character span escaped the reviewed address bounds")
+            byte = get(chars + index, 1, label + " character byte")[0]
+            text_raw.append(byte)
+            if byte == 0:
+                evidence["nulTerminated"] = True
+                break
+            if not 0x20 <= byte < 0x7F:
+                evidence["failedChecks"] = ["printable-ASCII-initial-Appearance-input"]
+                raise ProbeError(label + " is outside the reviewed printable ASCII string contract")
+        if not evidence["nulTerminated"]:
+            evidence["failedChecks"] = ["bounded-NUL-termination"]
+            raise ProbeError(label + " lacks NUL termination within the fixed path bound")
+        evidence["path"] = text_raw[:-1].decode("ascii")
+        if not evidence["path"]:
+            evidence["reason"] = "Initial Appearance loader input string is empty"
+            return None
+        evidence.update(state="observed", initialAppearanceInputObserved=True)
+        return None
+    except ProbeError as error:
+        evidence.update(state="rejected", failureReason=str(error))
+        return error
+    finally:
+        evidence.update(bytesRead=len(text_raw), pathBytesIncludingNulHex=text_raw.hex())
+
+
 def declared_render_input_paths(reader, component, base, evidence, *, watch):
-    """Read exactly two native file-input properties, never a selected descriptor.
+    """Read two native file-input properties and the initial Appearance key.
 
     The parent has already passed the dedicated Skinned reflection gate. Only
     direct property owners are supported; the constructor's weak branch stops
     before +28. Character pointers are byte addresses, unlike aligned holders.
     Every read byte, including NUL, joins the whole Scene stability recheck.
+    The separate initial key is a producer-proven held string, not a property.
     """
     evidence.update(state="notReady", inputs=[], maxPathBytes=MAX_RENDER_INPUT_PATH_BYTES,
         stringEncoding="printable-ASCII/NUL", selectedRenderResourceEquivalenceVerified=False,
@@ -602,8 +673,13 @@ def declared_render_input_paths(reader, component, base, evidence, *, watch):
             errors.append(error)
         finally:
             entry.update(bytesRead=len(text_raw), pathBytesIncludingNulHex=text_raw.hex())
+    evidence["initialAppearanceInput"] = {}
+    initial_error = initial_appearance_input(get, component, evidence["initialAppearanceInput"])
+    if initial_error:
+        errors.append(initial_error)
     evidence["state"] = ("rejected" if errors else "observed" if
-                         all(item["declaredPathObserved"] for item in evidence["inputs"]) else "notReady")
+                         all(item["declaredPathObserved"] for item in evidence["inputs"])
+                         and evidence["initialAppearanceInput"]["initialAppearanceInputObserved"] else "notReady")
     return errors
 
 
@@ -622,7 +698,8 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
             "renderLinkObserved": False, "renderSelectorFieldsObserved": False,
             "selectedResourceTypeVerified": False, "renderedDescriptorVerified": False,
             "appearanceApplicationVerified": False, "renderResourceIdentitiesObserved": False,
-            "renderResourceLinksObserved": False, "renderInputPathsObserved": False}
+            "renderResourceLinksObserved": False, "renderInputPathsObserved": False,
+            "initialAppearanceInputObserved": False}
     observed["characterScene"] = info
     watched = {}
     resource_identities = []
@@ -845,6 +922,9 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
         stable()
         if input_errors:
             raise input_errors[0]
+        info["initialAppearanceInputObserved"] = (info.get("renderInputPaths", {}).get(
+            "initialAppearanceInput", {}).get("initialAppearanceInputObserved", False)
+            and bool(parameter and info["renderSelectorFieldsObserved"]))
         info["renderInputPathsObserved"] = (info.get("renderInputPaths", {}).get("state") == "observed"
             and bool(parameter and info["renderSelectorFieldsObserved"]))
     info["state"] = "observed" if (parameter and info["renderSelectorFieldsObserved"]) else "notReady"
@@ -852,6 +932,7 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
         "Scene and parameter identity use pinned reflection/constructor evidence; primary MSVC RTTI is unavailable.",
         "The render-linked object must pass exact SceneObjectClient RTTI or the dedicated pinned SkinnedMeshComponent reflection contract.",
         "Declared PAC/PAB property strings do not verify the selected resource's rendered descriptor or grant native application permission.",
+        "The initial Appearance loader key does not verify its file content, assembled prefabs or selected head/body PAC.",
         "These observations do not establish appearance application ABI, thread, restore or slot semantics."]
 
 
@@ -951,7 +1032,7 @@ def sample(reader, base, length, observed, *, render_resource_identities=False, 
 
 def collect(reader, base, length, pause=time.sleep, *, render_resource_identities=False, render_resource_links=False,
             render_input_paths=False):
-    report = {"schemaVersion": 6 if render_input_paths else 5 if render_resource_links else 4,
+    report = {"schemaVersion": 7 if render_input_paths else 5 if render_resource_links else 4,
               "mode": "external-read-only", "state": "rejected", "samples": [],
               "renderResourceIdentitiesRequested": render_resource_identities,
               "renderResourceIdentitiesObserved": False,
@@ -959,6 +1040,7 @@ def collect(reader, base, length, pause=time.sleep, *, render_resource_identitie
               "renderResourceLinksObserved": False,
               "renderInputPathsRequested": render_input_paths,
               "renderInputPathsObserved": False,
+              "initialAppearanceInputObserved": False,
               "nativeFunctionsInvoked": False, "gameMemoryWritten": False, "heapScanned": False,
               "appearanceApplicationVerified": False, "appearanceRestoreVerified": False,
               "steveModelLoaded": False, "snapshotAtomic": False,
@@ -1000,13 +1082,14 @@ def collect(reader, base, length, pause=time.sleep, *, render_resource_identitie
         report["renderResourceIdentitiesObserved"] = scene["renderResourceIdentitiesObserved"]
         report["renderResourceLinksObserved"] = scene["renderResourceLinksObserved"]
         report["renderInputPathsObserved"] = scene["renderInputPathsObserved"]
+        report["initialAppearanceInputObserved"] = scene["initialAppearanceInputObserved"]
         report["state"] = "observed" if report["selectionBuffersPresent"] and report["loadedOptionsObserved"] else "notReady"
         if render_resource_links and not report["renderResourceLinksObserved"]:
             report["state"] = "notReady"
             report["reason"] = "The controlled Scene resource pair or a nested reference/header is absent"
         if render_input_paths and not report["renderInputPathsObserved"]:
             report["state"] = "notReady"
-            report["reason"] = "A controlled Scene field or declared PAC/PAB input property/string is absent or empty"
+            report["reason"] = "A controlled Scene field, declared PAC/PAB input or initial Appearance loader key is absent or empty"
         if report["state"] == "notReady":
             report.setdefault("reason", "Controller ownership was observed but a selection buffer or loaded option table is empty")
     except (ProbeError, RuntimeError, OSError, ValueError, struct.error) as error:
@@ -1039,7 +1122,7 @@ def summary(report, output):
             ("state", "reason", "stableTwoSamples", "controlledControllerChainObserved", "selectionBuffersPresent",
              "loadedOptionsObserved", "meshGroupChoiceBoundsVerified", "decorationComputedBoundsVerified",
              "characterSceneObserved", "sceneRenderSelectorObserved", "renderResourceIdentitiesObserved", "renderedDescriptorVerified",
-             "renderResourceLinksObserved", "renderInputPathsObserved",
+             "renderResourceLinksObserved", "renderInputPathsObserved", "initialAppearanceInputObserved",
              "nativeFunctionsInvoked", "gameMemoryWritten", "appearanceApplicationVerified", "steveModelLoaded")}}
 
 
@@ -1060,7 +1143,7 @@ def main():
     modes.add_argument("--render-resource-links", action="store_true",
                        help="Read exact anonymous parent +68 references and nested vtables only, without RTTI or descriptor interpretation")
     modes.add_argument("--render-input-paths", action="store_true",
-                       help="Read the exact controlled Skinned component's declared PAC/PAB property strings only; no selected descriptor equivalence")
+                       help="Read exact controlled Skinned declared PAC/PAB strings and initial Appearance loader key; no selected descriptor equivalence")
     parser.add_argument("--output", type=Path, default=ROOT / "runtime/appearance-controller.json")
     args = parser.parse_args()
     output = output_path(args.output)
@@ -1090,6 +1173,7 @@ def main():
                           renderResourceIdentitiesObserved=False,
                           renderResourceLinksObserved=False,
                           renderInputPathsObserved=False,
+                          initialAppearanceInputObserved=False,
                           renderedDescriptorVerified=False,
                           reason="Game module changed during the read-only observation")
         report.update(timeUtc=dt.datetime.now(dt.timezone.utc).isoformat(),

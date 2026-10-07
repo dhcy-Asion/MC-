@@ -380,6 +380,72 @@ basename 改为 `crimsonmc_steve_body_1_21_1`／`crimsonmc_steve_head_1_21_1`；
 恢复不覆盖后来存档。候选准入和关闭游戏的包事务均不能证明外观刷新 ABI、跨重载
 自动持续 Steve 或实际恢复。新包故障检查 **21/21** 通过，实机验收另行记录；窗口接管
 在物理 Escape 后停止，获得用户再次授权才恢复。首测新会话已实际读到 Body／Head
-两个私有 basename，均为合法的默认选项 0；这仍是选项声明，未验证渲染。随后再次
+两个私有 basename，均为合法的默认选项 0；这仍是选项声明。用户随后反馈实际仍是
+原角色，外观切换未通过。随后再次
 收到物理 Escape 停止；用户退出后临时包已恢复，详细证据见进度。流程及精确资源范围见
 [asset-pipeline.md](asset-pipeline.md)。
+
+### 首测反馈与初始装配分支
+
+用户补充首测进入世界后仍看到原角色，因此结论为选项配置已加载、外观切换未通过。
+固定 EXE 的 `0x46B100` 初始装配读取 Appearance 资源 `+0x38` 的 16 字节 Name 记录；
+`0x2438A40` 解析器将这些 Name 与 Customization MeshParamFile 分别保存。故选项表
+中的私有 basename 不能单独证明原始 app 部件被替换。当前两个已知 Macduff app 的
+Nude／Head Name 仍是原名，具体受控实例使用哪份 app 尚待读取。
+
+`0x72C230` 消费 controller `+0xF8/+0x100/+0x104` 的指针／count／capacity，元素
+为三字节 slot/oldRaw/newRaw。空队列跳过；new FF 经 preset/default 解析后，与 raw
+old 相同也跳过。`0x72C31B` 的 old FF 分支不删除旧选项，因此 FF→0 不能视为完整换装；
+0→0 则不执行替换。初始装配仍可能通过 `0x72C5D0→0x92F2B90` 排入 FF→FF。
+本次没有采样实际队列，不能断定空队列就是失败原因，也没有执行这些写入或调用。
+
+上游 controller vtable slot 1 在此 EXE 为 `0x723A00→0x723A10` 反射元数据 getter，
+并非已证明的 update 回调。World Builder pump 固定签名唯一命中 `0x42820E0`，但两者
+线程等价未验证；不从上游 hook 命名推断安全调用线程。磁盘研究的 45 个固定字节窗口、
+10 条精确 direct xref 通过，只是本版本代码证据。下一步只读初始 Appearance loader
+input key，模型实际显示与动画仍以游戏内结果为准。
+
+### 初始 Appearance loader key：schema 7
+
+`--render-input-paths` 保留原 PAC/PAB 输入，新增精确 Skinned `+0x168→holder[0]` 的
+直接 held string。构造 `0x2D9702A` 初始化该字段；`0x46B278..0x46B290` 把初始
+Appearance 资源 +30 复制进刚分配的 Skinned。loader `0x2439DB6..0x2439DD0` 保留
+task+18 路径 holder，`0x243A340..0x243A347` 写入输出资源 +30；随后解析 Appearance。
+新增六个指令边界窗口，共 46 个固定窗口验证，只有此 SHA 准入。
+
+样本中的 `characterScene.renderInputPaths.initialAppearanceInput.path` 是初始加载
+输入键；允许记录不透明键，不凭扩展名认定已载入文件。只允许对齐 holder，字符是
+有界字节地址；最多读取 512 字节，含 NUL，仅可打印 ASCII。字段、holder[0]、每个
+字符及 NUL 都加入完整 Scene 回读，再检查受控 owner 全链和两次样本一致。缺失或空
+为 notReady，越界／类型／短读／漂移拒绝；末尾模块或 SHA 变化清除顶层成功标记。
+
+顶层 `initialAppearanceInputObserved` 与 `renderInputPathsObserved` 分别表达稳定
+初始 key 和全部三项输入齐备。PAC 为空但初始 key 稳定时，前者可为 true，后者为
+false 且整体 notReady。默认及其他模式不读取 +168；默认 schema 4、links schema 5
+不变。**103/103** 隔离检查通过，新字段尚无实际游戏观测。它不证明加载完成、
+实际头身 PAC、装备或已执行外观替换，不提升任何 Steve／应用／descriptor 标记。
+
+### HP 候选诊断的语义修正
+
+原角色诊断把 current=base+norm 及 max(base,+30) 当成生命检查，固定 EXE 不支持
+这两个推断。唯一命中的 stat commit `0xC7EFDE0` 在 `0xC7EFEEA..0xC7EFF16` 写入
+norm=max(committed-base,0)，再写 stored current。因此受伤后 current<base、norm=0
+可以成立，旧检查会错误拒绝正常受伤状态。字段 +30 在提交路径用于阈值／+52 latch，
+尚未证明是 HUD 最大值；第三方补满生命的写入策略不能代替读取语义。
+
+当前 `probe_characters.py` 只保留原始字段 `current_stored_raw/base_raw/norm_raw/
+floor_raw/field_30_raw`、entry_id=0 和有界数值检查。完整读长必须为 0x38 字节；
+短读或首 ID 非零返回空。`plausibility_scope=bounded_raw_fields_only`，身份、时间投影、
+最大值、单位及 HUD 就绪标记均 false。13 项隔离检查包括受伤、零值、越界及短读；
+这只是诊断修复，没有接入心形 HUD。
+
+静态 getter `0x17AD810` 取 base +18；`0x17AD670→0x17B4040` 的 current 可依据元数据
+模式及时间、速率字段投影，不能始终用 stored +08。`0x17AF510` 的通用比例为
+(projectedCurrent-floor)/(base+norm-floor)；主生命类别消费者 `0x367400` 调用 base 和
+current getter，并按 `0x5D736F4` 的 1000.0 换算后比较 current/base。它是具体原生
+消费者，但尚未识别为 HUD 控件，也不证明任意首条 ID 0 记录就是当前角色生命。
+
+后续须从已验证受控 Client 身份出发，固定 Status 组件 RTTI／回链、元数据索引和
+单条 0x90 记录边界，重读完整链；然后确定实际 HP 模式、投影时钟及 UI 最大值策略，
+与受伤、治疗、最大 HP 变化和切角色逐项对照。当前不导入扫描前 32 条记录等启发式，
+不调用 native getter、不写状态。历史满血快照不能替代上述行为验收。

@@ -82,6 +82,7 @@ the earlier copy under Desktop/Git.
 | Steve 当前 neutral 补偿 | `py -3.12 -B tools/check_steve_current_rig.py --rebuild`；固定当前 PABC／descriptor、实际 byte 权重及量化后中立回放，UV／skin／拓扑保持；独立 combined 候选，不代表原生 shader／动画或私有分件已应用 |
 | Steve 私有十资源组合 | `py -3.12 -B tools/check_steve_assembly.py --rebuild`；固定来源与十项纯准入、身体补偿及头原字节；Head PABC 缺骨 93，原生头身 merge/scale 未验，不能以离线假设代替显示 |
 | Steve 两属性外观候选 | `py -3.12 -B tools/check_steve_appearance.py --rebuild`；固定原版 0009 提取、只改 Body/Head 默认 basename、逆替换逐字恢复；保留 Hair/Beard 与装备，Kliff 共享资源不是 actor-local |
+| Steve 头描述文件对照 | `py -3.12 -B tools/check_steve_head_descriptor.py --rebuild`；只增加私有头同名的原字节 HeadPrefabData，七字段和外部引用保持；不能据此断定它是首测未切换的原因 |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |
 | 全方块注册表 | `python -B tools/check_block_registry.py --rebuild`；固定 vanilla 数据生成器、合法状态乘积/ID/默认状态及客户端资源核对，不启动世界 |
@@ -90,7 +91,8 @@ the earlier copy under Desktop/Git.
 | 独立资源包预演 | `py -3.12 -B tools/check_asset_overlay.py --verify-game`；原索引保留、完整 DDS、逐项解包、路径与报告输出保护；预演不写游戏 |
 | 临时原木资源探针 | `py -3.12 -B tools/check_asset_probe.py`（隔离副本）；`python tools/check_native_block_probe.py`（隔离 HTTP）；实际安装／恢复先关闭游戏并核对备份／所有权，实机显示与碰撞另验收 |
 | 临时 Steve 十一资源探针 | `py -3.12 -B tools/check_steve_probe.py --rebuild`（隔离副本）；独立 `install_steve_probe.py` 安装／恢复 kind=steve-mesh-parameters，原木 CLI 默认 oak-log 不变；共用锁与收据但拒绝交叉恢复，不覆盖后续存档；实机显示和恢复单独验收 |
-| 外观只读输入路径 | `py -3.12 -B tools/check_appearance_controller.py`；schema 6 的 `--render-input-paths` 与 RTTI／links 模式互斥，固定 40 个静态窗口及两次全链采样；仅声明 PAC/PAB 输入，不证明实际 descriptor 或 Steve 加载 |
+| 临时 Steve 十二资源对照 | `py -3.12 -B tools/check_steve_probe.py --head-descriptor --rebuild`；单独输出，不替换默认十一资源；旧十一项逐字相同，仅增加固定头描述文件，沿用 Steve 专用收据／恢复事务 |
+| 外观只读输入路径 | `py -3.12 -B tools/check_appearance_controller.py`；schema 7 的 `--render-input-paths` 与 RTTI／links 模式互斥，固定 46 个静态窗口及两次全链采样；声明 PAC/PAB 与初始 Appearance 输入，均不证明实际 descriptor 或 Steve 加载 |
 | 原生资源读取客户端 | `py -3.12 -B tools/check_native_resource_probe.py`，使用隔离 HTTP/假进程身份及真实本地资源摘要；实际引擎读取单独记录，不等于模型显示 |
 | 原生资源读取接口 | `python -B tools/check_native_resources.py`；真实 backend 的隔离 host、故障释放/尺寸/队列测试、旧读取函数与补丁回建；完整 ASI 构建后再实测 |
 | Git 同步脚本 | `python tools/check_sync.py`，使用其临时仓库，不重写用户仓库历史 |

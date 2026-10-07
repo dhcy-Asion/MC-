@@ -23,6 +23,8 @@ class SteveProbeChecks(ProbeChecks):
     plan = steve.steve.DEFAULT_OUTPUT
     plan_loader = staticmethod(steve.load_plan)
     rebuild = False
+    resource_count = 11
+    rebuild_args = ()
 
     def install(self, **kwargs):
         return steve.install(self.plan, self.game, state_root=self.state, save_roots=[self.save],
@@ -63,7 +65,7 @@ class SteveProbeChecks(ProbeChecks):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 steve.load_plan(plan)
         path.write_text(json.dumps(original), encoding="utf-8")
-        self.assertEqual(len(steve.load_plan(plan)["payloads"]), 11)
+        self.assertEqual(len(steve.load_plan(plan)["payloads"]), self.resource_count)
 
     def test_17_oak_entrypoint_cannot_load_or_restore_steve_receipt(self):
         with self.assertRaisesRegex(ValueError, "21-resource"):
@@ -100,7 +102,7 @@ class SteveProbeChecks(ProbeChecks):
         from cdmw.core.archive_format import parse_archive_pamt
         target = steve.steve.appearance.TARGET_PATH
         entries = parse_archive_pamt(self.reviewed["package"] / "0.pamt")
-        self.assertEqual(len(entries), 11)
+        self.assertEqual(len(entries), self.resource_count)
         self.assertEqual([e.path for e in entries if not Path(e.path).name.startswith("crimsonmc_")], [target])
         old = (steve.steve.DEFAULT_APPEARANCE.parent / "template" / target).read_bytes()
         new = self.reviewed["payloads"][target]
@@ -113,7 +115,7 @@ class SteveProbeChecks(ProbeChecks):
         if not self.rebuild:
             self.skipTest("Use --rebuild to compose from the original installed indexes")
         output = self.test_root / "rebuilt-overlay"
-        result = subprocess.run([sys.executable, "-B", str(steve.ROOT / "tools/prepare_steve_probe_overlay.py"), "--output", str(output)],
+        result = subprocess.run([sys.executable, "-B", str(steve.ROOT / "tools/prepare_steve_probe_overlay.py"), "--output", str(output), *self.rebuild_args],
                                 cwd=steve.ROOT, capture_output=True, text=True, timeout=180)
         self.assertEqual(result.returncode, 0, result.stderr)
         for relative in (*self.reviewed["report"]["files"], "reports/overlay-report.json"):
@@ -122,13 +124,53 @@ class SteveProbeChecks(ProbeChecks):
         self.assert_original()
 
 
+class SteveHeadDescriptorProbeChecks(SteveProbeChecks):
+    plan = steve.steve.HEAD_DESCRIPTOR_OUTPUT
+    resource_count = 12
+    rebuild_args = ("--head-descriptor-report", str(steve.steve.HEAD_DESCRIPTOR_REPORT))
+
+    def test_22_control_adds_only_original_byte_head_descriptor(self):
+        old = steve.load_plan(steve.steve.DEFAULT_OUTPUT)
+        expected_path = "character/prefab/1_pc/01_phm/head/head/crimsonmc_steve_head_1_21_1.prefabdata_xml"
+        expected_sha = "d69be68d7e5592b40c601f98899465a69694eeff7213809b0063217a9faee56b"
+        self.assertEqual(set(self.reviewed["payloads"]) - set(old["payloads"]), {expected_path})
+        for path, data in old["payloads"].items():
+            self.assertEqual(self.reviewed["payloads"][path], data)
+        self.assertEqual(steve.native.sha256(self.reviewed["payloads"][expected_path]), expected_sha)
+        self.assertEqual(self.reviewed["probeVariant"], "steve-kliff-head-descriptor-v1")
+        self.assertEqual(old["probeVariant"], "steve-kliff-meshparams-v1")
+        self.assertEqual(self.reviewed["after"]["meta/0.pathc"], old["after"]["meta/0.pathc"])
+        receipt = self.install()
+        self.assertEqual(receipt["probeVariant"], self.reviewed["probeVariant"])
+        self.restore()
+        self.assert_original()
+
+    def test_23_descriptor_resource_and_provenance_cannot_be_separated(self):
+        plan, path, original = self.altered_plan()
+        for change in ("report", "resource", "unknown-report"):
+            report = json.loads(json.dumps(original))
+            if change == "report":
+                name = next(k for k in report["candidateReports"] if k.endswith("steve-head-descriptor-report.json"))
+                del report["candidateReports"][name]
+            elif change == "resource":
+                report["resources"] = [r for r in report["resources"] if not r["virtualPath"].endswith("head/crimsonmc_steve_head_1_21_1.prefabdata_xml")]
+            else:
+                report["candidateReports"]["build/unknown-report.json"] = "0" * 64
+            path.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                steve.load_plan(plan)
+        self.assert_original()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--plan", type=Path, default=SteveProbeChecks.plan)
+    parser.add_argument("--plan", type=Path)
+    parser.add_argument("--head-descriptor", action="store_true")
     parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
-    SteveProbeChecks.plan, SteveProbeChecks.rebuild = args.plan, args.rebuild
-    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(SteveProbeChecks))
+    case = SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks
+    case.plan, case.rebuild = args.plan or case.plan, args.rebuild
+    result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(case))
     raise SystemExit(not result.wasSuccessful())
 
 

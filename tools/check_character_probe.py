@@ -71,5 +71,69 @@ class DiagnosticGuards(unittest.TestCase):
         self.assertEqual(probe.correlate_positions(report)["matches"], [])
 
 
+class StoredHealthCandidate(unittest.TestCase):
+    @staticmethod
+    def entry(current=300000, base=300000, norm=0, floor=0, field30=0, entry_id=0):
+        raw = bytearray(0x38)
+        struct.pack_into("<i", raw, 0, entry_id)
+        for offset, value in zip((8, 0x18, 0x20, 0x28, 0x30), (current, base, norm, floor, field30)):
+            struct.pack_into("<q", raw, offset, value)
+        return bytes(raw)
+
+    def test_injured_stored_current_need_not_equal_base_plus_norm(self):
+        result = probe.decode_health_candidate(self.entry(current=250000))
+        self.assertTrue(result["plausible"])
+        self.assertEqual(result["current_stored_raw"], 250000)
+        self.assertEqual(result["base_raw"], 300000)
+        self.assertEqual(result["norm_raw"], 0)
+
+    def test_zero_current_and_zero_threshold_are_reported_without_maximum(self):
+        result = probe.decode_health_candidate(self.entry(current=0, floor=30000))
+        self.assertTrue(result["plausible"])
+        self.assertEqual(result["current_stored_raw"], 0)
+        self.assertEqual(result["floor_raw"], 30000)
+        self.assertEqual(result["field_30_raw"], 0)
+        self.assertNotIn("maximum_candidate_raw", result)
+        self.assertNotIn("cap_raw", result)
+
+    def test_field30_is_preserved_without_becoming_a_maximum(self):
+        for threshold in (100000, 900000):
+            with self.subTest(threshold=threshold):
+                result = probe.decode_health_candidate(self.entry(current=250000, field30=threshold))
+                self.assertTrue(result["plausible"])
+                self.assertEqual(result["field_30_raw"], threshold)
+                self.assertFalse(result["maximum_verified"])
+                self.assertNotIn("maximum_candidate_raw", result)
+
+    def test_numeric_screen_does_not_claim_a_coherent_or_projected_snapshot(self):
+        result = probe.decode_health_candidate(self.entry(current=350000))
+        self.assertTrue(result["plausible"])
+        self.assertEqual(result["plausibility_scope"], "bounded_raw_fields_only")
+        for field in ("health_identity_verified", "projected_current_verified", "maximum_verified",
+                      "units_verified", "hud_ready"):
+            with self.subTest(field=field):
+                self.assertIs(result[field], False)
+
+    def test_out_of_range_raw_fields_are_retained_but_not_plausible(self):
+        for name in ("current", "base", "norm", "floor", "field30"):
+            for value in (-1, 10**12 + 1, -(2**63), 2**63 - 1):
+                with self.subTest(name=name, value=value):
+                    result = probe.decode_health_candidate(self.entry(**{name: value}))
+                    self.assertFalse(result["plausible"])
+                    self.assertFalse(result["hud_ready"])
+        self.assertTrue(probe.decode_health_candidate(self.entry(current=10**12))["plausible"])
+
+    def test_wrong_entry_id_is_not_decoded_as_health(self):
+        for entry_id in (-1, 1, 22, 0x7fffffff):
+            with self.subTest(entry_id=entry_id):
+                self.assertIsNone(probe.decode_health_candidate(self.entry(entry_id=entry_id)))
+
+    def test_incomplete_or_oversized_read_never_decodes(self):
+        raw = self.entry()
+        for bad in (None, b"", raw[:4], raw[:0x30], raw[:-1], raw + b"\0", "0" * 0x38):
+            with self.subTest(length=len(bad) if bad is not None else None):
+                self.assertIsNone(probe.decode_health_candidate(bad))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

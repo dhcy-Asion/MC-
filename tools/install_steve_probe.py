@@ -1,4 +1,4 @@
-"""Install/restore only the reviewed, temporary eleven-resource Steve probe.
+"""Install/restore the fixed Steve probe or its one-head-descriptor control.
 
 This uses the existing transaction, backup, lock and recovery implementation.
 The default oak-log installer cannot install or restore this separate probe kind.
@@ -41,24 +41,26 @@ def load_plan(plan):
     if not isinstance(name, str) or not name.isascii() or not name.isdigit() or len(name) != 4 or not 36 <= int(name) <= 9999:
         raise ValueError("Unsafe Steve overlay directory")
     candidate_reports = report.get("candidateReports")
-    if not isinstance(candidate_reports, dict) or len(candidate_reports) != 2:
-        raise ValueError("Steve probe requires exactly two fixed candidate reports")
+    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3):
+        raise ValueError("Steve probe requires two fixed reports, optionally the fixed head descriptor")
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
         if file.name in by_name or native.file_hash(file) != digest:
             raise ValueError("Steve candidate report changed or is ambiguous")
         by_name[file.name] = file
-    if set(by_name) != {"steve-assembly-report.json", "steve-appearance-report.json"}:
+    required = {"steve-assembly-report.json", "steve-appearance-report.json"}
+    if set(by_name) not in (required, required | {"steve-head-descriptor-report.json"}):
         raise ValueError("Unrecognized Steve candidate report names")
     models = by_name["steve-assembly-report.json"]
     appearance = by_name["steve-appearance-report.json"]
-    expected, inputs, snapshot = steve.candidates(models, appearance)
+    head_descriptor = by_name.get("steve-head-descriptor-report.json")
+    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor)
     if inputs != candidate_reports:
         raise ValueError("Steve candidate provenance changed")
     rows = report.get("resources")
-    if not isinstance(rows, list) or len(rows) != 11 or {r.get("virtualPath") for r in rows} != set(expected):
-        raise ValueError("Steve probe must contain exactly the reviewed eleven resources")
+    if not isinstance(rows, list) or len(rows) != len(expected) or {r.get("virtualPath") for r in rows} != set(expected):
+        raise ValueError("Steve probe must contain exactly the reviewed resource set")
     payloads = {}
     for row in rows:
         item = expected[row["virtualPath"]]
@@ -90,7 +92,8 @@ def load_plan(plan):
     overlay.audit_registry(before["meta/0.pathc"], after["meta/0.pathc"], textures)
     steve.orientation.verify_snapshot(snapshot)
     return {"plan": plan, "report": report, "reportSha256": native.sha256(raw), "name": name,
-            "probeVariant": "steve-kliff-meshparams-v1", "candidateReport": str(models),
+            "probeVariant": "steve-kliff-head-descriptor-v1" if head_descriptor else "steve-kliff-meshparams-v1",
+            "candidateReport": str(models),
             "candidateReportSha256": native.file_hash(models), "package": package,
             "payloads": payloads, "before": before, "after": after}
 
