@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import struct
 import tempfile
 import unittest
@@ -14,6 +15,66 @@ BASE = 0x140000000
 LENGTH = 0x173AB000
 ADDR = {name: 0x20000 + i * 0x1000 for i, name in enumerate(
     ("root", "manager", "user", "actor", "table", "control", "middle", "controller", "owner", "weak", "members", "mesh", "decoration"))}
+OPTIONS = {"meshParams": 0x100000, "preset": 0x101000, "decorationParams": 0x102000,
+           "meshRows": 0x110000, "decorationRows": 0x120000, "options": 0x140000,
+           "presetMesh": 0x150000, "presetDecoration": 0x151000}
+
+
+def option_fixture(reader):
+    """Synthetic resource inputs; no game resources or process are accessed."""
+    def text(holder, chars, name):
+        reader.block(holder, 0x20)
+        reader.put(holder, chars)
+        reader.block(chars, 512)
+        reader.segments[chars][:len(name)] = name.encode("utf-8")
+    for index, (name, (offset, size, vtable, rtti)) in enumerate(probe.RESOURCE_TYPES.items()):
+        address = OPTIONS[name]
+        reader.block(address, size)
+        reader.put(ADDR["controller"] + offset, address)
+        vt, col = BASE + vtable, BASE + 0x50000 + index * 0x100
+        reader.put(address, vt)
+        reader.put(vt - 8, col)
+        reader.segments[col] = bytearray(struct.pack("<6I", 1, 0, 0, 0x51000 + index * 0x100,
+                                                  0x52000 + index * 0x100, col - BASE))
+        reader.names[address] = rtti
+        holder, chars = 0x160000 + index * 0x1000, 0x160100 + index * 0x1000
+        text(holder, chars, "synthetic/" + name)
+        reader.put(address + 0x20, holder)
+    reader.block(OPTIONS["presetMesh"], 16)
+    reader.segments[OPTIONS["presetMesh"]][:] = b"\xff\x01" + b"\xff" * 14
+    reader.block(OPTIONS["presetDecoration"], 250)
+    reader.segments[OPTIONS["presetDecoration"]][:] = b"\xff" * 250
+    for offset, array, count in ((0x38, OPTIONS["presetMesh"], 16), (0x28, OPTIONS["presetDecoration"], 250)):
+        reader.put(OPTIONS["preset"] + offset, array)
+        reader.put(OPTIONS["preset"] + offset + 8, count, "<I")
+        reader.put(OPTIONS["preset"] + offset + 12, count, "<I")
+    reader.segments[ADDR["mesh"]][:16] = b"\x00" + b"\xff" * 15
+    for name, offset, array, count, stride in (("meshParams", 0x28, OPTIONS["meshRows"], 2, 0x58),
+                                             ("decorationParams", 0x48, OPTIONS["decorationRows"], 3, 0x98)):
+        reader.block(array, 250 * stride if name == "decorationParams" else count * stride)
+        reader.put(OPTIONS[name] + offset, array)
+        reader.put(OPTIONS[name] + offset + 8, count, "<I")
+        reader.put(OPTIONS[name] + offset + 12, count, "<I")
+    for group in range(2):
+        row, array = OPTIONS["meshRows"] + group * 0x58, OPTIONS["options"] + group * 0x1000
+        reader.block(array, 2 * 0x120)
+        reader.put(row, array)
+        reader.put(row + 8, 2, "<I"); reader.put(row + 12, 2, "<I")
+        reader.put(row + 0x10, 0, "<B")
+        for choice in range(2):
+            refs = 0x180000 + (group * 2 + choice) * 0x1000
+            holder, chars = refs + 0x100, refs + 0x200
+            reader.block(refs, 8)
+            reader.put(refs, holder)
+            text(holder, chars, f"synthetic/group{group}/choice{choice}.prefab")
+            option = array + choice * 0x120
+            reader.put(option, refs)
+            reader.put(option + 8, 1, "<I"); reader.put(option + 12, 1, "<I")
+    for index in range(250):
+        row = OPTIONS["decorationRows"] + index * 0x98
+        reader.put(row + 0x3C, -1, "<i")
+        for off, value in ((0x7E, 7), (0x7F, 4), (0x80, 10), (0x81, 20), (0x82, 12), (0x83, 0xFF)):
+            reader.put(row + off, value, "<B")
 
 
 def fixture():
@@ -57,6 +118,7 @@ def fixture():
         reader.put(ADDR["controller"] + off + 8, count, "<I")
         reader.put(ADDR["controller"] + off + 12, count, "<I")
         reader.segments[ADDR[name]][:count] = bytes(range(count))
+    option_fixture(reader)
     return reader
 
 
@@ -222,7 +284,7 @@ class AppearanceControllerChecks(unittest.TestCase):
             target = folder / "result.json"
             result = collect(fixture())
             probe.write_report(target, result)
-            self.assertEqual(target.read_bytes().count(b'"state"'), 1)
+            self.assertEqual(json.loads(target.read_bytes())["state"], "observed")
             before = target.read_bytes()
             with self.assertRaisesRegex(probe.ProbeError, "already exists"):
                 probe.write_report(target, result)
@@ -270,6 +332,176 @@ class AppearanceControllerChecks(unittest.TestCase):
         self.assertIn("opaque controller holder", result["reason"])
         self.assertNotIn("controller", result["samples"][1])
         self.assertFalse(result["controlledControllerChainObserved"])
+
+    def test_18_loaded_resources_require_exact_primary_types_and_vtables(self):
+        for name in probe.RESOURCE_TYPES:
+            for bad_type in (True, False):
+                reader = fixture()
+                if bad_type:
+                    reader.names[OPTIONS[name]] = ".?AVUnsupported@pa@@"
+                else:
+                    original_vt = reader.value(OPTIONS[name])
+                    vt = BASE + 0x9000
+                    reader.put(vt - 8, reader.value(original_vt - 8))
+                    reader.put(OPTIONS[name], vt)
+                result = collect(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertIn(name, result["reason"])
+                self.assertNotIn((OPTIONS["meshRows"], 16), reader.reads)
+
+    def test_19_mesh_ff_uses_non_ff_preset_then_real_group_default(self):
+        reader = fixture()
+        result = collect(reader)
+        groups = result["samples"][0]["loadedOptions"]["meshGroups"]
+        self.assertEqual(groups[0]["fallbackSource"], "selection")
+        self.assertEqual(groups[1]["fallbackSource"], "preset")
+        self.assertEqual(groups[1]["prefabNames"], ["synthetic/group1/choice1.prefab"])
+        self.assertTrue(result["meshGroupChoiceBoundsVerified"])
+        coverage = result["samples"][0]["loadedOptions"]["meshSelectionCoverage"]
+        self.assertEqual(coverage["unmappedSelectionCount"], 14)
+        self.assertFalse(coverage["selectionGroupCountsMatch"])
+        self.assertFalse(result["samples"][0]["selections"]["mesh"]["loadedOptionBoundsVerified"])
+        reader = fixture()
+        reader.put(ADDR["controller"] + 0xA8, 2, "<I")
+        self.assertTrue(collect(reader)["samples"][0]["selections"]["mesh"]["loadedOptionBoundsVerified"])
+        for null_preset in (False, True):
+            reader = fixture()
+            if null_preset:
+                reader.put(ADDR["controller"] + 0x110, 0)
+            else:
+                reader.put(OPTIONS["presetMesh"] + 1, 0xFF, "<B")
+            result = collect(reader)
+            group = result["samples"][0]["loadedOptions"]["meshGroups"][1]
+            self.assertEqual(result["state"], "observed")
+            self.assertEqual(group["fallbackSource"], "groupDefault")
+            self.assertEqual(group["prefabNames"], ["synthetic/group1/choice0.prefab"])
+
+    def test_20_resource_vectors_stop_at_fixed_count_and_capacity_bounds(self):
+        for name, offset, count, capacity in (("meshParams", 0x28, 17, 17),
+                    ("decorationParams", 0x48, 251, 251), ("preset", 0x38, 17, 17),
+                    ("preset", 0x28, 251, 251), ("meshParams", 0x28, 2, 1),
+                    ("decorationParams", 0x48, 3, 4097)):
+            reader = fixture()
+            reader.put(OPTIONS[name] + offset + 8, count, "<I")
+            reader.put(OPTIONS[name] + offset + 12, capacity, "<I")
+            result = collect(reader)
+            self.assertIn("count/capacity", result["reason"])
+            self.assertTrue(all(size <= 4096 for _, size in reader.reads))
+        for offset, replacement in ((8, 257), (12, 1)):
+            reader = fixture()
+            reader.put(OPTIONS["meshRows"] + offset, replacement, "<I")
+            self.assertIn("count/capacity", collect(reader)["reason"])
+            self.assertFalse(any(address == OPTIONS["options"] for address, _ in reader.reads))
+
+    def test_21_mesh_actual_group_bounds_stop_direct_invalid_choices(self):
+        reader = fixture()
+        reader.put(ADDR["mesh"], 2, "<B")
+        result = collect(reader)
+        self.assertIn("real group's option count", result["reason"])
+        self.assertFalse(any(address == OPTIONS["options"] + 2 * 0x120 for address, _ in reader.reads))
+        group = result["samples"][0]["loadedOptions"]["meshGroups"][0]
+        self.assertTrue(group["nativeWouldSkipOutOfBoundsCandidate"])
+        reader = fixture()
+        reader.put(OPTIONS["presetMesh"] + 1, 8, "<B")
+        result = collect(reader)
+        self.assertEqual(result["state"], "observed")
+        self.assertFalse(result["meshGroupChoiceBoundsVerified"])
+        self.assertEqual(result["samples"][0]["loadedOptions"]["meshGroups"][1]["prefabNames"], [])
+
+    def test_22_only_bounded_current_option_prefab_references_are_read(self):
+        reader = fixture()
+        reader.put(OPTIONS["options"] + 8, 33, "<I")
+        reader.put(OPTIONS["options"] + 12, 33, "<I")
+        self.assertIn("prefab references count/capacity", collect(reader)["reason"])
+        reader = fixture()
+        reader.segments[0x180000] = reader.segments[0x180000][:7]
+        self.assertIn("prefab references complete", collect(reader)["reason"])
+        reader = fixture()
+        reader.put(0x180000, 0x70000)
+        self.assertIn("chars pointer complete readable span", collect(reader)["reason"])
+        self.assertTrue(all(size <= 4096 for _, size in reader.reads))
+
+    def test_23_names_are_bounded_untrusted_strings_and_never_files(self):
+        for raw in (b"A" * 512, b"\xff\0", b"a\nb\0"):
+            reader = fixture()
+            reader.segments[0x180200][:len(raw)] = raw
+            result = collect(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertFalse(result["appearanceApplicationVerified"])
+        reader = fixture()
+        reader.segments[0x180200] = reader.segments[0x180200][:3]
+        self.assertIn("complete readable span", collect(reader)["reason"])
+
+    def test_24_interpreted_resource_fields_are_reread_and_preserve_failure(self):
+        reader = fixture()
+        original = reader.read
+        times = []
+        def changing(address, size):
+            if address == OPTIONS["meshRows"] and size == 16:
+                times.append(1)
+                if len(times) > 1:
+                    changed = bytearray(original(address, size))
+                    changed[8] = 1
+                    return bytes(changed)
+            return original(address, size)
+        reader.read = changing
+        result = collect(reader)
+        self.assertIn("resource fields changed", result["reason"])
+        self.assertFalse(result["controlledControllerChainObserved"])
+        self.assertEqual(len(result["samples"][0]["loadedOptions"]["meshGroups"]), 2)
+        reader = fixture()
+        def unloading(_):
+            reader.put(OPTIONS["meshParams"] + 0x15, 1, "<B")
+        result = collect(reader, unloading)
+        self.assertEqual(result["state"], "unstable")
+        self.assertEqual(len(result["samples"]), 2)
+        self.assertTrue(result["samples"][0]["stableDuringSample"])
+
+    def test_25_loaded_resource_invalidation_stops_unknown_state(self):
+        for name in probe.RESOURCE_TYPES:
+            for flag in (1, 2):
+                reader = fixture()
+                reader.put(OPTIONS[name] + 0x15, flag, "<B")
+                result = collect(reader)
+                self.assertIn("unknown resource flag", result["reason"])
+                self.assertFalse(result["controlledControllerChainObserved"])
+
+    def test_26_missing_loaded_parameter_resources_preserve_not_ready_chain(self):
+        for name in ("meshParams", "decorationParams"):
+            reader = fixture()
+            reader.put(ADDR["controller"] + probe.RESOURCE_TYPES[name][0], 0)
+            result = collect(reader)
+            self.assertEqual(result["state"], "notReady")
+            self.assertTrue(result["controlledControllerChainObserved"])
+            self.assertFalse(result["loadedOptionsObserved"])
+
+    def test_27_decoration_records_declared_inputs_without_claiming_final_bounds(self):
+        reader = fixture()
+        reader.put(ADDR["decoration"], 0xFF, "<B")
+        reader.put(ADDR["decoration"] + 1, 0xFF, "<B")
+        reader.put(OPTIONS["presetDecoration"] + 1, 18, "<B")
+        result = collect(reader)
+        groups = result["samples"][0]["loadedOptions"]["decorationGroups"]
+        self.assertEqual(groups[0]["fallbackCandidate"], 12)
+        self.assertEqual(groups[0]["fallbackSource"], "groupDefault")
+        self.assertEqual(groups[1]["fallbackCandidate"], 18)
+        self.assertEqual(groups[1]["fallbackSource"], "preset")
+        self.assertEqual(groups[2]["rawChoice"], 2)  # Below declared min is not a final-bound failure.
+        self.assertEqual(groups[2]["declaredMin"], 10)
+        self.assertEqual(groups[2]["modeByte"], 4)
+        self.assertFalse(result["decorationComputedBoundsVerified"])
+        self.assertTrue(all(not g["nativeComputedBoundsVerified"] for g in groups))
+        self.assertFalse(result["samples"][0]["loadedOptions"]["slotSemanticsVerified"])
+
+    def test_28_full_decoration_input_remains_bounded_and_output_is_representative(self):
+        reader = fixture()
+        reader.put(OPTIONS["decorationParams"] + 0x50, 250, "<I")
+        reader.put(OPTIONS["decorationParams"] + 0x54, 250, "<I")
+        result = collect(reader)
+        self.assertEqual(result["state"], "observed")
+        self.assertEqual(len(result["samples"][0]["loadedOptions"]["decorationGroups"]), 250)
+        self.assertLess(len(json.dumps(result, ensure_ascii=False, indent=2).encode()), 512 * 1024)
+        self.assertTrue(all(size <= 4096 for _, size in reader.reads))
 
 
 if __name__ == "__main__":

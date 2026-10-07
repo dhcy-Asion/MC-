@@ -55,9 +55,15 @@ C 仅去除 XML 声明的对照完成封装/隔离检查并短暂安装，启动
 
 随后用户明确恢复接管，本次 C 对照已实机读回 15/15、原木像素纹理可见（角色部分
 遮挡）、碰撞高度增量 1.15198 米，UID 1 已清理、地面回到 0，MC 状态保持。
-**当前 C 收据 `c2fb925c9d2b423996d764886408cf1a` 仍 installed；退出确认界面已打开，
-正在等待用户手动确认退出后恢复。不得在游戏运行时卸载此临时包。**
+**C 收据 `c2fb925c9d2b423996d764886408cf1a` 已在确认游戏退出后恢复：38 项原始
+文件哈希一致，0041 与 active receipt 已移除，测试对象已清理。**
 本次外观控制器只读链两次稳定采样也成功；尚未写入外观或加载 Steve。
+随后准备修复后三轴包，overlay 13 项及隔离安装／恢复 16 项通过；临时收据
+`5c89c03dc0614c7ba5066598062c0711` 用于同包三轴验证。新进程 PID 59252
+已读回全部 27 项，X/Y/Z 碰撞和清理均通过；画面仍有角色遮挡，不作为完整朝向验收。
+**用户正常退出后本次新包也已 restored，38 项原始哈希一致，无 0041／active receipt，
+无未清理测试对象，MC 完整状态保持。** 外观探针已实际
+读取 7 组 mesh 选项及 250 组 decoration 声明；仍没有应用 Steve 或调用刷新函数。
 
 M1 已完成并提交为 `1bb0775`。M6a 独立背包保持进行中：全物品官方中文图标目录、
 中文悬停、整组领取、控制台按数量添加、36 格选择和实际消耗已实现，兼容六种方块放置。
@@ -893,11 +899,83 @@ A/B/C 输入。新普通报告标记 `materialSerialization=pami-utf8-no-declara
 [native-character-contract.md](native-character-contract.md)。
 
 测试清理后 Alt+F4 已打开红沙“是否结束游戏”确认框；自动点击/短按未完成确认。
-已请求用户手动结束游戏。**当前仍有游戏 PID 4900，C 包为 installed，等待实际退出
-后才能恢复；没有未清理测试实体。** 这不是恢复完成，不修改仍被游戏使用的资源包。
+已请求用户手动结束游戏。后续独立确认进程已退出，再运行 `install_asset_probe.py
+--restore` 成功；收据 `c2fb925c9d2b423996d764886408cf1a` 已归档为 restored。
+34 个 sourceIndexes、2 个 untouchedGameFiles 与 2 个 metadataBefore 的并集共
+38 项哈希全部一致，0041 与 active receipt 均不存在；没有覆盖退出时更新的存档。
+结果在 `runtime/asset-probe-restore-c-20261007-checks.json`。初次独立核查误加了
+不存在的 resource 子目录，修正为收据 gameRoot 后逐项重算通过，未修改游戏文件。
 
 收尾静态检查：55 个 Python AST、7 个公开 JSON、修改文档的相对文件链接、启动脚本
 PowerShell 语法及 `git diff --check` 通过。新原木检查的固定模板/成功 Y 哈希证明为
 必需项，本机历史包额外逐字比较；模拟干净环境缺少历史包时必需检查仍通过，历史
 比较明确跳过，不要求重新生成已知失败格式。ASI 未改，JAR 已更新，所有官方/派生
 模型、纹理、世界、截图、地址和安装备份仍 ignored。
+
+## 2026-10-07 修复后三轴包与实际外观选项
+
+先确认前次进程已退出，恢复 C 收据 `c2fb925c9d2b423996d764886408cf1a`，独立核对
+38 项原哈希。然后从原始索引准备 `build/native-declaration-fixed-overlay`；
+`check_asset_overlay.py --output build/native-declaration-fixed-overlay --verify-game`
+**13/13**、`check_asset_probe.py --plan build/native-declaration-fixed-overlay`
+**16/16** 通过。包报告 SHA256 为
+`2c1c2efeeff1d80e2ce4fab5401fbeadab6417c41ada79b71ace73d5a6d207c9`，候选仍为
+`7fd02bb439f52738b829472c2fa7cdc658be3123ebb733252187eaac21287417`。
+
+临时安装新收据 `5c89c03dc0614c7ba5066598062c0711` 后正常启动游戏。首轮读取遇到
+原生 ready=false，**零资源提交**，保留失败记录；其 mcBefore 尚未采样，故报告
+mcStateUnchanged=false 不是材料改变证据。实际 ready=true 后使用新输出文件重试，
+`probe_native_resources.py --group all` **27/27 首次读回匹配**，前后同一实例，MC
+状态摘要不变，证据 `runtime/native-resource-declaration-fixed-ready-20261007.json`。
+
+同一实例逐个生成／清理三轴，每次仅一块，未提交 MC 放置操作：
+
+| axis | runId | UID | 登记／碰撞／清理 | MC 状态 |
+| --- | --- | --- | --- | --- |
+| x | `dd69669c-87db-4ce2-9437-91c8a5ca34f5` | 1 | 通过 | 保持 |
+| y | `46b5d878-ab6b-47de-b7aa-cb00a48c66aa` | 2 | 通过 | 保持 |
+| z | `f26d4a2e-c14d-4be8-afe8-b75f808b8000` | 3 | 通过 | 保持 |
+
+三个日志为 `runtime/native-block-declaration-fixed-{x,y,z}-20261007.json`，全部
+phase=cleaned、登记移除、碰撞回到 0。相对原地面增量均 **1.15198 m**，但放置点
+用了最高地面加 0.03 m，相对放置原点碰撞顶面为 **1.01163 m**；不要把地面高差
+解释为模型高度。库存 revision 18、选择 1、36 格和材料不变，没有新增编辑项目。
+
+每轴真实截图及独立观察保存在 `runtime/native-oak-declaration-fixed-*-partial-20261007.jpg`
+和对应 `*-visual-20261007.json`。X 可见局部端面，Y 可见浅色顶面和局部竖纹侧面，
+Z 可见局部横向树皮；均被角色遮挡，因此只记可见，axisAppearanceVerified 与
+allFacesUvLightingVerified 仍 false，自动日志 visualVerified 也保持 false。
+自动短按未能完成侧移；已取消移开角色的待办。三个对象清理后打开正常退出确认框，
+自动 Space／点击未完成退出；用户随后确认已退出。独立检查实际进程消失，再运行
+`install_asset_probe.py --restore` 成功；本次收据已 restored，原始 38 项哈希全部
+一致，无 0041／active receipt，恢复后 MC 完整 API 状态与测试前一致。
+证据 `runtime/asset-probe-restore-declaration-fixed-20261007-checks.json`，保留后来
+存档，没有强制结束游戏或恢复旧存档。
+
+新增 [native_block_models.py](../bridge/native_block_models.py) 纯选择层，按 MC 完整
+properties 匹配确切原木轴，逐状态验收身份、候选／包摘要、固定 EXE 及当前会话
+资源范围需一致。显式 blue 支持现有六类；native 对未验收轴及另五类明确拒绝。
+[check_native_block_models.py](../tools/check_native_block_models.py) **14/14** 通过。
+此模块不读取报告／截图或验证安装文件，不自带生产准入，也未接线到 service.py；
+实际验证适配器、原生受理后的持久操作日志和替换确认仍需实现，正式建造仍为蓝块。
+
+只读外观工具扩展到精确 RTTI/vtable 的 meshParams、preset、decorationParams，
+固定 EXE 10 个代码窗口逐字核对；**28/28** 隔离检查、既有角色 **6/6** 通过。
+实际运行 `probe_appearance_controller.py --pid 59252 --output
+runtime/appearance-options-20261007.json` 成功，两次稳定采样完全相同：
+
+- mesh 实际 **7 组／capacity 8**，option counts 为 **2,2,7,7,0,0,0**；选择和
+  preset 各 16 字节全 FF，四个非空组使用 default 0，三个空组按静态消费者跳过。
+- 四个候选名称分别含 nude、head、hair、beard；这只是实际资源输入名称，还未核对
+  渲染 Scene／装备槽含义。额外 9 个选择明确记为 unmapped，完整选择边界不称通过。
+- decoration **250/250**，仅记录声明范围／默认与 preset 输入；动态 palette 与
+  mesh 相关的最终范围尚未解析，computedBounds、renderedDescriptor、slotSemantics
+  和所有应用／恢复标记仍 false。
+
+下一步从已核对 owner 组件数组定位真实 CharacterScene 与渲染资源归属，再建立
+刷新线程和恢复生命周期。当前没有外观写入、原生调用或 Steve 加载。
+七份实际名称对应的原始资源已从固定归档只读解包并留 ignored build；实际 Macduff
+身体 prefab 指向既有 Steve 的原生 PAC 模板，资源关联成立，但还保留 underwear，
+另有原头／眼／牙、头发／胡须。原文将七组命名为身体／头／毛发等，不含已证明的
+护甲／武器槽，详见 [native-character-contract.md](native-character-contract.md)。
+收尾四个 Python AST、修改文档相对链接、11 个本地证据 JSON 与 diff 检查通过。

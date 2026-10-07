@@ -86,7 +86,8 @@ SceneObjectClient，`+0x210` 的组件数组在有界 count 内恰好包含该�
 控制器分配大小 `0x140` 来自构造调用；mesh `+0xA0` 和 decoration `+0xB0` 选择数组
 的指针/count/capacity 分别位于容器 `+0/+8/+0xC`，字节步长由固定 resize helper
 `0x3D2BE0` 与 mesh setter `0x92F2B90` 的逐字节复制支持。只读工具仍不解释中间
-结构类型、加载的选项上界或资源对象，不写这些数组，也不调用刷新函数。
+结构类型，不写这些数组，也不调用刷新函数；后续 schema 2 探针补充的已加载选项
+资源只读合同见本节末尾，不能反推首次观测已完成该检查。
 
 工具 [probe_appearance_controller.py](../tools/probe_appearance_controller.py) 限定固定
 链、4KiB 单次读取上限和两次稳定采样，复用版本/SHA、VirtualQueryEx 可读页与只读
@@ -111,3 +112,65 @@ appearanceApplicationVerified/appearanceRestoreVerified/steveModelLoaded 均为 
 两次稳定采样也不等于原子快照。下一步需建立实际加载的 descriptor/mesh 选项、原生
 刷新线程及恢复契约；只读找到当前控制器不足以直接实施身体/装备替换。原始堆地址仅
 保存在本机观测文件，不作为以后进程的固定入口。
+
+### 2026-10-07 已加载选项资源与 FF 回退
+
+只读报告 schema 2 增加以下精确资源类型，仍限固定 EXE SHA、RTTI/COL 与 vtable。
+资源名由 `+0x20` 的字符串 holder 的 `+0` 字符指针读取，依据原生 `0x48D670`；
+最多 512 字节、每次 32 字节。若跨入不可读页，即使更早可能存在结束符也保守拒绝，
+不跳过缺失页拼接名称。读取的名称仅为数据，不作为文件路径或指令执行。
+
+| controller 字段 | 精确资源类 | vtable RVA | 已核对目录 |
+| --- | --- | --- | --- |
+| `+0x128` | CustomizationMeshParamData | `0x559F0D0` | `+0x28` QII，group stride `0x58` |
+| `+0x110` | CharacterCustomizationData | `0x559F150` | mesh `+0x38`、decoration `+0x28` QII 字节数组；null 合法 |
+| `+0x130` | CustomizationDecorationParamData | `0x559F110` | `+0x48` QII，group stride `0x98` |
+
+mesh group `+0` 是 option QII，`+0x10` 为默认字节。固定 `0x72C230` 消费链的
+`0x72C2B5` 先检查 preset 状态和相应字节：当前选择 FF 时使用非 FF preset，
+否则用 group 默认，再与真实 option count 比较；超界走跳过路径，不能解释为
+“全部隐藏”。option stride `0x120` 由 `0x72C3F9..0x72C40D` 的计算支持，option
+`+0` 的 prefab 引用数组／8 字节 holder 步长由 `0x72C4B1..0x72C51C` 支持。
+这里只解引用当前有界候选，不猜测未选 option 的身体／装备槽语义。
+
+decoration group 的 `+0x7E..+0x83` 为已观察的类别、模式、声明 min/max/default、
+palette 索引输入；`+0x3C` 为关联 mesh slot 输入。`0x735F70` 等后续消费还会依据
+未解码 palette／mesh 修正范围，因此不把声明 max 当作最终可写上界。
+
+`check_appearance_controller.py` **28/28**、既有角色 **6/6** 通过；直接读取固定
+EXE 重新核对 **10 个代码窗口逐字一致**及三类 RTTI。实际新进程的独立输出
+`runtime/appearance-options-20261007.json` 两次稳定，显示：
+
+- mesh 资源 `character/descriptors/customizationmeta/meshparam_example_kliff.xml`，
+  **7 组／capacity 8**，选项数 **2,2,7,7,0,0,0**。
+- preset `character/descriptors/customization/cd_pc/cd_phm_macduff_customization.paccd_xml`，
+  当前与 preset 的 mesh 数组各 **16/16、全 FF**。前四组选 default 0，后三个空组
+  原生应跳过。额外 9 个选择明确 unmapped；meshGroupChoiceBoundsVerified=true
+  只覆盖实际 group，完整数组的 loadedOptionBoundsVerified=false。
+- 四个候选名称为 `cd_phm_00_nude_01_0002_macduff`、
+  `cd_phm_00_head_00_0001_macduff`、`cd_phm_00_hair_00_0022_player` 和
+  `cd_phm_00_beard_00_0005_06_player`。它们不是实际已渲染 descriptor 的证明。
+- decoration 资源 `character/descriptors/customizationmeta/decorationparam_player.xml`，
+  **250/250**，声明输入已读；computedBounds、renderedDescriptor、slotSemantics、
+  appearanceApplication／Restore、Steve 加载均保持 false。
+
+下一步在已界定 owner `+0x210` 组件数组中，按 `0x4736A0` 的实际反射类型查找
+CharacterScene；其目标反射元数据来自 `0x4667A0` 返回的 global `0x6D6C850`，
+不能仅凭名字或扫描堆猜实例。确认归属后再建立 Scene `+0xA0` 与 `+0x78` 弱渲染
+owner、`+0xA8` 源缓冲的合同。静态更新路线 `0x726C50 → 0x72C230 → 0x7267B0
+→ 0x726E40` 尚未证明调用 ABI、线程或可恢复副作用，当前不得作为主动调用入口。
+
+随后从固定 `0009/0.pamt` 只读解出本次三份 meta/preset 与四个非空组 prefab，
+七项原文与结构报告仅保存在 ignored
+`build/steve-appearance-research-20261007/observed-native-resources/`。meshparam
+SHA256 `5c35726023151b024bbd10b03481bd0bb2c6c0ba745fcefe68907d20c07e40b5` 的
+UIKey 将七组命名为 Body、Head、Hair、Beard、Mustache、Whiskers、Eyebrows，
+数量／默认／名称与实机一致；这是原文声明的分类，不是已验证装备槽合同。
+
+实际 `cd_phm_00_nude_01_0002_macduff.prefab` SHA256
+`0184309bae4ded9d51e07269ddebea8ed6f6b08701c59a077f9d866d6002e757` 的 CD_Nude
+引用 `character/model/1_pc/1_phm/nude/cd_phm_00_nude_00_0001.pac`，与现有 Steve
+PAC 模板建立真实资源关联；但其 prefab／SkeletonVariation 不能等同先前的 00_0001
+prefab 候选。它保留 CD_Underwear；另有头／眼／牙／眉、头发和胡须输入。共享身体
+资源也被其它静态 appearance 索引引用，不能对共享 nude 全局替换并声称仅作用当前
+玩家。私有资源合成和各部分保留／隐藏／装备绑定规则仍需明确。
