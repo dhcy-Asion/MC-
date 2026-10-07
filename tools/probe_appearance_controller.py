@@ -35,6 +35,15 @@ SKINNED_MESH_GETTER = 0x2D88B10
 SKINNED_MESH_META = 0x6D6A160
 SKINNED_MESH_META_VTABLE = 0x55739A0
 SKINNED_MESH_META_TYPE = ".?AV?$ReflectMetaObjectBind@VSkinnedMeshComponent@pa@@$0A@@pa@@"
+ANONYMOUS_RESOURCE_VTABLE = 0x5B3FC58
+# Separate opt-in contract: the constructor and consumers prove only the +68
+# held reference, not a complete resource class, descriptor or native ABI.
+RESOURCE_LINK_WINDOWS = {
+    0x109DB74F: bytes.fromhex("488d05024516f5488901"),
+    0x109DB78F: bytes.fromhex("897b6048897b68"),
+    0x2CC7E55: bytes.fromhex("498d7668488d7b68483bf77436488b06483907742e488bcfe81e2f6cfd488b0e48890f4885c9741b807914007406f0ff4110eb088b4110ffc0894110488b07c6401601"),
+    0x2DEFE18: bytes.fromhex("488b41184889442420488b412048894424280fb64128488b7cc420488b5f684885db7425807b1501741f8b5b38"),
+}
 CODE_WINDOWS = {
     # Existing native callers, not entry points for this diagnostic to invoke.
     0x6298DD: bytes.fromhex("488b4708488b4868488b4140488b88b8000000488b5920488d542430488bcbe8cf2c1000488d542440488bcbe892271000488bcbe83ad30f00"),
@@ -181,14 +190,17 @@ def typed(reader, address, base, length, name, *, context=None, evidence=None):
         raise
 
 
-def validate_code(reader, base, length):
+def validate_code(reader, base, length, *, render_resource_links=False):
     if not 0 < length <= core.MAX_IMAGE_SIZE:
         raise ProbeError("Main image exceeds the reviewed bounds")
     if any(rva > length - size for rva, size in ((WORLD_GLOBAL, 8), (CONTROLLER_VTABLE, 8),
             (SCENE_META, 24), (SCENE_META_VTABLE, 8), (SCENE_VTABLE, 16), (SCENE_PARAM_VTABLE, 8),
             (SKINNED_MESH_META, 24), (SKINNED_MESH_META_VTABLE, 8), (SKINNED_MESH_VTABLE, 16))):
         raise ProbeError("Fixed world global or reviewed vtable/metadata escaped the main image")
-    for rva, expected in CODE_WINDOWS.items():
+    if render_resource_links and ANONYMOUS_RESOURCE_VTABLE > length - 8:
+        raise ProbeError("Anonymous constructor vtable escaped the main image")
+    windows = {**CODE_WINDOWS, **RESOURCE_LINK_WINDOWS} if render_resource_links else CODE_WINDOWS
+    for rva, expected in windows.items():
         if rva > length - len(expected) or read(reader, base + rva, len(expected), "native chain code") != expected:
             raise ProbeError("Native chain code bytes differ from the fixed EXE contract")
     pattern = core.pattern(WORLD_PATTERN)
@@ -416,7 +428,59 @@ def resource_identity(reader, address, base, length, evidence):
         raise
 
 
-def character_scene(reader, base, length, owner, members, observed, *, render_resource_identities=False):
+def linked_resource_header(reader, address, base, length, evidence, *, watch=None):
+    """Read one exact anonymous parent's +68 reference and nested vtable only.
+
+    There is no RTTI fallback: this is an independent constructor/consumer field
+    contract. A nested vtable in the image is only an observed pointer, never a
+    class admission. No nested member, locator, name or descriptor is read.
+    """
+    evidence.update(pointer=hex(address), state="rejected", anonymousParentVtableVerified=False,
+        primaryMsvcRttiVerified=False, nestedClassVerified=False, nestedLayoutInterpreted=False,
+        descriptorVerified=False, linkFieldObserved=False, nestedPrimaryHeaderObserved=False,
+        identityMode="exact-constructor-vtable/held-reference-consumer-only", failedChecks=[])
+    watched = []
+
+    def get(at, label):
+        raw = read(reader, at, 8, label)
+        watched.append((at, raw, label))
+        if watch is not None:
+            watch(at, raw, label)
+        return struct.unpack("<Q", raw)[0]
+
+    def require(valid, key):
+        if not valid:
+            evidence["failedChecks"].append(key)
+            raise ProbeError("Anonymous render resource link rejected: " + key)
+
+    try:
+        pointer(address, "anonymous render resource parent")
+        vt = get(address, "anonymous resource parent vtable")
+        evidence["parentVtablePointer"] = hex(vt)
+        require(vt == base + ANONYMOUS_RESOURCE_VTABLE, "exact-anonymous-constructor-vtable")
+        evidence.update(parentVtableRva=hex(vt - base), anonymousParentVtableVerified=True)
+        nested = get(address + 0x68, "anonymous resource nested reference")
+        evidence.update(nestedPointer=hex(nested), nestedPresent=bool(nested), linkFieldObserved=True)
+        if nested:
+            pointer(nested, "anonymous resource nested primary")
+            nested_vt = get(nested, "anonymous resource nested vtable")
+            evidence["nestedVtablePointer"] = hex(nested_vt)
+            require(base + 8 <= nested_vt <= base + length - 8, "nested-vtable-main-image-bounds")
+            evidence.update(nestedVtableRva=hex(nested_vt - base), nestedPrimaryHeaderObserved=True)
+        for at, expected, label in watched:
+            require(read(reader, at, 8, label + " stability") == expected, "stable-linked-header-bytes")
+        evidence["state"] = "headerObserved" if nested else "emptyNestedReference"
+        return {key: evidence[key] for key in ("pointer", "parentVtableRva", "nestedPointer",
+                "nestedPresent", "linkFieldObserved", "nestedPrimaryHeaderObserved", "state")} | (
+            {"nestedVtableRva": evidence["nestedVtableRva"]} if nested else {})
+    except ProbeError as error:
+        evidence["state"] = "rejected"
+        evidence["failureReason"] = str(error)
+        raise
+
+
+def character_scene(reader, base, length, owner, members, observed, *, render_resource_identities=False,
+                    render_resource_links=False):
     """Follow the exact owner's bounded components and reviewed Scene fields.
 
     Scene and its owned parameter resource lack a valid primary MSVC RTTI
@@ -429,11 +493,14 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
             "sceneOwnerRoundTripObserved": False, "parameterOwnerRoundTripObserved": False,
             "renderLinkObserved": False, "renderSelectorFieldsObserved": False,
             "selectedResourceTypeVerified": False, "renderedDescriptorVerified": False,
-            "appearanceApplicationVerified": False, "renderResourceIdentitiesObserved": False}
+            "appearanceApplicationVerified": False, "renderResourceIdentitiesObserved": False,
+            "renderResourceLinksObserved": False}
     observed["characterScene"] = info
     watched = {}
     resource_identities = []
     identity_errors = []
+    resource_links = []
+    link_errors = []
 
     def get(address, size, label):
         raw = read(reader, address, size, label)
@@ -442,6 +509,11 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
 
     def qword(address, label):
         return struct.unpack("<Q", get(address, 8, label))[0]
+
+    def watch_link(address, raw, label):
+        key = (address, len(raw), label)
+        if watched.setdefault(key, raw) != raw:
+            raise ProbeError("Anonymous resource link bytes changed during Scene reads")
 
     def weak_at(address, label, expected=None):
         holder = qword(address, label + " holder")
@@ -591,6 +663,20 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
                             # and allow the other identity-only observation. Never
                             # promote a mixed/failed pair to a stable Scene result.
                             identity_errors.append(error)
+            if render_resource_links:
+                info["renderSelector"].update(resourceLinks=[], nestedResourcesIdentityOnly=True)
+                for slot, candidate in enumerate((first, second)):
+                    evidence = {"slot": slot, "present": bool(candidate),
+                                "nestedPrimaryHeaderObserved": False, "state": "emptyParentReference"}
+                    info["renderSelector"]["resourceLinks"].append(evidence)
+                    if candidate:
+                        if slot == index:
+                            info["renderSelector"]["selectedResourceDereferenced"] = True
+                        try:
+                            header = linked_resource_header(reader, candidate, base, length, evidence, watch=watch_link)
+                            resource_links.append((candidate, header))
+                        except ProbeError as error:
+                            link_errors.append(error)
     stable()
     if typed(reader, base + SCENE_META, base, length, "sceneMetadata") != metadata:
         raise ProbeError("CharacterScene reflection metadata changed during reads")
@@ -599,12 +685,21 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
     for candidate, identity in resource_identities:
         if resource_identity(reader, candidate, base, length, {}) != identity:
             raise ProbeError("Render resource identity changed within the controlled Scene observation")
+    for candidate, header in resource_links:
+        if linked_resource_header(reader, candidate, base, length, {}, watch=watch_link) != header:
+            raise ProbeError("Anonymous render resource link changed within the controlled Scene observation")
     # Include a final pair/owner re-read after identity reads, not just before them.
     if render_resource_identities:
         stable()
         if identity_errors:
             raise identity_errors[0]
         info["renderResourceIdentitiesObserved"] = bool(resource_identities)
+    if render_resource_links:
+        stable()
+        if link_errors:
+            raise link_errors[0]
+        info["renderResourceLinksObserved"] = (len(resource_links) == 2 and
+            all(header["nestedPrimaryHeaderObserved"] for _, header in resource_links))
     info["state"] = "observed" if (parameter and info["renderSelectorFieldsObserved"]) else "notReady"
     info["limitations"] = ["The selected buffer's resource type and descriptor fields are not decoded.",
         "Scene and parameter identity use pinned reflection/constructor evidence; primary MSVC RTTI is unavailable.",
@@ -612,7 +707,7 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
         "These observations do not establish appearance application ABI, thread, restore or slot semantics."]
 
 
-def sample(reader, base, length, observed, *, render_resource_identities=False):
+def sample(reader, base, length, observed, *, render_resource_identities=False, render_resource_links=False):
     def link(address, name):
         return pointer(value(reader, address, name), name)
     root = link(base + WORLD_GLOBAL, "world root")
@@ -679,7 +774,8 @@ def sample(reader, base, length, observed, *, render_resource_identities=False):
     observed["selections"] = selections
     loaded_options(reader, base, length, controller, raw, selections, observed)
     character_scene(reader, base, length, owner, members, observed,
-                    render_resource_identities=render_resource_identities)
+                    render_resource_identities=render_resource_identities,
+                    render_resource_links=render_resource_links)
     # Re-read only structural bytes that have a known contract, not unknown
     # holder fields or values which may legitimately change while moving.
     expected_links = ((base + WORLD_GLOBAL, root), (root + 0x30, manager), (manager + 0x58, user),
@@ -704,10 +800,13 @@ def sample(reader, base, length, observed, *, render_resource_identities=False):
     observed["stableDuringSample"] = True
 
 
-def collect(reader, base, length, pause=time.sleep, *, render_resource_identities=False):
-    report = {"schemaVersion": 4, "mode": "external-read-only", "state": "rejected", "samples": [],
+def collect(reader, base, length, pause=time.sleep, *, render_resource_identities=False, render_resource_links=False):
+    report = {"schemaVersion": 5 if render_resource_links else 4,
+              "mode": "external-read-only", "state": "rejected", "samples": [],
               "renderResourceIdentitiesRequested": render_resource_identities,
               "renderResourceIdentitiesObserved": False,
+              "renderResourceLinksRequested": render_resource_links,
+              "renderResourceLinksObserved": False,
               "nativeFunctionsInvoked": False, "gameMemoryWritten": False, "heapScanned": False,
               "appearanceApplicationVerified": False, "appearanceRestoreVerified": False,
               "steveModelLoaded": False, "snapshotAtomic": False,
@@ -719,14 +818,17 @@ def collect(reader, base, length, pause=time.sleep, *, render_resource_identitie
                               "Decoration final palette/mesh-dependent bounds and slot semantics are not verified.",
                               "The intermediate holder's type and unused fields are not interpreted."]}
     try:
-        validate_code(reader, base, length)
+        if render_resource_identities and render_resource_links:
+            raise ProbeError("Choose exactly one independent render-resource diagnostic mode")
+        validate_code(reader, base, length, render_resource_links=render_resource_links)
         for index in range(2):
             observed = {}
             report["samples"].append(observed)
-            sample(reader, base, length, observed, render_resource_identities=render_resource_identities)
+            sample(reader, base, length, observed, render_resource_identities=render_resource_identities,
+                   render_resource_links=render_resource_links)
             if index == 0:
                 pause(SAMPLE_GAP_SECONDS)
-        validate_code(reader, base, length)
+        validate_code(reader, base, length, render_resource_links=render_resource_links)
         if report["samples"][0] != report["samples"][1]:
             report["state"] = "unstable"
             raise ProbeError("The two fixed controller samples do not agree")
@@ -742,9 +844,13 @@ def collect(reader, base, length, pause=time.sleep, *, render_resource_identitie
         report["characterSceneObserved"] = scene["sceneOwnerRoundTripObserved"]
         report["sceneRenderSelectorObserved"] = scene["state"] == "observed"
         report["renderResourceIdentitiesObserved"] = scene["renderResourceIdentitiesObserved"]
+        report["renderResourceLinksObserved"] = scene["renderResourceLinksObserved"]
         report["state"] = "observed" if report["selectionBuffersPresent"] and report["loadedOptionsObserved"] else "notReady"
+        if render_resource_links and not report["renderResourceLinksObserved"]:
+            report["state"] = "notReady"
+            report["reason"] = "The controlled Scene resource pair or a nested reference/header is absent"
         if report["state"] == "notReady":
-            report["reason"] = "Controller ownership was observed but a selection buffer or loaded option table is empty"
+            report.setdefault("reason", "Controller ownership was observed but a selection buffer or loaded option table is empty")
     except (ProbeError, RuntimeError, OSError, ValueError, struct.error) as error:
         if len(report["samples"]) > 1 and report["samples"][0].get("stableDuringSample"):
             report["state"] = "unstable"
@@ -775,6 +881,7 @@ def summary(report, output):
             ("state", "reason", "stableTwoSamples", "controlledControllerChainObserved", "selectionBuffersPresent",
              "loadedOptionsObserved", "meshGroupChoiceBoundsVerified", "decorationComputedBoundsVerified",
              "characterSceneObserved", "sceneRenderSelectorObserved", "renderResourceIdentitiesObserved", "renderedDescriptorVerified",
+             "renderResourceLinksObserved",
              "nativeFunctionsInvoked", "gameMemoryWritten", "appearanceApplicationVerified", "steveModelLoaded")}}
 
 
@@ -789,8 +896,11 @@ def file_digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pid", type=int, help="otherwise require exactly one running CrimsonDesert.exe")
-    parser.add_argument("--render-resource-identities", action="store_true",
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--render-resource-identities", action="store_true",
                         help="Read only primary RTTI identities of the two controlled Scene selector resources")
+    modes.add_argument("--render-resource-links", action="store_true",
+                       help="Read exact anonymous parent +68 references and nested vtables only, without RTTI or descriptor interpretation")
     parser.add_argument("--output", type=Path, default=ROOT / "runtime/appearance-controller.json")
     args = parser.parse_args()
     output = output_path(args.output)
@@ -812,18 +922,21 @@ def main():
             "(Get-Item -LiteralPath '" + str(path).replace("'", "''") + "').VersionInfo.FileVersion"], text=True).strip()
         digest = file_digest(path)
         roster.validate_layout_build(profile, version, digest)
-        report = collect(reader, base, length, render_resource_identities=args.render_resource_identities)
+        report = collect(reader, base, length, render_resource_identities=args.render_resource_identities,
+                         render_resource_links=args.render_resource_links)
         if reader.module() != (base, length, path) or file_digest(path) != digest:
             report.update(state="unstable", stableTwoSamples=False, controlledControllerChainObserved=False,
                           characterSceneObserved=False, sceneRenderSelectorObserved=False,
                           renderResourceIdentitiesObserved=False,
+                          renderResourceLinksObserved=False,
                           renderedDescriptorVerified=False,
                           reason="Game module changed during the read-only observation")
         report.update(timeUtc=dt.datetime.now(dt.timezone.utc).isoformat(),
                       game={"pid": pid, "path": str(path), "version": version, "sha256": digest,
                             "moduleBase": hex(base), "moduleSize": length},
                       source={"worldAnchor": profile["world_root"]["source"], "license": "MIT",
-                              "staticChainRvas": [hex(rva) for rva in CODE_WINDOWS]})
+                              "staticChainRvas": [hex(rva) for rva in ({**CODE_WINDOWS, **RESOURCE_LINK_WINDOWS}
+                                  if args.render_resource_links else CODE_WINDOWS)]})
         write_report(output, report)
         print(json.dumps(summary(report, output), ensure_ascii=False, indent=2))
         return 0 if report["state"] == "observed" else 1

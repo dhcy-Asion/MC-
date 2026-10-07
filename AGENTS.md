@@ -78,6 +78,8 @@ the earlier copy under Desktop/Git.
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |
 | Steve 离线资产 | `python tools/build_steve_asset.py`；`python tools/check_steve_asset.py`；产物留 ignored build，不安装为原生角色 |
 | Steve 分段蒙皮候选 | `py -3.12 -B tools/check_steve_segmented.py --rebuild`；真实 palette、四 LOD 表面／UV、原始 byte 权重、inverse bind 与合成弯曲；仍使用旧模板 PABC，不代表当前角色描述符、装备或实机动画验收 |
+| Steve 头身分件／私有 prefab | `py -3.12 -B tools/check_steve_parts.py --rebuild` 和 `check_steve_parts_prefab.py --rebuild`；四 LOD 完整记录并集、逐模型材质依赖、原生部件名与严格 footer／路径往返；旧分件 rig 与当前 descriptor 未共同验收，不能直接安装为完整人物 |
+| Steve 当前 neutral 补偿 | `py -3.12 -B tools/check_steve_current_rig.py --rebuild`；固定当前 PABC／descriptor、实际 byte 权重及量化后中立回放，UV／skin／拓扑保持；独立 combined 候选，不代表原生 shader／动画或私有分件已应用 |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |
 | 全方块注册表 | `python -B tools/check_block_registry.py --rebuild`；固定 vanilla 数据生成器、合法状态乘积/ID/默认状态及客户端资源核对，不启动世界 |

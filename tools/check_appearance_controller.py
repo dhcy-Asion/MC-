@@ -25,6 +25,30 @@ RENDER_IDENTITIES = ({"vtable": BASE + 0x91000, "col": BASE + 0x92000,
                       "descriptor": BASE + 0x93000, "hierarchy": BASE + 0x94000},
                      {"vtable": BASE + 0x95000, "col": BASE + 0x96000,
                       "descriptor": BASE + 0x97000, "hierarchy": BASE + 0x98000})
+NESTED_HEADERS = (0x230000, 0x231000)
+
+
+def linked_scene_fixture():
+    reader = skinned_scene_fixture()
+    for rva, raw in probe.RESOURCE_LINK_WINDOWS.items():
+        reader.segments[BASE + rva] = bytearray(raw)
+    for slot, nested in enumerate(NESTED_HEADERS):
+        primary = SCENE[f"buffer{slot}"]
+        # Only the two reviewed parent fields and nested primary header exist.
+        reader.block(primary, 8)
+        reader.put(primary, BASE + probe.ANONYMOUS_RESOURCE_VTABLE)
+        reader.put(primary + 0x68, nested)
+        reader.block(nested, 8)
+        reader.put(nested, BASE + 0x99000 + slot * 0x100)
+    # Actual kind of non-COL prefix: linked mode must never follow this qword.
+    reader.put(BASE + probe.ANONYMOUS_RESOURCE_VTABLE - 8, BASE + 0x3600C0)
+    reader.segments[BASE + 0x3600C0] = bytearray.fromhex("b001c3cccccccccccccccccccccccccc488b4108c3cccccc")
+    reader.reads.clear()
+    return reader
+
+
+def collect_resource_links(reader, pause=lambda _: None):
+    return probe.collect(reader, BASE, LENGTH, pause, render_resource_links=True)
 
 
 def resource_scene_fixture(skinned=True):
@@ -1218,6 +1242,219 @@ class AppearanceControllerChecks(unittest.TestCase):
         reads = [(address, size) for address, size in reader.reads
                  if SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x1000]
         self.assertEqual(set(reads), {(SCENE["buffer0"], 8), (SCENE["buffer1"], 8)})
+
+
+    def test_63_anonymous_links_read_only_three_qwords_with_two_complete_samples(self):
+        reader = linked_scene_fixture()
+        result = collect_resource_links(reader)
+        self.assertEqual(result["schemaVersion"], 5)
+        self.assertEqual(result["state"], "observed")
+        self.assertTrue(result["renderResourceLinksRequested"] and result["renderResourceLinksObserved"])
+        self.assertTrue(result["stableTwoSamples"] and result["controlledControllerChainObserved"])
+        self.assertEqual(result["samples"][0], result["samples"][1])
+        for sample in result["samples"]:
+            links = sample["characterScene"]["renderSelector"]["resourceLinks"]
+            self.assertEqual(len(links), 2)
+            for slot, row in enumerate(links):
+                self.assertTrue(row["anonymousParentVtableVerified"] and row["linkFieldObserved"]
+                                and row["nestedPrimaryHeaderObserved"])
+                self.assertEqual(row["nestedPointer"], hex(NESTED_HEADERS[slot]))
+                self.assertEqual(row["nestedVtableRva"], hex(0x99000 + slot * 0x100))
+                for flag in ("primaryMsvcRttiVerified", "nestedClassVerified", "nestedLayoutInterpreted", "descriptorVerified"):
+                    self.assertIs(row[flag], False)
+        for slot in range(2):
+            primary, nested = SCENE[f"buffer{slot}"], NESTED_HEADERS[slot]
+            reads = {(address, size) for address, size in reader.reads if primary <= address < primary + 0x100}
+            self.assertEqual(reads, {(primary, 8), (primary + 0x68, 8)})
+            self.assertEqual({(address, size) for address, size in reader.reads if nested <= address < nested + 0x100}, {(nested, 8)})
+        self.assertNotIn((BASE + probe.ANONYMOUS_RESOURCE_VTABLE - 8, 8), reader.reads)
+        for flag in ("renderResourceIdentitiesObserved", "renderedDescriptorVerified", "nativeFunctionsInvoked",
+                     "gameMemoryWritten", "appearanceApplicationVerified", "appearanceRestoreVerified", "steveModelLoaded"):
+            self.assertIs(result[flag], False)
+
+    def test_64_link_mode_is_independent_from_col_identity_and_default(self):
+        reader = linked_scene_fixture()
+        self.assertEqual(collect_resource_identities(reader)["state"], "rejected")
+        reader.reads.clear()
+        self.assertEqual(collect_resource_links(reader)["state"], "observed")
+        reader.reads.clear()
+        result = collect(reader)
+        self.assertEqual(result["schemaVersion"], 4)
+        self.assertEqual(result["state"], "observed")
+        self.assertFalse(result["renderResourceLinksRequested"] or result["renderResourceLinksObserved"])
+        self.assertFalse(any(SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x1000 for address, _ in reader.reads))
+        self.assertFalse(any(address in {BASE + rva for rva in probe.RESOURCE_LINK_WINDOWS} for address, _ in reader.reads))
+
+    def test_65_unknown_parent_vtable_stops_its_layout_and_records_sibling(self):
+        reader = linked_scene_fixture()
+        reader.put(SCENE["buffer0"], BASE + probe.ANONYMOUS_RESOURCE_VTABLE + 8)
+        result = collect_resource_links(reader)
+        self.assertEqual(result["state"], "rejected")
+        links = result["samples"][0]["characterScene"]["renderSelector"]["resourceLinks"]
+        self.assertEqual(links[0]["failedChecks"], ["exact-anonymous-constructor-vtable"])
+        self.assertFalse(links[0]["anonymousParentVtableVerified"])
+        self.assertTrue(links[1]["nestedPrimaryHeaderObserved"])
+        self.assertNotIn((SCENE["buffer0"] + 0x68, 8), reader.reads)
+        self.assertFalse(result["renderResourceLinksObserved"] or result["stableTwoSamples"])
+
+    def test_66_unreadable_link_or_nested_header_preserves_failure_and_sibling(self):
+        for address in (SCENE["buffer0"] + 0x68, NESTED_HEADERS[0]):
+            with self.subTest(address=address):
+                reader = linked_scene_fixture()
+                del reader.segments[address]
+                result = collect_resource_links(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertIn("complete readable span", result["reason"])
+                links = result["samples"][0]["characterScene"]["renderSelector"]["resourceLinks"]
+                self.assertEqual(links[0]["state"], "rejected")
+                self.assertTrue(links[1]["nestedPrimaryHeaderObserved"])
+                self.assertFalse(result["stableTwoSamples"] or result["renderResourceLinksObserved"])
+
+    def test_67_null_parent_or_nested_reference_is_not_ready_without_null_read(self):
+        for address in (SCENE["selector"] + 0x18, SCENE["buffer0"] + 0x68,
+                        SCENE["selector"] + 0x20, SCENE["buffer1"] + 0x68):
+            with self.subTest(address=address):
+                reader = linked_scene_fixture(); reader.put(address, 0)
+                result = collect_resource_links(reader)
+                self.assertEqual(result["state"], "notReady")
+                self.assertTrue(result["stableTwoSamples"])
+                self.assertFalse(result["renderResourceLinksObserved"])
+                self.assertFalse(any(at < 0x10000 for at, _ in reader.reads))
+                self.assertFalse(result["renderedDescriptorVerified"] or result["appearanceApplicationVerified"])
+
+    def test_68_nested_pointer_and_vtable_bounds_do_not_authorize_unknown_fields(self):
+        for replacement in (1, 0x10003, 2**47):
+            reader = linked_scene_fixture(); reader.put(SCENE["buffer0"] + 0x68, replacement)
+            result = collect_resource_links(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertFalse(result["renderResourceLinksObserved"])
+            self.assertFalse(any(at == replacement for at, _ in reader.reads))
+        for vt in (0, BASE, BASE + LENGTH, 2**47):
+            reader = linked_scene_fixture(); reader.put(NESTED_HEADERS[0], vt)
+            result = collect_resource_links(reader)
+            self.assertEqual(result["state"], "rejected")
+            row = result["samples"][0]["characterScene"]["renderSelector"]["resourceLinks"][0]
+            self.assertEqual(row["nestedVtablePointer"], hex(vt))
+            self.assertEqual(row["failedChecks"], ["nested-vtable-main-image-bounds"])
+            self.assertFalse(row["nestedPrimaryHeaderObserved"])
+            self.assertNotIn((vt, 8), reader.reads)
+
+    def test_69_link_header_three_independent_rereads_detect_mid_sample_drift(self):
+        for address, replacement in ((SCENE["buffer0"], BASE + 0x99100),
+                    (SCENE["buffer0"] + 0x68, NESTED_HEADERS[1]), (NESTED_HEADERS[0], BASE + 0x99100)):
+            with self.subTest(address=address):
+                reader = linked_scene_fixture(); original = reader.read
+                def changing(at, size):
+                    raw = original(at, size)
+                    if at == address:
+                        reader.put(address, replacement)
+                    return raw
+                reader.read = changing
+                result = collect_resource_links(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertIn("interpreted fields changed", result["reason"])
+                row = result["samples"][0]["characterScene"]["renderSelector"]["resourceLinks"][0]
+                self.assertEqual(row["failedChecks"], ["stable-linked-header-bytes"])
+                self.assertFalse(result["stableTwoSamples"] or result["renderResourceLinksObserved"])
+
+    def test_70_nested_vtable_changes_between_samples_remain_unstable(self):
+        reader = linked_scene_fixture()
+        result = collect_resource_links(reader, lambda _: reader.put(NESTED_HEADERS[1], BASE + 0x99200))
+        self.assertEqual(result["state"], "unstable")
+        self.assertEqual(len(result["samples"]), 2)
+        self.assertFalse(result["stableTwoSamples"] or result["renderResourceLinksObserved"])
+
+    def test_71_pair_and_control_owner_rereads_still_gate_link_observation(self):
+        for address, replacement in ((SCENE["selector"] + 0x28, 0),
+                (ADDR["manager"] + 0x50, ADDR["user"]),
+                (ADDR["owner"] + 0x218, 1)):
+            with self.subTest(address=address):
+                reader = linked_scene_fixture(); original = reader.read; changed = False
+                def changing(at, size):
+                    nonlocal changed
+                    raw = original(at, size)
+                    if at == NESTED_HEADERS[1] and not changed:
+                        changed = True
+                        reader.put(address, replacement, "<B" if address == SCENE["selector"] + 0x28
+                                   else "<I" if address == ADDR["owner"] + 0x218 else "<Q")
+                    return raw
+                reader.read = changing
+                result = collect_resource_links(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertFalse(result["stableTwoSamples"] or result["renderResourceLinksObserved"])
+
+    def test_72_link_code_pins_and_global_vtable_bounds_reject_before_any_heap_read(self):
+        for rva in probe.RESOURCE_LINK_WINDOWS:
+            reader = linked_scene_fixture(); reader.segments[BASE + rva][0] ^= 1
+            result = collect_resource_links(reader)
+            self.assertEqual(result["samples"], [])
+            self.assertIn("code bytes", result["reason"])
+        reader = linked_scene_fixture()
+        with mock.patch.object(probe, "ANONYMOUS_RESOURCE_VTABLE", LENGTH):
+            result = collect_resource_links(reader)
+        self.assertEqual(result["samples"], [])
+        self.assertEqual(reader.reads, [])
+        reader = linked_scene_fixture()
+        self.assertEqual(probe.collect(reader, BASE, 0x109DB74F + 9, lambda _: None,
+                        render_resource_links=True)["samples"], [])
+
+    def test_73_modes_cannot_accidentally_mix_rtti_with_anonymous_contract(self):
+        reader = linked_scene_fixture()
+        result = probe.collect(reader, BASE, LENGTH, lambda _: None,
+                               render_resource_identities=True, render_resource_links=True)
+        self.assertEqual(result["state"], "rejected")
+        self.assertEqual(result["samples"], [])
+        self.assertEqual(reader.reads, [])
+        self.assertIn("independent", result["reason"])
+
+    def test_74_final_peer_read_cannot_hide_prior_parent_link_change(self):
+        reader = linked_scene_fixture(); original = probe.linked_resource_header
+        calls = 0
+        def changing(*args, **kwargs):
+            nonlocal calls
+            result = original(*args, **kwargs)
+            calls += 1
+            if calls == 4:
+                reader.put(SCENE["buffer0"] + 0x68, NESTED_HEADERS[1])
+            return result
+        with mock.patch.object(probe, "linked_resource_header", side_effect=changing):
+            result = collect_resource_links(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertIn("interpreted fields changed", result["reason"])
+        self.assertFalse(result["renderResourceLinksObserved"] or result["stableTwoSamples"])
+
+    def test_75_link_cli_final_module_or_digest_change_clears_link_success_and_closes_reader(self):
+        for changed in ("module", "digest"):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory(dir=probe.ROOT / "runtime") as temp:
+                reader = linked_scene_fixture()
+                exe, output = Path(temp) / "CrimsonDesert.exe", Path(temp) / "linked.json"
+                reader.module = mock.Mock(side_effect=[(BASE, LENGTH, exe),
+                    (BASE + (0x1000 if changed == "module" else 0), LENGTH, exe)])
+                reader.close = mock.Mock()
+                with mock.patch("sys.argv", ["probe", "--pid", "42123", "--render-resource-links", "--output", str(output)]), \
+                        mock.patch.object(probe.core, "Reader", return_value=reader), \
+                        mock.patch.object(probe.subprocess, "check_output", return_value=probe.roster.VERSION), \
+                        mock.patch.object(probe, "file_digest", side_effect=[probe.roster.SHA256,
+                            probe.roster.SHA256 if changed == "module" else "0" * 64]), \
+                        mock.patch("builtins.print"):
+                    self.assertEqual(probe.main(), 1)
+                report = json.loads(output.read_bytes())
+                self.assertEqual(report["state"], "unstable")
+                self.assertFalse(report["renderResourceLinksObserved"] or report["stableTwoSamples"])
+                self.assertTrue(report["samples"][0]["characterScene"]["renderResourceLinksObserved"])
+                self.assertEqual(report["source"]["staticChainRvas"], [hex(x) for x in {**probe.CODE_WINDOWS, **probe.RESOURCE_LINK_WINDOWS}])
+                reader.close.assert_called_once()
+
+    def test_76_cli_rejects_two_modes_before_opening_any_process(self):
+        with mock.patch("sys.argv", ["probe", "--render-resource-links", "--render-resource-identities"]), \
+                mock.patch.object(probe.core, "Reader") as open_reader, \
+                mock.patch.object(probe.subprocess, "check_output") as command, \
+                mock.patch("sys.stderr"):
+            with self.assertRaises(SystemExit) as error:
+                probe.main()
+            self.assertEqual(error.exception.code, 2)
+            open_reader.assert_not_called()
+            command.assert_not_called()
 
 
 if __name__ == "__main__":

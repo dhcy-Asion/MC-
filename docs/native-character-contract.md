@@ -302,3 +302,25 @@ controller 复读或第二样本，所以部分头信息不能称为完整稳定
 可复建脚本 `build/steve-render-scene-research-20261007/inspect_unknown_selector_resource.py`
 和 `unknown-selector-resource-static.json` 保留 12 个关键字节窗口及 7 个有界片段。
 它们只是固定 EXE 的构造／释放事实，精确类名、嵌套资源类型和应用／恢复合同仍未完成。
+
+### 2026-10-07 构造证据限定的嵌套引用双采样
+
+新增互斥的 `--render-resource-links`（schema 5）；原默认与 RTTI 模式仍为 schema 4。
+这条路径不放宽旧 COL 门禁，而是使用独立的构造／clone／consumer 合同：构造在
+`0x109DB74F` 写 vtable `0x5B3FC58`，`0x109DB78F` 将 +68 置零，clone 在
+`0x2CC7E55` 受引用复制该字段，`0x2DEFE18` 的 pair/index 消费链读选中资源 +68。
+新增四个 pin 只由新模式要求，固定 EXE 共 **31/31** 窗口通过。
+
+对至多两个非空父资源，每项只读 parent[0]、parent+68、非空 nested[0] 三个 QWORD。
+父 vtable 必须精确匹配；嵌套 vtable 只检查主映像范围，不读取 COL、名字、descriptor
+或其它嵌套字段，不准入其类型。两项分别记录失败；成功项重读、Scene/参数/类型/
+pair/index/owner 完整回链和两次采样全部一致才设置 renderResourceLinksObserved。
+空父或空嵌套引用是 notReady，漂移与读取失败不提升为成功，末尾模块变化清除标志。
+隔离检查 **76/76** 通过，包括未解释字节不读、两个模式互斥和最终模块／摘要变化。
+
+实机 `runtime/appearance-linked-headers-20261007.json` 在同一原版资源会话
+`36352:134358196715607705` 完成双采样：两个父资源 +68 指向同一非空对象，嵌套
+vtable RVA 为 `0x5B426C0`，当前 index=1。整体 observed、完整受控链及链接标志为 true；
+nestedClassVerified、nestedLayoutInterpreted、renderedDescriptorVerified、外观应用
+和 Steve 加载仍 false。这证明当前选中资源的一个受引用链接稳定，并不证明资源名称、
+PABC、描述符应用函数或线程 ABI。没有调用游戏函数、写内存、创建对象或改变 MC 库存。

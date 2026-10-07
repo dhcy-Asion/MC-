@@ -25,8 +25,12 @@ MC 存档已升级 schema 2，保存完整 properties；原木 x/y/z 状态可�
 1060 种方块的 26684 个合法状态、原版模型选择及面几何已有离线导出，不能据此称全
 方块已进入红沙。Steve 七资源 prefab／原生 palette PAC 仍为离线候选，持续外观、
 骨骼／动画／两套装备、心形血量和工坊均未完成。
-本轮新增独立分段蒙皮候选，使原来没有响应的肘／膝／手／足骨链带动远端，12 项
-真实资源检查通过；仍使用旧 00_0001 PABC，当前 01_0002 绑定及实机动画尚未验收。
+已有独立分段蒙皮候选在合成姿态检查中使原来没有响应的肘／膝／手／足骨链带动远端，12 项真实资源
+检查通过。本轮进一步拆出头／帽和身体／四肢两 PAC，完整四 LOD 记录保持，7 项检查
+通过；私有 CD_Nude／CD_Head prefab 16 项检查通过。旧分件仍使用 00_0001 neutral；
+当前 01_0002 配置与实机动画须单独验证，离线分件不是已装配的原生人物。
+独立当前 neutral 补偿候选的 13 项检查通过，将该配置的离线中立回放最大误差从
+约 8.9 cm 降到 0.0271 mm；保留原 scale，尚未与私有头身组合或原生动画共同验收。
 
 原木加载失败已定位到 PAMI XML 声明，并以单变量 C 对照验证。新一轮侧向放置消除
 角色遮挡，X/Y/Z 在相同视角可见的三个面（-X、+Y、+Z）朝向分别核对通过，27 项
@@ -41,8 +45,10 @@ MC 存档已升级 schema 2，保存完整 properties；原木 x/y/z 状态可�
 装饰声明；没有写入外观、执行刷新或加载 Steve。CharacterScene 及其参数资源已获得
 部分实读证据，实际渲染组件被严格识别为 SkinnedMeshComponent；专门只读分支
 已在恢复原版资源后的新游戏实例完成双采样，Scene、参数回链与资源选择字段稳定。
-可选资源身份头读取的 62 项检查通过；两个实读资源的候选 RTTI 位置均为代码，
-因此保留 rejected，不解析未知资源布局。该观测没有执行换装。持久操作日志及
+可选资源身份头读取中两个实读资源的候选 RTTI 位置均为代码，因此旧结果保留 rejected。
+独立的构造／消费者限定模式已完成 76 项检查与实机双采样：两项父资源 +68 指向同一
+嵌套头，vtable RVA 0x5B426C0；类型、descriptor 与应用 ABI 仍未准入。没有执行换装。
+持久操作日志及
 会话／对象条件已接入正式蓝代理同步，实机放置／恢复／拆除、后台重启验证通过。
 现有观测不证明所选渲染资源、应用 ABI、刷新线程或恢复生命周期。
 
@@ -171,11 +177,12 @@ RTTI、结构、参数和调用线程验证。没有固定三人限制的直接�
    python tools/probe_characters.py --output runtime/character-next.json
    ```
 
-3. 最新优先级是 **M4a 可逆史蒂夫模式**。先核对实际身体的外观对象／线程与资产绑定，
+3. 最新优先级是 **M4a 启用期间持续 Steve、禁用恢复**。先核对实际身体的外观对象／线程与资产绑定，
    不写猜测的原生指针；M2/M3 的独立第四身份不再阻塞本轮，M6a 未验收按钮保留。
    不消耗用户实验材料。
-4. 获得明确的新角色创建／登记契约后才进入 M3；每完成一个里程碑检查、更新本文件、
-   写 CHANGELOG 并通过同步脚本正常推送。当前用户已要求继续两项修改。
+4. 当前不以独立新身份 M3 作为门槛；继续把当前 rig 补偿与私有头身部件组合，定位
+   实际渲染资源与应用／恢复接口。每完成一个里程碑检查、更新本文件、写 CHANGELOG
+   并通过同步脚本正常推送，保持完整持续目标未完成。
 
 ## 决策记录
 
@@ -1109,3 +1116,61 @@ PABC；头部连接、旋转中心及 current descriptor/装备遮挡保持未�
 下一步优先完成当前 01_0002 描述符与分段模型的绑定对照、Steve 头/身体分件和原部件
 排除；渲染资源继续沿已确认的 0xA0 构造/释放链核对嵌套描述符及应用线程，随后才能
 做可恢复的受控人物切换。不能用新增离线候选代替启用即持续 Steve 的验收。
+
+## 2026-10-07 头身分件、当前 neutral 补偿与嵌套资源实读
+
+上一轮退出／恢复工作已结束；收到迟到的“窗口已关闭”回复后先核对实际状态，当前
+是后来已启动的同一原版资源会话，未误对运行游戏执行恢复。38 项原始文件重新计算
+SHA 全部一致，无 0041、active receipt 或测试对象。
+
+新增头／帽 PAC 与身体／四肢 PAC，四 LOD 分别 48／1008 顶点、24／504 三角，完整
+40-byte 顶点记录、拓扑、UV 和 skin 与合并源逐字保持。每 PAC 有独立同名 PAMI，
+共用三 DDS；七资源不带旧 combined prefab／descriptor。私有 prefab 工具从原版
+0009 索引直接提取当前身体／头，只保留 CD_Nude／CD_Head，保留各自正确 name-pointee
+footer 后改路径，连同当前 body descriptor 共三资源。它避免了通用数组删除留下
+错误 footer、但 CDMW walk_complete 仍为 true 的实测边界问题。
+
+两份 manifest 的十个唯一资源静态路径匹配；外部 PAB/PABC/PAPR/ragdoll、wrinkle
+XML、breath key、原发须 appearance、head scale 和装备/partshrink 仍未共同验收。
+分件仍使用旧 neutral，不能把静态路径闭合视为当前角色已经适配。
+
+另一个独立 current-rig 候选从固定索引提取真实 01_0002 PABC，420 记录、416 个
+中立矩阵与旧配置不同；十四个实际赋权骨都覆盖。共享 PAB/PAPR 与旧版字节相同。
+原 descriptor 的五字段及 1.02571 scale 保持。按已编码权重混合矩阵后求逆预变形，
+重新解码量化 PAC 回放，将当前 neutral 最大偏移 **0.088770 m** 降为
+**2.705741e-5 m**。只允许改 bbox、位置、法线和 V frame，UV／skin／拓扑不改。
+非均匀形变下按协向量/方向分别运输目标 frame，法线 dot≥0.999594、V dot≥0.999721。
+该 combined 候选仍带原内衣，尚未与分件结合；没有证明原生 shader、动态姿态或装备。
+
+新 `--render-resource-links` 与旧 RTTI 诊断互斥，只在固定构造／消费窗口成立时读
+两项父资源 vtable／+68／nested vtable 三个 QWORD。实机完整受控链双采样 observed，
+两个 +68 指向同一非空 nested，vtable RVA `0x5B426C0`；class／layout／descriptor／
+application／Steve loaded 全部 false。旧 RTTI 拒绝结果保留。没有写进程、执行函数、
+安装资源、改变插件或创建原生对象。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| `py -3.12 -B tools/check_steve_parts.py --rebuild` | **7/7**；真实重建、四 LOD 完整 union／palette／材质、破坏字节及输入／输出拒绝 |
+| `py -3.12 -B tools/check_steve_parts_prefab.py --rebuild` | **16/16**；独立原始语法、完整模板逆向恢复、stale footer 反例、真实索引提取后重建 |
+| `py -3.12 -B tools/check_steve_current_rig.py --rebuild` | **13/13**；真实索引提取后重建、byte 权重／量化回放、非对称 shear／127:128 混合反例、覆盖与写入范围拒绝 |
+| `py -3.12 -B tools/check_appearance_controller.py` | **76/76**；默认不读、独立父项错误、空链、漂移、最终 owner/pair/module 与互斥模式 |
+| 固定 EXE 字节窗口 | **31/31**；默认 27 加 linked 模式 4，实际只读采样通过 |
+
+本地报告 SHA256：
+
+- `build/steve-parts/steve-parts-report.json`：`b868ca5d9aa19f6cacae3af4afc8a744be98e966fa3cddbe072d67c3bb33db5d`。
+- `build/steve-parts-prefab/steve-parts-prefab-report.json`：`9aefc59a11e321cb0f46baebc6b8a6ca04caaca98b80da956d8250df43adc3f7`。
+- `build/steve-current-rig/steve-current-rig-report.json`：`da3bd0c0d899c280d26ad1c8d9ca188d9600eeaaf5d2f74a6c4e614a06287585`。
+- `runtime/appearance-linked-headers-20261007.json`：`374ba1763752d41755cc090a656458eaa099ad50664489ebad8130bb2a7b1812`。
+
+`runtime/appearance-linked-context-20261007-before.json`／`-after.json` 记录同一实例
+`36352:134358196715607705`，MC 完整状态均为 revision 22、36 格与选择未变，原生
+对象 0。重新核对原包记录在 `runtime/appearance-linked-restoration-20261007.json`。
+没有待恢复项，正常运行游戏不受本轮候选影响。独立审查未发现分件或补偿写入范围
+的阻塞问题；所有资产、报告、存档及进程地址仍留 ignored 路径。
+收尾 8 个 Python AST、6 份文档的 38 处相对链接、三个候选的 33 项文件哈希和
+`git diff --check` 通过；本轮四组相关检查共 112 项通过，没有为此重复运行无关存档／建造测试。
+
+下一步把已验证补偿用于私有头身组合，并继续从 `0x5B426C0` 自身的构造/消费者核对
+嵌套类型和实际资源路径，不能把相邻 vtable 的 getter 当作本类成员。之后才接通
+受控应用、重载保持和恢复，完整持续目标仍 active。

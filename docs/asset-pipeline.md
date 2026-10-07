@@ -445,3 +445,64 @@ inverseBind×pose 和真实重建逐字一致共 **12/12 通过**。24 个 30° 
 Bip_Weapon_L/R 是 Hand 子骨且 bind 点处于手骨赋权区域，但实际装备是否使用该接点
 未验证。合成弯曲不是原生动画或渲染验收；新候选改变四肢动态变形，不宣称保持原版
 MC 刚体运动。所有安装、外观应用、动画和装备验收标记仍 false，资源留 ignored build。
+
+## Steve 头身分件与当前角色配置（2026-10-07）
+
+```powershell
+py -3.12 -B tools/prepare_steve_parts.py
+py -3.12 -B tools/check_steve_parts.py --rebuild
+py -3.12 -B tools/prepare_steve_parts_prefab.py
+py -3.12 -B tools/check_steve_parts_prefab.py --rebuild
+```
+
+分件默认输出 `build/steve-parts`，固定读取前一节的分段候选。头与帽层为独立 PAC，
+每 LOD 48 顶点／24 三角；身体与四肢及外层为另一 PAC，每 LOD 1008 顶点／504 三角。
+四 LOD 与合并源的几何、UV、权重及全部 40 字节顶点记录逐字一致，两部分的并集无
+遗漏或重复。保留 447 骨／189 palette 和三个原生 draw descriptor，空 draw 不复活。
+**7/7** 检查含真实独立重建通过，原候选文件保持。
+
+每个 PAC 都有其同名 `modelproperty/...pac_xml` 材质；两份材质字节相同，保留原
+三个 draw 名和六套 variant，引用同三份 DDS。因此这里有七项候选资源，不携带旧
+合并 prefab 或旧 descriptor。材质路径遵循固定 CDMW 的
+`appearance_model_sidecar_path`；这是静态依赖规则，尚未证明游戏实际加载。
+
+组合工具单独输出 `build/steve-parts-prefab`：从真实当前 Macduff 身体与头部 prefab
+保留首项 CD_Nude／CD_Head，删除该候选中的内衣和旧头部细件，引用上述两个新 PAC。
+保留原部件名、Nude shrink tag、0.05 shrink distance、空骨架字段、原 owner token
+与头部 `breath_effect_basic`。第三资源是当前 01_0002 身体 descriptor 的原字节副本。
+二进制组件删除显式保留被留下的 name-pointee footer；不能使用 CDMW 通用数组删除
+后表面 walk_complete 的结果，检查已复现该路径遗留错误 footer。
+组合工具默认从 `runtime/installation.json` 或 `--game-root` 指定的原版安装只读提取
+三份固定模板；先核对 EXE 与 0009 索引，再核对每个 payload SHA，不需要历史研究
+目录。显式离线输入须同时给 `--inputs` 和 `--descriptor`。**16/16** 检查含真实索引
+提取后独立重建、错误 footer／指针／计数／头部及输入变化拒绝通过。
+
+这两份报告路径可以静态连接，但旧分件 PAC 使用 00_0001 neutral，不能与当前
+01_0002 descriptor 直接称为已验收的角色。PAB、PABC、PAPR、ragdoll、原 wrinkle
+描述符与动画 key 仍是外部依赖；原独立 Hair/Beard、appearance 的 head scale、
+装备遮挡和受控身体绑定也仍未处理。全部安装、渲染、动画和装备标记保持 false。
+
+当前配置的独立补偿候选：
+
+```powershell
+py -3.12 -B tools/prepare_steve_current_rig.py
+py -3.12 -B tools/check_steve_current_rig.py --rebuild
+```
+
+工具默认输出 `build/steve-current-rig`，从固定 0009 索引提取实际 Macduff prefab、
+327 字节 descriptor、420 记录的 01_0002 PABC 及共享 PAB/PAPR。descriptor 五字段
+逐字保持，包括 `BaseCharacterScale=1.02571` 和尚未解析 payload 的 `macduff.hkt`。
+直接使用旧 bind 几何会在该中立配置下偏移最多 0.088770 m，躯干顶面收缩约 4.38 cm。
+
+对每个顶点按实际 byte 权重求混合矩阵 A，再用 `p_bind=p_target*inverse(A)` 做
+独立预变形。只修改 PAC 的包围盒、位置、法线和 V frame，原拓扑、UV、权重字节与
+四 LOD 保持。重新解码量化产物后，中立姿态回放误差最大 `2.705741e-5 m`；法线
+协向量与 V 方向回放 dot 最低约 0.999594／0.999721。矩阵与 shader 解释尚须原生
+验证；非均匀形变下运输的是目标中立表面的 frame，不宣称是预扭曲 bind 表面的导数。
+
+这套显式候选仍使用合并 PAC，保留当前 prefab 的内衣；它与前述私有头身分件分别
+验证，没有合成一个已装配角色。原 scale 没有烘焙或抵消，实际 head scale、动态
+关节接缝、原生 normals、全部装备和应用／恢复生命周期仍未验收。
+**13/13** 检查通过，包括真实固定索引提取后的完整重建、独立非对称 shear／混合权重
+反例、PABC 覆盖不足和未知 byte lane 修改拒绝。当前候选 PAC SHA256 为
+`3632e1def16d851bf0038dc585ed0bc9a248dd799d462a9435f2816ae8677237`。

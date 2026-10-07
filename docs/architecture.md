@@ -31,8 +31,11 @@ flowchart LR
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断 | 只申请读和查询权限，不调用游戏函数、不创建角色或写游戏内存 |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
-| `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认不解引用选择资源；显式 `--render-resource-identities` 只读至多两个资源的标准 primary RTTI，失败停止，不解析未知布局、不调用刷新或写选择 |
+| `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认不解引用选择资源；互斥 opt-in 为标准 primary RTTI 或精确构造资源的 +68 引用及嵌套 vtable；失败停止，不解析未知 descriptor、不调用刷新或写选择 |
 | `tools/prepare_steve_segmented.py`、`check_steve_segmented.py` | 从固定朝向候选生成独立四肢分段蒙皮 PAC，四 LOD 表面／UV 与真实骨链检查 | 不改变旧候选／默认资源；旧 PABC、头部组合、实际装备接点和实机动画仍未验收 |
+| `tools/prepare_steve_parts.py`、`check_steve_parts.py` | 把固定分段候选拆成头／帽与身体／四肢两 PAC，分别配同名材质及共享 DDS | 四 LOD 的完整顶点记录与合并源一致；使用旧 neutral，不安装或选择角色 |
+| `tools/prepare_steve_parts_prefab.py`、`check_steve_parts_prefab.py` | 真实 Macduff 模板的独立 CD_Nude／CD_Head，严格组件 footer 与路径往返，原字节当前 descriptor | 保留部件名／shrink／空骨架字段；原发须、外部依赖、当前 rig 适配及 actor-local 应用仍需单独验证 |
+| `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收，尚未与私有头身组合接线 |
 | `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
 | `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
 | `tools/build_block_registry.py`、`check_block_registry.py` | 在隔离 build 目录运行固定官方 vanilla 数据生成器，核对 1060 种方块、26684 个合法状态及客户端资源 | 不启动世界；不是 Fabric 实际运行注册表，不表示原生模型/碰撞/特殊渲染已接通 |
