@@ -26,6 +26,32 @@ RENDER_IDENTITIES = ({"vtable": BASE + 0x91000, "col": BASE + 0x92000,
                      {"vtable": BASE + 0x95000, "col": BASE + 0x96000,
                       "descriptor": BASE + 0x97000, "hierarchy": BASE + 0x98000})
 NESTED_HEADERS = (0x230000, 0x231000)
+INPUT_PATHS = ({"property": 0x240000, "holder": 0x242000, "chars": 0x244003,
+                "text": "synthetic/controlled/declared_body.pac"},
+               {"property": 0x241000, "holder": 0x243000, "chars": 0x245005,
+                "text": "synthetic/controlled/declared_skeleton.pab"})
+
+
+def input_path_scene_fixture():
+    reader = skinned_scene_fixture()
+    for rva, raw in probe.INPUT_PATH_WINDOWS.items():
+        reader.segments[BASE + rva] = bytearray(raw)
+    for row, (kind, (offset, vtable)) in zip(INPUT_PATHS, probe.RENDER_INPUT_PROPERTIES.items()):
+        prop, holder, chars = row["property"], row["holder"], row["chars"]
+        reader.put(0x220000 + offset, prop)
+        # Unreviewed property fields and holder suffix are deliberately absent.
+        reader.put(prop, BASE + vtable)
+        reader.put(prop + 0x10, 0x220000)
+        reader.put(prop + 0x1A, 0, "<B")
+        reader.put(prop + 0x28, holder)
+        reader.put(holder, chars)
+        reader.segments[chars] = bytearray(row["text"].encode("ascii") + b"\0")
+    reader.reads.clear()
+    return reader
+
+
+def collect_input_paths(reader, pause=lambda _: None):
+    return probe.collect(reader, BASE, LENGTH, pause, render_input_paths=True)
 
 
 def linked_scene_fixture():
@@ -1455,6 +1481,267 @@ class AppearanceControllerChecks(unittest.TestCase):
             self.assertEqual(error.exception.code, 2)
             open_reader.assert_not_called()
             command.assert_not_called()
+
+
+    def test_77_declared_inputs_have_exact_owner_paths_and_no_rendered_equivalence(self):
+        reader = input_path_scene_fixture()
+        result = collect_input_paths(reader)
+        self.assertEqual((result["schemaVersion"], result["state"]), (6, "observed"))
+        self.assertTrue(result["renderInputPathsRequested"] and result["renderInputPathsObserved"]
+                        and result["stableTwoSamples"])
+        self.assertEqual(result["samples"][0], result["samples"][1])
+        for sample in result["samples"]:
+            info = sample["characterScene"]["renderInputPaths"]
+            self.assertEqual(info["state"], "observed")
+            for row, expected in zip(info["inputs"], INPUT_PATHS):
+                self.assertEqual(row["path"], expected["text"])
+                self.assertTrue(row["propertyIdentityVerified"] and row["directOwnerRoundTripObserved"]
+                                and row["declaredPathObserved"] and row["nulTerminated"])
+                self.assertEqual(row["pathBytesIncludingNulHex"], (expected["text"].encode() + b"\0").hex())
+                self.assertEqual(row["bytesRead"], len(expected["text"]) + 1)
+                self.assertTrue(row["extensionMatchesNativeInput"])
+            self.assertFalse(info["selectedRenderResourceEquivalenceVerified"])
+            self.assertFalse(sample["characterScene"]["renderSelector"]["selectedResourceDereferenced"])
+        for row in INPUT_PATHS:
+            prop, holder, chars = row["property"], row["holder"], row["chars"]
+            self.assertEqual({(at, size) for at, size in reader.reads if prop <= at < prop + 0x38},
+                             {(prop, 8), (prop + 0x10, 8), (prop + 0x1A, 1), (prop + 0x28, 8)})
+            self.assertEqual({(at, size) for at, size in reader.reads if holder <= at < holder + 0x38}, {(holder, 8)})
+            reads = {(at, size) for at, size in reader.reads if chars <= at < chars + 512}
+            self.assertEqual(reads, {(chars + i, 1) for i in range(len(row["text"]) + 1)})
+        self.assertFalse(any(SCENE["buffer0"] <= at < SCENE["buffer1"] + 0x1000 for at, _ in reader.reads))
+        for flag in ("renderResourceLinksObserved", "renderResourceIdentitiesObserved", "renderedDescriptorVerified",
+                     "nativeFunctionsInvoked", "gameMemoryWritten", "appearanceApplicationVerified",
+                     "appearanceRestoreVerified", "steveModelLoaded"):
+            self.assertIs(result[flag], False, flag)
+
+    def test_78_default_does_not_read_declared_input_fields_or_extra_pins(self):
+        reader = input_path_scene_fixture()
+        result = collect(reader)
+        self.assertEqual((result["schemaVersion"], result["state"]), (4, "observed"))
+        self.assertFalse(result["renderInputPathsRequested"] or result["renderInputPathsObserved"])
+        self.assertNotIn("renderInputPaths", result["samples"][0]["characterScene"])
+        excluded = {BASE + rva for rva in probe.INPUT_PATH_WINDOWS}
+        excluded.update((0x220000 + 0xD8, 0x220000 + 0xE8))
+        self.assertFalse(any(at in excluded or 0x240000 <= at < 0x246000 for at, _ in reader.reads))
+
+    def test_79_unknown_property_vtable_stops_its_fields_and_retains_peer(self):
+        reader = input_path_scene_fixture(); prop = INPUT_PATHS[0]["property"]
+        reader.put(prop, BASE + probe.RENDER_INPUT_PROPERTIES["pac"][1] + 8)
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "rejected")
+        rows = result["samples"][0]["characterScene"]["renderInputPaths"]["inputs"]
+        self.assertEqual(rows[0]["failedChecks"], ["exact-declared-property-constructor-vtable"])
+        self.assertTrue(rows[1]["declaredPathObserved"])
+        self.assertFalse(any(prop < at < prop + 0x38 for at, _ in reader.reads))
+        self.assertFalse(result["renderInputPathsObserved"] or result["stableTwoSamples"])
+
+    def test_80_weak_owner_and_wrong_direct_owner_stop_before_string_holder(self):
+        for weak in (False, True):
+            with self.subTest(weak=weak):
+                reader = input_path_scene_fixture(); prop = INPUT_PATHS[0]["property"]
+                reader.put(prop + (0x1A if weak else 0x10), 8 if weak else ADDR["owner"], "<B" if weak else "<Q")
+                result = collect_input_paths(reader)
+                self.assertEqual(result["state"], "rejected")
+                row = result["samples"][0]["characterScene"]["renderInputPaths"]["inputs"][0]
+                self.assertEqual(row["failedChecks"], ["direct-property-owner-required" if weak
+                                 else "exact-Skinned-property-owner-backlink"])
+                self.assertNotIn((prop + 0x28, 8), reader.reads)
+                if weak:
+                    self.assertNotIn((prop + 0x10, 8), reader.reads)
+                self.assertFalse(result["renderInputPathsObserved"] or result["stableTwoSamples"])
+
+    def test_81_absent_property_holder_chars_or_empty_input_is_not_ready(self):
+        first = INPUT_PATHS[0]
+        for absent in ("property", "holder", "chars", "text"):
+            with self.subTest(absent=absent):
+                reader = input_path_scene_fixture()
+                if absent == "property": reader.put(0x220000 + 0xD8, 0)
+                elif absent == "holder": reader.put(first["property"] + 0x28, 0)
+                elif absent == "chars": reader.put(first["holder"], 0)
+                else: reader.segments[first["chars"]][:] = b"\0"
+                result = collect_input_paths(reader)
+                self.assertEqual(result["state"], "notReady")
+                self.assertTrue(result["stableTwoSamples"])
+                self.assertFalse(result["renderInputPathsObserved"])
+                rows = result["samples"][0]["characterScene"]["renderInputPaths"]["inputs"]
+                self.assertFalse(rows[0]["declaredPathObserved"])
+                self.assertTrue(rows[1]["declaredPathObserved"])
+                self.assertFalse(any(at < 0x10000 for at, _ in reader.reads))
+
+    def test_82_property_holder_alignment_and_character_byte_bounds(self):
+        for field in (0x220000 + 0xD8, INPUT_PATHS[0]["property"] + 0x28):
+            for invalid in (1, 0x10003, 2**47):
+                reader = input_path_scene_fixture(); reader.put(field, invalid)
+                result = collect_input_paths(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertNotIn((invalid, 8), reader.reads)
+        for invalid in (1, 2**47):
+            reader = input_path_scene_fixture(); reader.put(INPUT_PATHS[0]["holder"], invalid)
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            row = result["samples"][0]["characterScene"]["renderInputPaths"]["inputs"][0]
+            self.assertEqual(row["failedChecks"], ["character-byte-address-bounds"])
+            self.assertNotIn((invalid, 1), reader.reads)
+        # The successful fixture deliberately uses two unaligned char pointers.
+        self.assertEqual(collect_input_paths(input_path_scene_fixture())["state"], "observed")
+
+    def test_83_string_read_is_bounded_terminated_printable_and_complete(self):
+        first = INPUT_PATHS[0]; chars = first["chars"]
+        for raw, expected in ((b"x" * 512, "bounded-NUL-termination"),
+                              (b"x\x01\0", "printable-ASCII-declared-input"),
+                              (b"x\xff\0", "printable-ASCII-declared-input")):
+            reader = input_path_scene_fixture(); reader.segments[chars] = bytearray(raw)
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            row = result["samples"][0]["characterScene"]["renderInputPaths"]["inputs"][0]
+            self.assertEqual(row["failedChecks"], [expected])
+            self.assertFalse(row["declaredPathObserved"] or result["renderInputPathsObserved"])
+            self.assertNotIn((chars + 512, 1), reader.reads)
+        reader = input_path_scene_fixture(); reader.segments[chars] = bytearray(b"x" * 511 + b"\0")
+        self.assertEqual(collect_input_paths(reader)["state"], "observed")
+        reader = input_path_scene_fixture(); reader.segments[chars] = bytearray(b"x")
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertIn("complete readable span", result["reason"])
+
+    def test_84_all_interpreted_property_fields_are_reread(self):
+        row = INPUT_PATHS[0]
+        for address, replacement, fmt in ((0x220000 + 0xD8, INPUT_PATHS[1]["property"], "<Q"),
+                (row["property"], BASE + probe.RENDER_INPUT_PROPERTIES["pab"][1], "<Q"),
+                (row["property"] + 0x10, ADDR["owner"], "<Q"),
+                (row["property"] + 0x1A, 8, "<B"),
+                (row["property"] + 0x28, INPUT_PATHS[1]["holder"], "<Q"),
+                (row["holder"], INPUT_PATHS[1]["chars"], "<Q")):
+            with self.subTest(address=address):
+                reader = input_path_scene_fixture(); original = reader.read; changed = False
+                def changing(at, size):
+                    nonlocal changed
+                    raw = original(at, size)
+                    if at == address and not changed:
+                        changed = True; reader.put(address, replacement, fmt)
+                    return raw
+                reader.read = changing
+                result = collect_input_paths(reader)
+                self.assertEqual(result["state"], "rejected")
+                self.assertIn("interpreted fields changed", result["reason"])
+                self.assertFalse(result["stableTwoSamples"] or result["renderInputPathsObserved"])
+
+    def test_85_path_and_nul_bytes_reread_after_peer_detect_late_mutation(self):
+        first, second = INPUT_PATHS
+        for offset in (0, len(first["text"])):
+            reader = input_path_scene_fixture(); original = reader.read; changed = False
+            def changing(at, size):
+                nonlocal changed
+                raw = original(at, size)
+                if at == second["chars"] + len(second["text"]) and not changed:
+                    changed = True; reader.segments[first["chars"]][offset] = ord("X")
+                return raw
+            reader.read = changing
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertIn("interpreted fields changed", result["reason"])
+            self.assertFalse(result["renderInputPathsObserved"] or result["stableTwoSamples"])
+
+    def test_86_declared_input_changes_between_samples_are_unstable(self):
+        reader = input_path_scene_fixture()
+        result = collect_input_paths(reader, lambda _: reader.segments[INPUT_PATHS[1]["chars"]].__setitem__(0, ord("X")))
+        self.assertEqual(result["state"], "unstable")
+        self.assertEqual(len(result["samples"]), 2)
+        self.assertNotEqual(result["samples"][0], result["samples"][1])
+        self.assertFalse(result["renderInputPathsObserved"] or result["stableTwoSamples"])
+
+    def test_87_exact_skinned_type_remains_required_before_any_input_read(self):
+        reader = input_path_scene_fixture()
+        reader.put(SCENE["renderWeak"] + 8, ADDR["owner"] + 0x28)
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertIn("exact SkinnedMeshComponent", result["reason"])
+        self.assertFalse(any(at in (ADDR["owner"] + 0xD8, ADDR["owner"] + 0xE8)
+                             or 0x240000 <= at < 0x246000 for at, _ in reader.reads))
+
+    def test_88_full_controlled_scene_owner_rechecks_gate_input_observation(self):
+        for address, replacement, fmt in ((ADDR["manager"] + 0x50, ADDR["user"], "<Q"),
+                (SCENE["ownerWeak"] + 8, ADDR["actor"] + 0x28, "<Q"),
+                (ADDR["owner"] + 0x218, 1, "<I")):
+            reader = input_path_scene_fixture(); original = reader.read; changed = False
+            def changing(at, size):
+                nonlocal changed
+                raw = original(at, size)
+                if at == INPUT_PATHS[1]["chars"] + len(INPUT_PATHS[1]["text"]) and not changed:
+                    changed = True; reader.put(address, replacement, fmt)
+                return raw
+            reader.read = changing
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "rejected")
+            self.assertFalse(result["stableTwoSamples"] or result["renderInputPathsObserved"])
+
+    def test_89_input_pins_and_property_vtable_image_bounds_fail_before_heap_reads(self):
+        for rva in probe.INPUT_PATH_WINDOWS:
+            reader = input_path_scene_fixture(); reader.segments[BASE + rva][0] ^= 1
+            result = collect_input_paths(reader)
+            self.assertEqual(result["samples"], [])
+            self.assertIn("code bytes", result["reason"])
+        reader = input_path_scene_fixture()
+        with mock.patch.object(probe, "RENDER_INPUT_PROPERTIES", {"pac": (0xD8, LENGTH), "pab": (0xE8, LENGTH)}):
+            result = collect_input_paths(reader)
+        self.assertEqual(result["samples"], [])
+        self.assertEqual(reader.reads, [])
+
+    def test_90_three_modes_are_pairwise_exclusive_before_any_read_or_process(self):
+        flags = ("--render-resource-identities", "--render-resource-links", "--render-input-paths")
+        for index, first in enumerate(flags):
+            for second in flags[index + 1:]:
+                kwargs = {first[2:].replace("-", "_"): True, second[2:].replace("-", "_"): True}
+                reader = input_path_scene_fixture()
+                result = probe.collect(reader, BASE, LENGTH, lambda _: None, **kwargs)
+                self.assertEqual(result["state"], "rejected")
+                self.assertEqual(result["samples"], [])
+                self.assertEqual(reader.reads, [])
+                with mock.patch("sys.argv", ["probe", first, second]), \
+                        mock.patch.object(probe.core, "Reader") as open_reader, \
+                        mock.patch.object(probe.subprocess, "check_output") as command, mock.patch("sys.stderr"):
+                    with self.assertRaises(SystemExit) as error: probe.main()
+                    self.assertEqual(error.exception.code, 2)
+                    open_reader.assert_not_called(); command.assert_not_called()
+
+    def test_91_input_cli_module_digest_change_clears_flag_and_preserves_original_samples(self):
+        for changed in ("module", "digest"):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory(dir=probe.ROOT / "runtime") as temp:
+                reader = input_path_scene_fixture()
+                exe, output = Path(temp) / "CrimsonDesert.exe", Path(temp) / "paths.json"
+                reader.module = mock.Mock(side_effect=[(BASE, LENGTH, exe),
+                    (BASE + (0x1000 if changed == "module" else 0), LENGTH, exe)])
+                reader.close = mock.Mock()
+                with mock.patch("sys.argv", ["probe", "--pid", "42123", "--render-input-paths", "--output", str(output)]), \
+                        mock.patch.object(probe.core, "Reader", return_value=reader), \
+                        mock.patch.object(probe.subprocess, "check_output", return_value=probe.roster.VERSION), \
+                        mock.patch.object(probe, "file_digest", side_effect=[probe.roster.SHA256,
+                            probe.roster.SHA256 if changed == "module" else "0" * 64]), mock.patch("builtins.print"):
+                    self.assertEqual(probe.main(), 1)
+                report = json.loads(output.read_bytes())
+                self.assertEqual(report["state"], "unstable")
+                self.assertFalse(report["renderInputPathsObserved"] or report["stableTwoSamples"])
+                self.assertTrue(report["samples"][0]["characterScene"]["renderInputPathsObserved"])
+                self.assertEqual(report["source"]["staticChainRvas"], [hex(x) for x in probe.code_windows(render_input_paths=True)])
+                reader.close.assert_called_once()
+
+    def test_92_declared_path_content_is_reported_without_selected_type_or_suffix_guess(self):
+        reader = input_path_scene_fixture(); chars = INPUT_PATHS[0]["chars"]
+        reader.segments[chars] = bytearray(b"synthetic/declared.input\0")
+        result = collect_input_paths(reader)
+        self.assertEqual(result["state"], "observed")
+        row = result["samples"][0]["characterScene"]["renderInputPaths"]["inputs"][0]
+        self.assertEqual(row["path"], "synthetic/declared.input")
+        self.assertFalse(row["extensionMatchesNativeInput"])
+        self.assertFalse(result["renderedDescriptorVerified"] or result["appearanceApplicationVerified"])
+
+    def test_93_missing_base_scene_fields_cannot_promote_complete_input_paths(self):
+        for field in (SCENE["scene"] + 0xA0, 0x220000 + 0xA8, SCENE["scene"] + 0x78):
+            reader = input_path_scene_fixture(); reader.put(field, 0)
+            result = collect_input_paths(reader)
+            self.assertEqual(result["state"], "notReady")
+            self.assertFalse(result["renderInputPathsObserved"])
 
 
 if __name__ == "__main__":

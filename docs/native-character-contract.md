@@ -257,8 +257,9 @@ API 保持 revision 22。此前三份 gate 拒绝报告仍保留；新成功记�
 
 实际 Macduff 身体 descriptor 使用 `01_0002.pabc`、`BaseCharacterScale=1.02571`
 和 `macduff.hkt`；旧候选仅复制 `00_0001.pabc` 的模板，不具有当前描述符等价性。
-需要保留当前绑定基线的私有描述符及 actor-local 选择/组合，不能借改共享基线来
-规避恢复。私有 meshparam／preset／decoration 绑定与加载、恢复尚未实现。
+需要保留当前绑定基线的私有描述符；最终 actor-local 选择/组合不能借改共享基线来
+规避恢复。后续允许单独验证有明确共享范围、可恢复的 meshparam 覆盖候选，见末节；
+私有 meshparam／preset／decoration 的 actor-local 绑定与加载、恢复尚未实现。
 
 原文还证明部件名、shrink tag 与装备遮挡耦合：44 条 partshrink 规则涉及 Nude、
 Underwear、Hair、Beard，postfix `_F` 中部分规则按 CD_Head 等名字隐藏。现候选把
@@ -324,3 +325,61 @@ vtable RVA 为 `0x5B426C0`，当前 index=1。整体 observed、完整受控链�
 nestedClassVerified、nestedLayoutInterpreted、renderedDescriptorVerified、外观应用
 和 Steve 加载仍 false。这证明当前选中资源的一个受引用链接稳定，并不证明资源名称、
 PABC、描述符应用函数或线程 ABI。没有调用游戏函数、写内存、创建对象或改变 MC 库存。
+
+### 声明 PAC/PAB 输入路径：schema 6
+
+`--render-input-paths` 与 `--render-resource-identities`、`--render-resource-links`
+互斥，默认模式保持 schema 4，links 保持 schema 5。新增模式不沿无名资源 +68 猜测
+descriptor，而从已经通过精确反射门禁的受控 SkinnedMeshComponent 读取两项声明输入：
+
+| 字段 | 固定身份和消费证据 |
+| --- | --- |
+| component `+0xD8` | PAC 文件输入属性，构造 vtable RVA `0x5B37368` |
+| component `+0xE8` | PAB 文件输入属性，构造 vtable RVA `0x5B43050` |
+| property `+0x1A`、`+0x10` | flag 的掩码 `0x08` 位为零且直接 owner 精确回指该 Skinned component；弱 owner 分支拒绝 |
+| property `+0x28 → holder[0]` | 原生字符串消费链指向字符字节；holder 须对齐，字符地址允许非 QWORD 对齐 |
+
+构造／owner／文件扩展名与字符串消费者共增加 13 个固定字节窗口，连同基础 27 个，
+该模式 **40/40** 窗口经固定 EXE 核对。每项最多逐字节读取 512 字节且必须包含 NUL，
+只接受可打印 ASCII；地址、vtable 或回链失败在进入后续布局前停止。空属性、空 holder、
+空字符指针或空字符串为 notReady，不当作已加载资源。扩展名是否为 pac/pab 只作
+`extensionMatchesNativeInput` 记录，不据此证明文件存在或已被引擎消费。
+
+两项分别保留成功或失败证据，失败项不继续解释未知字段。包括 NUL 在内的全部实际
+读取字节加入本次 Scene 稳定性复读；Scene/参数/弱链/pair/index/owner 必须完整，
+两次样本相同且最终代码、模块与 EXE 摘要未变化，才可提升 `renderInputPathsObserved`。
+缺失基础 Scene 字段时，即使两条字符串可读也不提升完整观测。输出仍限定新建的
+ignored runtime JSON，拒绝覆盖已有证据。
+
+隔离检查当前 **93/93** 通过，覆盖三个模式互斥、坏 vtable／owner／字符串、弱分支
+提前拒绝、非对齐字符地址、同级失败记录、读取中漂移、模块变化及部分 Scene 不晋升。
+这只证明声明输入的只读合同；`selectedRenderResourceEquivalenceVerified`、
+`renderedDescriptorVerified`、`appearanceApplicationVerified`、`appearanceRestoreVerified`
+和 `steveModelLoaded` 均保持 false。该模式不调用任何原生函数、不写内存或改变选择。
+本轮实际 `runtime/appearance-render-input-paths-20261007.json` 两样本完全一致：PAC
+属性的类型／owner 正确但声明为空，PAB 声明为 `character/model/1_pc/1_phm/phm_01.pab`。
+完整链稳定，整体如实为 notReady、renderInputPathsObserved=false；不能从空声明推断
+没有实际渲染 PAC。详情见进度，不凭声明路径宣称 Steve 已显示。
+
+### 私有资源组合及有界共享外观试验
+
+当前离线 assembly 已组合十项私有资源：头身 PAC/PAMI、三 DDS、独立 CD_Nude/CD_Head
+prefab 和当前身体 descriptor。身体使用实际 01_0002 neutral 补偿；头原 PAC 不变，
+因为 Head0001 的 207 条 PABC 记录未包含其唯一加权骨 93。PAB 回退与身体继承的
+数值比较是两个候选假设，尚未证明原生头身合并、HeadScale、动态动画及装备语义。
+组合 **12/12** 离线检查不代表原生准入。
+
+首次显示试验的候选只在固定 Kliff meshparam 的默认 Body/Head MeshSet 中将原
+basename 改为 `crimsonmc_steve_body_1_21_1`／`crimsonmc_steve_head_1_21_1`；两处
+逆替换逐字恢复原 XML，**12/12** 离线检查通过。七组选择、PABC、Hair/Beard 和装备
+均保持，FF 不作隐藏。该文件由 Macduff 00000/00002 等共享消费者使用；静态扫描
+不能证明全部运行时实例，因此这条试验明确不是 actor-local，不覆盖共享 nude PAC。
+
+十一资源专用 overlay 与 `steve-mesh-parameters` 事务种类提供临时包安装／恢复入口，
+原木 CLI 默认 `oak-log` 不变，两种 owner/收据不能交叉恢复；安装恢复必须关闭游戏，
+恢复不覆盖后来存档。候选准入和关闭游戏的包事务均不能证明外观刷新 ABI、跨重载
+自动持续 Steve 或实际恢复。新包故障检查 **21/21** 通过，实机验收另行记录；窗口接管
+在物理 Escape 后停止，获得用户再次授权才恢复。首测新会话已实际读到 Body／Head
+两个私有 basename，均为合法的默认选项 0；这仍是选项声明，未验证渲染。随后再次
+收到物理 Escape 停止；用户退出后临时包已恢复，详细证据见进度。流程及精确资源范围见
+[asset-pipeline.md](asset-pipeline.md)。

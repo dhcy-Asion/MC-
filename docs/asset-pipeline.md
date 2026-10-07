@@ -219,7 +219,7 @@ py -3.12 -B tools/check_asset_overlay.py --output build/steve-prefab-overlay --v
 内衣资源和 descriptor 原文保留，PAB/PABC/PAPR 三依赖从真实归档复读校验。
 16 项检查含真实重建通过，七资源 overlay 的 13 项预演也通过，PAZ 为 334976 字节。
 这次预演以仍装原木 0041 的快照生成 0042；原木恢复后此快照已过期，安装前须重新生成，
-不能复用旧计划。Steve 从未安装；prefab 仍未指向受控 actor，动画、贴合与装备未验收。
+不能复用旧计划。该阶段尚未安装 Steve；当时 prefab 未指向受控 actor，动画、贴合与装备未验收。
 
 ## 独立资源包与索引预演
 
@@ -501,8 +501,91 @@ py -3.12 -B tools/check_steve_current_rig.py --rebuild
 验证；非均匀形变下运输的是目标中立表面的 frame，不宣称是预扭曲 bind 表面的导数。
 
 这套显式候选仍使用合并 PAC，保留当前 prefab 的内衣；它与前述私有头身分件分别
-验证，没有合成一个已装配角色。原 scale 没有烘焙或抵消，实际 head scale、动态
+验证，后续组合见下一节。原 scale 没有烘焙或抵消，实际 head scale、动态
 关节接缝、原生 normals、全部装备和应用／恢复生命周期仍未验收。
 **13/13** 检查通过，包括真实固定索引提取后的完整重建、独立非对称 shear／混合权重
 反例、PABC 覆盖不足和未知 byte lane 修改拒绝。当前候选 PAC SHA256 为
 `3632e1def16d851bf0038dc585ed0bc9a248dd799d462a9435f2816ae8677237`。
+
+## 私有十资源组合与两属性外观候选
+
+在上述分件、私有 prefab 和当前 neutral 候选完成后，分别生成独立输出：
+
+```powershell
+py -3.12 -B tools/prepare_steve_assembly.py
+py -3.12 -B tools/check_steve_assembly.py --rebuild
+py -3.12 -B tools/prepare_steve_appearance.py
+py -3.12 -B tools/check_steve_appearance.py --rebuild
+```
+
+`build/steve-assembly/steve-assembly-report.json` 固定组合十项资源：两 PAC、各自同名
+两 PAMI、三 DDS、两私有 prefab 和当前身体 descriptor。身体使用当前 01_0002
+neutral 补偿，其四 LOD 顶点完整记录与 combined-current 的身体部分一致；头部 PAC
+保持原 split 字节。实际 Head0001 PABC 有 207 条记录，却没有头部唯一加权骨
+`Bip01 Head`（93）。工具分别计算 CDMW 单个 PABC 的 PAB bind 回退及继承身体
+neutral 的假设误差，不把其中任何一种宣布为原生头身合并合同。
+
+组合保留两 PAC 的拓扑、UV、byte 权重与 palette；独立 CD_Nude/CD_Head prefab
+排除原内衣与头部细件。材质纹理路径在十项资源内闭合，PAB/PABC/PAPR、ragdoll、
+wrinkle 和 `breath_effect_basic` 仍依赖原游戏。原生 HeadScale=0.92、身体 scale、
+动态接缝、shader frame、装备和实际加载均未验收。**12/12** 检查含独立真实重建通过；
+纯 `load_candidate` 固定整报告 SHA、三份来源报告、每个模板与 payload，不加载 CDMW
+或以可改写的报告标记授予安装资格。
+
+`build/steve-appearance/steve-appearance-report.json` 默认从固定 EXE/0009 索引
+只读提取原版模板并复读校验。它只修改
+`character/descriptors/customizationmeta/meshparam_example_kliff.xml` 中两个属性：
+
+| 默认选项 | 原 MeshFileName | 私有 MeshFileName |
+| --- | --- | --- |
+| Body，组 0 / MeshSet 0 | `cd_phm_00_nude_01_0002_macduff` | `crimsonmc_steve_body_1_21_1` |
+| Head，组 1 / MeshSet 0 | `cd_phm_00_head_00_0001_macduff` | `crimsonmc_steve_head_1_21_1` |
+
+其余 XML 字节及语义保持，逆替换逐字还原模板；七组选项数、默认值、variation、
+decoration 输入、Hair/Beard 和 scale 均未修改。报告的 `candidateResources` 为空，
+唯一旧路径单列 `targetReplacements`，固定 loader 重新生成预期两属性替换并核对
+全部字节。**12/12** 检查含真实提取重建、篡改拒绝与逆向还原通过。
+
+固定 0009 的 5667 份 app_xml 和 5 份 meshparam 静态扫描中，该 meshparam 被
+Macduff 00000/00002 引用；一份无关 NPC XML 解析失败，扫描也不覆盖其它归档和运行时
+生成引用。因此替换会影响使用该共享路径的所有实例，不能称为只对当前 actor 生效。
+直接替换共享身体 prefab 的消费者范围更大，本候选不这样做。原 Hair/Beard 与装备
+保留，可能遮挡 Steve；FF 是默认回退，不能当作隐藏。配置候选不代表已应用外观。
+
+## 独立十一资源临时 Steve 包
+
+```powershell
+# 只写新的 ignored build 输出，原木临时包须已恢复
+py -3.12 -B tools/prepare_steve_probe_overlay.py
+py -3.12 -B tools/check_steve_probe.py --rebuild
+```
+
+默认输出 `build/steve-probe-overlay`。它只接受上节固定十资源 assembly 和一份
+两属性替换，实际包必须恰好十一项：十个 crimsonmc 新 basename 加上述唯一旧路径。
+`prepare_asset_overlay.py` 的普通 CLI 和 `load_resources` 继续拒绝旧 basename；
+新增的 `replacement_report` 仅为程序内部限定入口，由 appearance 的纯固定 loader
+验证。旧路径通过新 overlay 首位挂载覆盖，不改写原版 0009 PAZ/PAMT。
+
+专用安装器重新验证两个候选报告、十一项解包字节及真实存储 flags、六份包／metadata
+文件、原索引和纹理注册，复用已有备份、锁、关闭游戏检查和恢复事务。独立种类为
+`steve-mesh-parameters`，owner 为 `CrimsonMC temporary Steve mesh-parameter probe v1`。
+原 `install_asset_probe.py` CLI 保持默认 `oak-log`。两者共用一份 active receipt，
+禁止并存；kind/owner 不符在恢复写入前拒绝，Steve 包必须用 Steve 入口恢复。
+
+完成隔离故障检查并安排实机验证后，关闭游戏时的专用操作入口是：
+
+```powershell
+py -3.12 -B tools/install_steve_probe.py --install --plan build/steve-probe-overlay
+# 验证后正常退出红沙，再恢复同种类包
+py -3.12 -B tools/install_steve_probe.py --restore
+```
+
+安装前备份 metadata 和存档，恢复只解除临时挂载、恢复原 metadata、删除确属收据的
+包文件，**不覆盖后来存档**；外部修改或游戏运行时停止并保留恢复证据。独立 Steve
+故障／真实重建检查 **21/21** 通过，包括不同 kind 拒绝交叉恢复。Windows 本地路径
+先规范分隔符再检查 build 边界，游戏虚拟路径仍严格要求 POSIX；目录越界反例通过。
+实机结果另记 [progress.md](progress.md)，隔离故障检查不代替原生显示／恢复验收。
+当前没有已验收的 Steve 游戏内显示、装备覆盖或实际外观恢复；临时共享资源包也
+不满足启用 mod 后跨重载自动持续 Steve 的完整目标。一次真实安装／启动后，受控
+选项表已读到两私有 basename，但接管再次被物理 Escape 停止，显示未确认。用户
+退出后已恢复原始文件，最新存档和 MC 状态保持，无待恢复项；详情见进度记录。

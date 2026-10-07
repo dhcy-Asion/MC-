@@ -31,11 +31,13 @@ flowchart LR
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断 | 只申请读和查询权限，不调用游戏函数、不创建角色或写游戏内存 |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
-| `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认不解引用选择资源；互斥 opt-in 为标准 primary RTTI 或精确构造资源的 +68 引用及嵌套 vtable；失败停止，不解析未知 descriptor、不调用刷新或写选择 |
+| `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认 schema 4；三个互斥 opt-in 分别读取 primary RTTI、schema 5 的 +68 引用头或 schema 6 的 Skinned PAC/PAB 声明路径；均不准入未知 descriptor、不调用刷新或写选择 |
 | `tools/prepare_steve_segmented.py`、`check_steve_segmented.py` | 从固定朝向候选生成独立四肢分段蒙皮 PAC，四 LOD 表面／UV 与真实骨链检查 | 不改变旧候选／默认资源；旧 PABC、头部组合、实际装备接点和实机动画仍未验收 |
 | `tools/prepare_steve_parts.py`、`check_steve_parts.py` | 把固定分段候选拆成头／帽与身体／四肢两 PAC，分别配同名材质及共享 DDS | 四 LOD 的完整顶点记录与合并源一致；使用旧 neutral，不安装或选择角色 |
 | `tools/prepare_steve_parts_prefab.py`、`check_steve_parts_prefab.py` | 真实 Macduff 模板的独立 CD_Nude／CD_Head，严格组件 footer 与路径往返，原字节当前 descriptor | 保留部件名／shrink／空骨架字段；原发须、外部依赖、当前 rig 适配及 actor-local 应用仍需单独验证 |
-| `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收，尚未与私有头身组合接线 |
+| `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
+| `tools/prepare_steve_assembly.py`、`check_steve_assembly.py` | 固定十资源组合：头身两 PAC、两 PAMI、三 DDS、两私有 prefab、当前身体 descriptor | 身体用当前 neutral 补偿；头保持原 split，Head PABC 未覆盖其唯一加权骨 93；PAB 回退与身体继承均只是离线假设 |
+| `tools/prepare_steve_appearance.py`、`check_steve_appearance.py` | 从固定 0009 模板只改 Kliff meshparam 的 Body/Head 默认 MeshFileName 两属性，提供纯本地固定候选准入 | 原路径共享于 Macduff appearance，影响所有使用者；保留发须／装备及 variation/scale，不是 actor-local 或永久外观绑定 |
 | `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
 | `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
 | `tools/build_block_registry.py`、`check_block_registry.py` | 在隔离 build 目录运行固定官方 vanilla 数据生成器，核对 1060 种方块、26684 个合法状态及客户端资源 | 不启动世界；不是 Fabric 实际运行注册表，不表示原生模型/碰撞/特殊渲染已接通 |
@@ -45,8 +47,9 @@ flowchart LR
 | `tools/prepare_steve_material.py`、`check_steve_material.py` | 编码 Steve BC3/BC5/DXT1 材质候选，用独立 Pillow 解码每层 mip，重写已核对的原生材质参数 | 仅本地候选；没有 actor 引用，透明/动画/装备/受控外观未验证 |
 | `tools/prepare_steve_prefab.py`、`check_steve_prefab.py` | 完整解析原生 nude prefab，仅改 CD_Nude 的 PAC 路径；保留内衣、descriptor 与骨骼依赖，生成七资源报告 | 离线候选，不选择受控角色身体，也不提供已验证的动画控制或刷新生命周期 |
 | `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 去声明 Y 轴对照已显示纹理并通过碰撞/清理；三轴完整验收、原生光照/采样仍未完成；单位立方碰撞不适用于特殊形状 |
-| `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 只写 ignored build；预演不安装，也不证明引擎渲染 |
-| `tools/install_asset_probe.py`、`check_asset_probe.py` | 关闭游戏时临时安装/恢复自有 21 项原木 overlay，核对新鲜索引、存档备份、所有权与并发锁 | 拒绝外部修改；恢复不覆盖后来存档；不安装 Steve 或接通正式 MC 映射 |
+| `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 默认 CLI/loader 只接收 crimsonmc 新 basename；程序内部 replacement_report 仅接受固定 Kliff meshparam；只写 ignored build |
+| `tools/install_asset_probe.py`、`check_asset_probe.py` | 默认 CLI 临时安装/恢复 21 项原木 overlay；共享关闭游戏、索引、备份、所有权和并发事务 | 默认 kind=oak-log；拒绝 Steve 收据与外部修改；恢复不覆盖后来存档，不接通正式 MC 模型映射 |
+| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 独立固定十一资源包入口：assembly 十项加一份 meshparam 替换；使用共享安装事务 | kind=steve-mesh-parameters，独立 owner、同一锁与 active receipt；必须用本入口恢复；隔离事务与实际显示／恢复分别验收 |
 | `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木；`--side-view` 优先现有侧方候选以减少遮挡 | 默认取点不变、不移动角色／相机；画面须另验，只清理自有 UID／变换，不消费 MC 材料 |
 | `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
 | `tools/prepare_native_block_control.py`、`check_native_block_control.py` | 在独立 build 目录准备三种单资源对照：原蓝 prefab、原蓝 PAMI、仅去除原木 Y PAMI 的 XML 声明 | 每种对照的其余 20 项资源逐字保持；身份贯穿资源报告、安装收据与实体日志，不能视为原木显示验收 |
@@ -290,6 +293,24 @@ Trinity 来源中的 client/server 标签在本机均指向同一个 ServerActor
 world-root 签名和 RTTI 链解析；多个 child 全部记录，不默认选择第一个。
 坐标关联与血量候选仅是证据，`native_character_id_verified` 和
 `native_f1_roster_registration_verified` 当前始终为 false。
+
+外观探针默认及 `--render-resource-identities` 输出 schema 4，`--render-resource-links`
+输出 schema 5，`--render-input-paths` 输出 schema 6；三个扩展互斥。schema 6 只读取
+已确认 SkinnedMeshComponent 的两项 PAC/PAB 文件输入属性：精确构造 vtable、直接
+owner 回链、有界 NUL 字符串及全部读取字节的稳定性均通过，才提升
+`renderInputPathsObserved`。声明路径不证明已选渲染资源、文件加载或 descriptor 应用。
+默认模式不追加这些字段读取；具体偏移、失败边界与固定证据见
+[native-character-contract.md](native-character-contract.md)。当前隔离检查 93/93、
+该模式固定 EXE 的 40 个静态窗口通过，外观应用、恢复与 Steve 加载标记仍 false。
+
+临时 Steve 包的唯一旧虚拟路径为
+`character/descriptors/customizationmeta/meshparam_example_kliff.xml`。其余十项使用
+私有 crimsonmc basename；`targetReplacements` 与 `candidateResources` 分开记录。
+两个候选的纯 `load_candidate` 重读固定报告、模板和 payload，不能只信报告成功标记。
+安装器再验证十一项解包字节、存储 flags、原索引和 metadata。`oak-log` 与
+`steve-mesh-parameters` 共用 `runtime/asset-probe-active.json` 和系统锁，但恢复首先
+核对 kind/owner，禁止交叉恢复。旧无 kind 的原木收据只按 oak-log 兼容。
+这是关闭游戏时可准备的临时共享资源试验，尚不提供跨重载自动 Steve 或装备绑定。
 
 ## 关键决策
 

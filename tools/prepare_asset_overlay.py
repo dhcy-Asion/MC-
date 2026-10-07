@@ -204,13 +204,36 @@ def publish(output: Path, files: dict[str, bytes]) -> None:
         temporary.replace(target)
 
 
-def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: Path) -> dict:
+def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: Path,
+            *, replacement_report: Path | None = None) -> dict:
     output = native.output_directory(output)
     provenance = native.load_cdmw(source, deps)
     native.check_links(game)
     if native.file_hash(game / "bin64" / "CrimsonDesert.exe") != native.EXE_SHA256:
         raise ValueError("Unsupported Crimson Desert EXE SHA; overlay rehearsal stopped")
     resources, payloads, inputs = load_resources(reports)
+    # The general loader/CLI remains new-name-only. A separate reviewed Steve
+    # probe may shadow exactly its fixed Kliff mesh-parameter template; this is
+    # not an arbitrary-path or in-place archive replacement interface.
+    replacement_paths, replacement_snapshot = set(), {}
+    if replacement_report is not None:
+        import prepare_steve_appearance as appearance
+        replacement_report = native.output_directory(replacement_report)
+        replacement, replacement_payloads, replacement_snapshot = appearance.load_candidate(replacement_report)
+        rows = replacement["targetReplacements"]
+        if len(rows) != 1 or set(replacement_payloads) != {appearance.TARGET_PATH}:
+            raise ValueError("Only the reviewed single Steve mesh-parameter replacement is permitted")
+        for row in rows:
+            path = virtual_path(row["virtualPath"])
+            if path != row["templatePath"] or path in payloads or row["kind"] != "appearanceMeshParams":
+                raise ValueError("Unexpected Steve replacement identity or duplicate resource")
+            resource = dict(row, localFile=str((replacement_report.parent / row["localFile"]).relative_to(ROOT)))
+            resources.append(resource)
+            payloads[path] = replacement_payloads[path]
+            replacement_paths.add(path)
+        inputs[str(replacement_report.relative_to(ROOT))] = native.file_hash(replacement_report)
+        if len(resources) > RESOURCE_LIMIT:
+            raise ValueError("Too many candidate overlay resources")
     if any(output.is_relative_to((ROOT / relative).parent) or
            (ROOT / relative).is_relative_to(output) for relative in inputs):
         raise ValueError("Overlay output must be separate from its candidate inputs")
@@ -218,7 +241,7 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
     from cdmw.core.archive_extraction import read_archive_entry_raw_data, _decode_archive_entry_data
     from cdmw.core.papgt_format import parse_papgt
     from cdmw.core.pathc_format import parse_pathc, encode_pathc, register_dds
-    from cdmw.domain.archives.mutation import ArchiveAddRequest
+    from cdmw.domain.archives.mutation import ArchiveAddRequest, ArchivePatchRequest
     from cdmw.services.archive_overlay_install import prepare_overlay_install, overlay_directory_name
     papgt_path, pathc_path = game / "meta/0.papgt", game / "meta/0.pathc"
     for path in (papgt_path, pathc_path):
@@ -250,7 +273,7 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                 stored_checksum != calculate_pa_checksum(index_bytes[12:])):
             raise ValueError("Mounted PAMT does not match PAPGT record")
         entries = parse_archive_pamt(index)
-        if any(entry.path.casefold() in targets for entry in entries):
+        if any(entry.path.casefold() in targets - replacement_paths for entry in entries):
             raise ValueError("Candidate virtual path already exists in a mounted archive")
         for entry in entries:
             # First mounted occurrence has the same priority as the game loader.
@@ -261,7 +284,7 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
     table = parse_pathc(pathc_before)
     textures = {}
     template_payloads = {}
-    additions = []
+    additions, requests = [], []
     for resource in resources:
         path, template_path = resource["virtualPath"], resource["templatePath"]
         template = templates[template_path]
@@ -283,8 +306,14 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
             table = register_dds(table, path, payloads[path])
         elif path.endswith(".dds"):
             raise ValueError("DDS resources must be marked texture for registry publication")
-        addition = ArchiveAddRequest.from_template(template, path, payloads[path])
         resource["templateArchiveFlags"] = int(template.flags)
+        if path in replacement_paths:
+            if path != template_path or path.endswith(".dds"):
+                raise ValueError("Replacement must shadow its exact nontexture template")
+            requests.append(ArchivePatchRequest(template, payloads[path]))
+            resource["archiveFlags"] = int(template.flags)
+            continue
+        addition = ArchiveAddRequest.from_template(template, path, payloads[path])
         if resource["kind"] == "texture":
             # These are complete DDS files, not the template's PartialDDS
             # chunks. Store them raw (the OverlayFile default) and register their
@@ -307,7 +336,7 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
         return calculate_pa_checksum(bytes(data))
 
     with patch("cdmw.core.archive_overlay._payload_checksum", reference_checksum):
-        preparation = prepare_overlay_install((), additions, package_root=game,
+        preparation = prepare_overlay_install(requests, additions, package_root=game,
                                              meta_files=(("meta/0.pathc", pathc_after),), directory_name=name)
     if preparation.carried_forward_paths or set(preparation.all_paths) != set(payloads):
         raise ValueError("Unexpected carried-forward overlay resources")
@@ -332,6 +361,9 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
     for relative, expected in inputs.items():
         if native.file_hash(ROOT / relative) != expected:
             raise ValueError("Candidate report changed during overlay rehearsal")
+    if replacement_snapshot:
+        from prepare_steve_orientation import verify_snapshot
+        verify_snapshot(replacement_snapshot)
     files = {f"package/{name}/0.pamt": preparation.pamt_bytes,
              f"package/{name}/0.paz": preparation.paz_bytes,
              "metadata-before/0.papgt": papgt_before, "metadata-before/0.pathc": pathc_before,
@@ -357,6 +389,9 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                               "Resource decoding and registry consistency do not prove engine rendering or companion compatibility.",
                               "Installation needs a fresh preflight, exact metadata backups, ownership receipt and tested restoration.",
                               "Derived game resources must remain local and must not be uploaded."]}
+    if replacement_paths:
+        report["replacementPaths"] = sorted(replacement_paths)
+        report["replacementScope"] = "Temporary shadow of the fixed Kliff mesh-parameter file; all consumers may observe it, not an actor-local override"
     files[report_file] = json.dumps(report, ensure_ascii=False, indent=2).encode()
     publish(output, files)
     return report

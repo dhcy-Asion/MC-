@@ -36,6 +36,25 @@ SKINNED_MESH_META = 0x6D6A160
 SKINNED_MESH_META_VTABLE = 0x55739A0
 SKINNED_MESH_META_TYPE = ".?AV?$ReflectMetaObjectBind@VSkinnedMeshComponent@pa@@$0A@@pa@@"
 ANONYMOUS_RESOURCE_VTABLE = 0x5B3FC58
+RENDER_INPUT_PROPERTIES = {"pac": (0xD8, 0x5B37368), "pab": (0xE8, 0x5B43050)}
+MAX_RENDER_INPUT_PATH_BYTES = 512
+# Constructor/owner/string consumers prove declared inputs only. These are not
+# assumed to be the paths consumed by the selected render resource/descriptor.
+INPUT_PATH_WINDOWS = {
+    0x2D96DD0: bytes.fromhex("ba10000000b93800000041382c377407e8938ca501eb05e8c48ba501488bd84885c0751be8772058fe4533c94533c0ba01000000b9020000a0ff153943450248895c24684885db740a488bcbe80f89edffeb03488bc54889afd80000004885c07407488987d8000000"),
+    0x2C6F78D: bytes.fromhex("488d412848894424484889442450488d0d9e61df03488908488d05bc7bec02488903"),
+    0x2D96E39: bytes.fromhex("4c8d3500ebcc034c89b7e0000000ba10000000b93800000041803c37007407e81b8ca501eb05e84c8ba501"),
+    0x2D96EE0: bytes.fromhex("488d4328488944247048894424784c8930488d0558c1da02488903"),
+    0x2D96F04: bytes.fromhex("4889afe80000004885db740748899fe8000000"),
+    0x2D97149: bytes.fromhex("488b9fd800000048397b10741e488b07488bcfff908801000084c07406804b1a08eb0848897b1066897318488b9fe800000048397b10741e488b07488bcfff908801000084c07406804b1a08eb0848897b1066897318"),
+    0x2D9BBE8: bytes.fromhex("488bb3d8000000488b4628488b084885c974058039007554"),
+    0x2D9BC54: bytes.fromhex("488d05ddb2d90248894424204c8d0d45787d024c8d051e102104488b93d8000000488bcbe803390000"),
+    0x2D9BC7D: bytes.fromhex("488d05d461da0248894424204c8d0d1c787d024c8d05fd0f2104488b93e8000000488bcbe8da380000"),
+    0x2D9F5A3: bytes.fromhex("488b42284c8b104d85d20f842c010000450fb61a4584db0f841f010000498bc248ffc04180fb2e75034c8bd0440fb6184584db75eb488b9424c0000000492bd2410fb60a410fb604122bc8750749ffc285c075ec85c90f8487000000"),
+    0x47B6EA: bytes.fromhex("488b39488bd9488b0a488d1546a25e0648890b483bca740b8b411085c07804f0ff4110"),
+    0x5B36F38: b"pac\0",
+    0x5B41E58: b"pab\0",
+}
 # Separate opt-in contract: the constructor and consumers prove only the +68
 # held reference, not a complete resource class, descriptor or native ABI.
 RESOURCE_LINK_WINDOWS = {
@@ -190,7 +209,12 @@ def typed(reader, address, base, length, name, *, context=None, evidence=None):
         raise
 
 
-def validate_code(reader, base, length, *, render_resource_links=False):
+def code_windows(*, render_resource_links=False, render_input_paths=False):
+    return {**CODE_WINDOWS, **(RESOURCE_LINK_WINDOWS if render_resource_links else {}),
+            **(INPUT_PATH_WINDOWS if render_input_paths else {})}
+
+
+def validate_code(reader, base, length, *, render_resource_links=False, render_input_paths=False):
     if not 0 < length <= core.MAX_IMAGE_SIZE:
         raise ProbeError("Main image exceeds the reviewed bounds")
     if any(rva > length - size for rva, size in ((WORLD_GLOBAL, 8), (CONTROLLER_VTABLE, 8),
@@ -199,7 +223,9 @@ def validate_code(reader, base, length, *, render_resource_links=False):
         raise ProbeError("Fixed world global or reviewed vtable/metadata escaped the main image")
     if render_resource_links and ANONYMOUS_RESOURCE_VTABLE > length - 8:
         raise ProbeError("Anonymous constructor vtable escaped the main image")
-    windows = {**CODE_WINDOWS, **RESOURCE_LINK_WINDOWS} if render_resource_links else CODE_WINDOWS
+    if render_input_paths and any(vtable > length - 8 for _, vtable in RENDER_INPUT_PROPERTIES.values()):
+        raise ProbeError("Declared input property constructor vtable escaped the main image")
+    windows = code_windows(render_resource_links=render_resource_links, render_input_paths=render_input_paths)
     for rva, expected in windows.items():
         if rva > length - len(expected) or read(reader, base + rva, len(expected), "native chain code") != expected:
             raise ProbeError("Native chain code bytes differ from the fixed EXE contract")
@@ -479,8 +505,110 @@ def linked_resource_header(reader, address, base, length, evidence, *, watch=Non
         raise
 
 
+def declared_render_input_paths(reader, component, base, evidence, *, watch):
+    """Read exactly two native file-input properties, never a selected descriptor.
+
+    The parent has already passed the dedicated Skinned reflection gate. Only
+    direct property owners are supported; the constructor's weak branch stops
+    before +28. Character pointers are byte addresses, unlike aligned holders.
+    Every read byte, including NUL, joins the whole Scene stability recheck.
+    """
+    evidence.update(state="notReady", inputs=[], maxPathBytes=MAX_RENDER_INPUT_PATH_BYTES,
+        stringEncoding="printable-ASCII/NUL", selectedRenderResourceEquivalenceVerified=False,
+        renderedDescriptorVerified=False, appearanceApplicationVerified=False,
+        identityMode="exact-property-constructor-vtable/direct-Skinned-owner/native-string-consumer")
+    errors = []
+
+    def get(address, size, label):
+        raw = read(reader, address, size, label)
+        watch(address, raw, label)
+        return raw
+
+    def qword(address, label):
+        return struct.unpack("<Q", get(address, 8, label))[0]
+
+    for kind, (offset, expected_vt) in RENDER_INPUT_PROPERTIES.items():
+        label = "Skinned declared " + kind + " input"
+        entry = {"kind": kind, "componentOffset": hex(offset), "state": "notReady",
+                 "expectedPropertyVtableRva": hex(expected_vt), "propertyIdentityVerified": False,
+                 "directOwnerRoundTripObserved": False, "declaredPathObserved": False,
+                 "nulTerminated": False, "bytesRead": 0, "failedChecks": []}
+        evidence["inputs"].append(entry)
+        text_raw = bytearray()
+        try:
+            prop = qword(component + offset, label + " property")
+            entry.update(propertyPointer=hex(prop), present=bool(prop))
+            if not prop:
+                entry["reason"] = "Declared input property is absent"
+                continue
+            pointer(prop, label + " property")
+            vt = qword(prop, label + " property vtable")
+            entry["propertyVtablePointer"] = hex(vt)
+            if vt != base + expected_vt:
+                entry["failedChecks"] = ["exact-declared-property-constructor-vtable"]
+                raise ProbeError(label + " property vtable differs from the fixed constructor")
+            entry.update(propertyVtableRva=hex(expected_vt), propertyIdentityVerified=True)
+            flag = get(prop + 0x1A, 1, label + " owner flags")[0]
+            entry["ownerFlag1A"] = flag
+            if flag & 8:
+                entry["failedChecks"] = ["direct-property-owner-required"]
+                raise ProbeError(label + " uses the unsupported weak property-owner branch")
+            parent = qword(prop + 0x10, label + " direct owner")
+            entry["ownerPointer"] = hex(parent)
+            if parent != component:
+                entry["failedChecks"] = ["exact-Skinned-property-owner-backlink"]
+                raise ProbeError(label + " property does not refer back to the controlled Skinned component")
+            entry["directOwnerRoundTripObserved"] = True
+            holder = qword(prop + 0x28, label + " string holder")
+            entry["stringHolderPointer"] = hex(holder)
+            if not holder:
+                entry["reason"] = "Declared input string holder is absent"
+                continue
+            pointer(holder, label + " string holder")
+            chars = qword(holder, label + " character pointer")
+            entry["charactersPointer"] = hex(chars)
+            if not chars:
+                entry["reason"] = "Declared input character pointer is absent"
+                continue
+            # Native code loads individual characters. Imposing QWORD alignment
+            # here would reject valid interned strings sharing a backing buffer.
+            if not 0x10000 <= chars < 2**47:
+                entry["failedChecks"] = ["character-byte-address-bounds"]
+                raise ProbeError(label + " character pointer escaped the reviewed byte-address bounds")
+            for index in range(MAX_RENDER_INPUT_PATH_BYTES):
+                if chars + index >= 2**47:
+                    entry["failedChecks"] = ["character-byte-address-bounds"]
+                    raise ProbeError(label + " character span escaped the reviewed address bounds")
+                byte = get(chars + index, 1, label + " character byte")[0]
+                text_raw.append(byte)
+                if byte == 0:
+                    entry["nulTerminated"] = True
+                    break
+                if not 0x20 <= byte < 0x7F:
+                    entry["failedChecks"] = ["printable-ASCII-declared-input"]
+                    raise ProbeError(label + " is outside the reviewed printable ASCII string contract")
+            if not entry["nulTerminated"]:
+                entry["failedChecks"] = ["bounded-NUL-termination"]
+                raise ProbeError(label + " lacks NUL termination within the fixed path bound")
+            path = text_raw[:-1].decode("ascii")
+            entry.update(path=path, expectedNativeExtension=kind,
+                         extensionMatchesNativeInput=path.rsplit(".", 1)[-1] == kind)
+            if not path:
+                entry["reason"] = "Declared input string is empty"
+                continue
+            entry.update(state="observed", declaredPathObserved=True)
+        except ProbeError as error:
+            entry.update(state="rejected", failureReason=str(error))
+            errors.append(error)
+        finally:
+            entry.update(bytesRead=len(text_raw), pathBytesIncludingNulHex=text_raw.hex())
+    evidence["state"] = ("rejected" if errors else "observed" if
+                         all(item["declaredPathObserved"] for item in evidence["inputs"]) else "notReady")
+    return errors
+
+
 def character_scene(reader, base, length, owner, members, observed, *, render_resource_identities=False,
-                    render_resource_links=False):
+                    render_resource_links=False, render_input_paths=False):
     """Follow the exact owner's bounded components and reviewed Scene fields.
 
     Scene and its owned parameter resource lack a valid primary MSVC RTTI
@@ -494,13 +622,14 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
             "renderLinkObserved": False, "renderSelectorFieldsObserved": False,
             "selectedResourceTypeVerified": False, "renderedDescriptorVerified": False,
             "appearanceApplicationVerified": False, "renderResourceIdentitiesObserved": False,
-            "renderResourceLinksObserved": False}
+            "renderResourceLinksObserved": False, "renderInputPathsObserved": False}
     observed["characterScene"] = info
     watched = {}
     resource_identities = []
     identity_errors = []
     resource_links = []
     link_errors = []
+    input_errors = []
 
     def get(address, size, label):
         raw = read(reader, address, size, label)
@@ -514,6 +643,11 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
         key = (address, len(raw), label)
         if watched.setdefault(key, raw) != raw:
             raise ProbeError("Anonymous resource link bytes changed during Scene reads")
+
+    def watch_input(address, raw, label):
+        key = (address, len(raw), label)
+        if watched.setdefault(key, raw) != raw:
+            raise ProbeError("Declared render input bytes changed during Scene reads")
 
     def weak_at(address, label, expected=None):
         holder = qword(address, label + " holder")
@@ -629,6 +763,13 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
         get(primary, 8, "render-linked primary vtable")
         info["renderObject"] = {**render_type, "equalsControlledOwner": primary == owner}
         info["renderLinkObserved"] = True
+        if render_input_paths:
+            info["renderInputPaths"] = {"state": "notReady"}
+            if render_type.get("reflectionType") != "SkinnedMeshComponent":
+                info["renderInputPaths"].update(state="rejected", failedChecks=["exact-SkinnedMeshComponent-required"])
+                raise ProbeError("Declared render inputs require the dedicated exact SkinnedMeshComponent type gate")
+            input_errors = declared_render_input_paths(reader, primary, base,
+                info["renderInputPaths"], watch=watch_input)
         selector = qword(primary + 0xA8, "render selector container")
         info["renderSelector"] = {"present": bool(selector), "typeInterpreted": False,
             "fieldContract": "native 0x7268C2..0x7268DD only; no constructor/type inferred"}
@@ -700,14 +841,22 @@ def character_scene(reader, base, length, owner, members, observed, *, render_re
             raise link_errors[0]
         info["renderResourceLinksObserved"] = (len(resource_links) == 2 and
             all(header["nestedPrimaryHeaderObserved"] for _, header in resource_links))
+    if render_input_paths:
+        stable()
+        if input_errors:
+            raise input_errors[0]
+        info["renderInputPathsObserved"] = (info.get("renderInputPaths", {}).get("state") == "observed"
+            and bool(parameter and info["renderSelectorFieldsObserved"]))
     info["state"] = "observed" if (parameter and info["renderSelectorFieldsObserved"]) else "notReady"
     info["limitations"] = ["The selected buffer's resource type and descriptor fields are not decoded.",
         "Scene and parameter identity use pinned reflection/constructor evidence; primary MSVC RTTI is unavailable.",
         "The render-linked object must pass exact SceneObjectClient RTTI or the dedicated pinned SkinnedMeshComponent reflection contract.",
+        "Declared PAC/PAB property strings do not verify the selected resource's rendered descriptor or grant native application permission.",
         "These observations do not establish appearance application ABI, thread, restore or slot semantics."]
 
 
-def sample(reader, base, length, observed, *, render_resource_identities=False, render_resource_links=False):
+def sample(reader, base, length, observed, *, render_resource_identities=False, render_resource_links=False,
+           render_input_paths=False):
     def link(address, name):
         return pointer(value(reader, address, name), name)
     root = link(base + WORLD_GLOBAL, "world root")
@@ -775,7 +924,7 @@ def sample(reader, base, length, observed, *, render_resource_identities=False, 
     loaded_options(reader, base, length, controller, raw, selections, observed)
     character_scene(reader, base, length, owner, members, observed,
                     render_resource_identities=render_resource_identities,
-                    render_resource_links=render_resource_links)
+                    render_resource_links=render_resource_links, render_input_paths=render_input_paths)
     # Re-read only structural bytes that have a known contract, not unknown
     # holder fields or values which may legitimately change while moving.
     expected_links = ((base + WORLD_GLOBAL, root), (root + 0x30, manager), (manager + 0x58, user),
@@ -800,13 +949,16 @@ def sample(reader, base, length, observed, *, render_resource_identities=False, 
     observed["stableDuringSample"] = True
 
 
-def collect(reader, base, length, pause=time.sleep, *, render_resource_identities=False, render_resource_links=False):
-    report = {"schemaVersion": 5 if render_resource_links else 4,
+def collect(reader, base, length, pause=time.sleep, *, render_resource_identities=False, render_resource_links=False,
+            render_input_paths=False):
+    report = {"schemaVersion": 6 if render_input_paths else 5 if render_resource_links else 4,
               "mode": "external-read-only", "state": "rejected", "samples": [],
               "renderResourceIdentitiesRequested": render_resource_identities,
               "renderResourceIdentitiesObserved": False,
               "renderResourceLinksRequested": render_resource_links,
               "renderResourceLinksObserved": False,
+              "renderInputPathsRequested": render_input_paths,
+              "renderInputPathsObserved": False,
               "nativeFunctionsInvoked": False, "gameMemoryWritten": False, "heapScanned": False,
               "appearanceApplicationVerified": False, "appearanceRestoreVerified": False,
               "steveModelLoaded": False, "snapshotAtomic": False,
@@ -818,17 +970,19 @@ def collect(reader, base, length, pause=time.sleep, *, render_resource_identitie
                               "Decoration final palette/mesh-dependent bounds and slot semantics are not verified.",
                               "The intermediate holder's type and unused fields are not interpreted."]}
     try:
-        if render_resource_identities and render_resource_links:
+        if sum(bool(mode) for mode in (render_resource_identities, render_resource_links, render_input_paths)) > 1:
             raise ProbeError("Choose exactly one independent render-resource diagnostic mode")
-        validate_code(reader, base, length, render_resource_links=render_resource_links)
+        validate_code(reader, base, length, render_resource_links=render_resource_links,
+                      render_input_paths=render_input_paths)
         for index in range(2):
             observed = {}
             report["samples"].append(observed)
             sample(reader, base, length, observed, render_resource_identities=render_resource_identities,
-                   render_resource_links=render_resource_links)
+                   render_resource_links=render_resource_links, render_input_paths=render_input_paths)
             if index == 0:
                 pause(SAMPLE_GAP_SECONDS)
-        validate_code(reader, base, length, render_resource_links=render_resource_links)
+        validate_code(reader, base, length, render_resource_links=render_resource_links,
+                      render_input_paths=render_input_paths)
         if report["samples"][0] != report["samples"][1]:
             report["state"] = "unstable"
             raise ProbeError("The two fixed controller samples do not agree")
@@ -845,10 +999,14 @@ def collect(reader, base, length, pause=time.sleep, *, render_resource_identitie
         report["sceneRenderSelectorObserved"] = scene["state"] == "observed"
         report["renderResourceIdentitiesObserved"] = scene["renderResourceIdentitiesObserved"]
         report["renderResourceLinksObserved"] = scene["renderResourceLinksObserved"]
+        report["renderInputPathsObserved"] = scene["renderInputPathsObserved"]
         report["state"] = "observed" if report["selectionBuffersPresent"] and report["loadedOptionsObserved"] else "notReady"
         if render_resource_links and not report["renderResourceLinksObserved"]:
             report["state"] = "notReady"
             report["reason"] = "The controlled Scene resource pair or a nested reference/header is absent"
+        if render_input_paths and not report["renderInputPathsObserved"]:
+            report["state"] = "notReady"
+            report["reason"] = "A controlled Scene field or declared PAC/PAB input property/string is absent or empty"
         if report["state"] == "notReady":
             report.setdefault("reason", "Controller ownership was observed but a selection buffer or loaded option table is empty")
     except (ProbeError, RuntimeError, OSError, ValueError, struct.error) as error:
@@ -881,7 +1039,7 @@ def summary(report, output):
             ("state", "reason", "stableTwoSamples", "controlledControllerChainObserved", "selectionBuffersPresent",
              "loadedOptionsObserved", "meshGroupChoiceBoundsVerified", "decorationComputedBoundsVerified",
              "characterSceneObserved", "sceneRenderSelectorObserved", "renderResourceIdentitiesObserved", "renderedDescriptorVerified",
-             "renderResourceLinksObserved",
+             "renderResourceLinksObserved", "renderInputPathsObserved",
              "nativeFunctionsInvoked", "gameMemoryWritten", "appearanceApplicationVerified", "steveModelLoaded")}}
 
 
@@ -901,6 +1059,8 @@ def main():
                         help="Read only primary RTTI identities of the two controlled Scene selector resources")
     modes.add_argument("--render-resource-links", action="store_true",
                        help="Read exact anonymous parent +68 references and nested vtables only, without RTTI or descriptor interpretation")
+    modes.add_argument("--render-input-paths", action="store_true",
+                       help="Read the exact controlled Skinned component's declared PAC/PAB property strings only; no selected descriptor equivalence")
     parser.add_argument("--output", type=Path, default=ROOT / "runtime/appearance-controller.json")
     args = parser.parse_args()
     output = output_path(args.output)
@@ -923,20 +1083,22 @@ def main():
         digest = file_digest(path)
         roster.validate_layout_build(profile, version, digest)
         report = collect(reader, base, length, render_resource_identities=args.render_resource_identities,
-                         render_resource_links=args.render_resource_links)
+                         render_resource_links=args.render_resource_links, render_input_paths=args.render_input_paths)
         if reader.module() != (base, length, path) or file_digest(path) != digest:
             report.update(state="unstable", stableTwoSamples=False, controlledControllerChainObserved=False,
                           characterSceneObserved=False, sceneRenderSelectorObserved=False,
                           renderResourceIdentitiesObserved=False,
                           renderResourceLinksObserved=False,
+                          renderInputPathsObserved=False,
                           renderedDescriptorVerified=False,
                           reason="Game module changed during the read-only observation")
         report.update(timeUtc=dt.datetime.now(dt.timezone.utc).isoformat(),
                       game={"pid": pid, "path": str(path), "version": version, "sha256": digest,
                             "moduleBase": hex(base), "moduleSize": length},
                       source={"worldAnchor": profile["world_root"]["source"], "license": "MIT",
-                              "staticChainRvas": [hex(rva) for rva in ({**CODE_WINDOWS, **RESOURCE_LINK_WINDOWS}
-                                  if args.render_resource_links else CODE_WINDOWS)]})
+                              "staticChainRvas": [hex(rva) for rva in code_windows(
+                                  render_resource_links=args.render_resource_links,
+                                  render_input_paths=args.render_input_paths)]})
         write_report(output, report)
         print(json.dumps(summary(report, output), ensure_ascii=False, indent=2))
         return 0 if report["state"] == "observed" else 1

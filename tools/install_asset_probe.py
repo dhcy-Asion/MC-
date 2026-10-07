@@ -22,11 +22,20 @@ import prepare_native_steve as native
 
 ROOT = native.ROOT
 OWNER = "CrimsonMC static oak-log asset probe v1"
+STEVE_OWNER = "CrimsonMC temporary Steve mesh-parameter probe v1"
 RECEIPT = "runtime/asset-probe-active.json"
 MARKER = ".crimsonmc-asset-probe-owner.json"
 METADATA = ("meta/0.pathc", "meta/0.papgt")
 MAX_SAVE_BYTES = 512 * 1024 * 1024
 MAX_SAVE_FILES = 10000
+
+
+def probe_owner(kind: str) -> str:
+    if kind == "oak-log":
+        return OWNER
+    if kind == "steve-mesh-parameters":
+        return STEVE_OWNER
+    raise ValueError("Unsupported asset probe kind")
 
 
 def json_bytes(value: object) -> bytes:
@@ -333,13 +342,19 @@ def archive_receipt(state_root: Path, receipt: dict, status: str) -> None:
 
 
 def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
-            save_roots: list[Path] | None = None, running=game_running, _fault=None) -> dict:
+            save_roots: list[Path] | None = None, running=game_running, _fault=None,
+            probe_kind: str = "oak-log") -> dict:
+    owner = probe_owner(probe_kind)
     game = game.absolute()
     require_closed(game, running)
     receipt_path = state_path(state_root, RECEIPT)
     if receipt_path.exists():
         raise ValueError("An active probe receipt exists; restore or inspect it first")
-    prepared = load_plan(plan_path)
+    if probe_kind == "oak-log":
+        prepared = load_plan(plan_path)
+    else:
+        from install_steve_probe import load_plan as load_steve_plan
+        prepared = load_steve_plan(plan_path)
     report, name = prepared["report"], prepared["name"]
     if (game / name).exists() or (game / ".cdmw").exists():
         raise ValueError("Probe directory or external CDMW management already exists")
@@ -350,7 +365,7 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
     identity = uuid.uuid4().hex
     backup = state_path(state_root, "backups/asset-probe-" + identity)
     backup.mkdir(parents=True, exist_ok=False)
-    marker_data = json_bytes({"owner": OWNER, "id": identity,
+    marker_data = json_bytes({"owner": owner, "id": identity,
                               "planSha256": prepared["reportSha256"]})
     package_files = {name + "/0.pamt": (prepared["package"] / "0.pamt").read_bytes(),
                      name + "/0.paz": (prepared["package"] / "0.paz").read_bytes(),
@@ -364,7 +379,8 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
         if backup_files[path] != native.sha256(prepared["before"][path]):
             raise ValueError("Metadata backup verification failed")
     saves = backup_saves(save_roots if save_roots is not None else discover_saves(), backup)
-    receipt = {"format": "crimsonmc_asset_probe_v1", "owner": OWNER, "id": identity,
+    receipt = {"format": "crimsonmc_asset_probe_v1", "owner": owner, "id": identity,
+               "probeKind": probe_kind,
                "status": "installing", "gameRoot": str(game.resolve()), "directoryName": name,
                "createdAt": dt.datetime.now(dt.timezone.utc).isoformat(),
                "plan": str(prepared["plan"]), "planSha256": prepared["reportSha256"],
@@ -436,13 +452,15 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
 
 
 def _restore_unlocked(game: Path | None = None, *, state_root: Path = ROOT, running=game_running,
-            _fault=None) -> dict:
+            _fault=None, probe_kind: str = "oak-log") -> dict:
+    expected_owner = probe_owner(probe_kind)
     receipt_path = state_path(state_root, RECEIPT)
     data = receipt_path.read_bytes()
     if len(data) > 8 * 1024 * 1024:
         raise ValueError("Probe receipt is too large")
     receipt = json.loads(data)
-    if (receipt.get("format") != "crimsonmc_asset_probe_v1" or receipt.get("owner") != OWNER
+    if (receipt.get("format") != "crimsonmc_asset_probe_v1" or receipt.get("owner") != expected_owner
+            or receipt.get("probeKind", "oak-log") != probe_kind
             or not re.fullmatch(r"[0-9a-f]{32}", receipt.get("id", ""))
             or receipt.get("status") not in ("installed", "installing", "restored", "rolled_back")):
         raise ValueError("Probe receipt ownership or state is invalid")
@@ -488,7 +506,7 @@ def _restore_unlocked(game: Path | None = None, *, state_root: Path = ROOT, runn
     marker = target(game, name + "/" + MARKER)
     if marker.exists():
         owner = json.loads(marker.read_bytes())
-        if owner != {"owner": OWNER, "id": receipt["id"], "planSha256": receipt["planSha256"]}:
+        if owner != {"owner": expected_owner, "id": receipt["id"], "planSha256": receipt["planSha256"]}:
             raise ValueError("Probe directory owner does not match its receipt")
     require_closed(game, running)
     old_metadata = {p: target(game, p).read_bytes() for p in METADATA}
@@ -579,17 +597,20 @@ def state_lock(state_root: Path):
 
 
 def install(plan_path: Path, game: Path, *, state_root: Path = ROOT,
-            save_roots: list[Path] | None = None, running=game_running, _fault=None) -> dict:
+            save_roots: list[Path] | None = None, running=game_running, _fault=None,
+            probe_kind: str = "oak-log") -> dict:
+    probe_owner(probe_kind)
     require_closed(game, running)
     with state_lock(state_root):
         return _install_unlocked(plan_path, game, state_root=state_root,
-                                 save_roots=save_roots, running=running, _fault=_fault)
+                                 save_roots=save_roots, running=running, _fault=_fault, probe_kind=probe_kind)
 
 
 def restore(game: Path | None = None, *, state_root: Path = ROOT,
-            running=game_running, _fault=None) -> dict:
+            running=game_running, _fault=None, probe_kind: str = "oak-log") -> dict:
+    probe_owner(probe_kind)
     with state_lock(state_root):
-        return _restore_unlocked(game, state_root=state_root, running=running, _fault=_fault)
+        return _restore_unlocked(game, state_root=state_root, running=running, _fault=_fault, probe_kind=probe_kind)
 
 
 def main() -> None:

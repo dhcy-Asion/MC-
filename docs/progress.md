@@ -30,7 +30,11 @@ MC 存档已升级 schema 2，保存完整 properties；原木 x/y/z 状态可�
 通过；私有 CD_Nude／CD_Head prefab 16 项检查通过。旧分件仍使用 00_0001 neutral；
 当前 01_0002 配置与实机动画须单独验证，离线分件不是已装配的原生人物。
 独立当前 neutral 补偿候选的 13 项检查通过，将该配置的离线中立回放最大误差从
-约 8.9 cm 降到 0.0271 mm；保留原 scale，尚未与私有头身组合或原生动画共同验收。
+约 8.9 cm 降到 0.0271 mm。现在已组合为 10 项私有头身资源：身体使用当前补偿，
+头部按独立 Head0001 变体保留原字节，12 项真实重建检查通过；原生动画尚未验收。
+Kliff meshparam 候选只改两个 MeshFileName，12 项检查通过。已生成含该 XML 的
+11 项临时测试包，保留原发须、装备、HeadScale 0.92 与 CharacterScale 1.02571；
+这些部分可能遮挡／影响首次显示，不能宣称已实现完整 Steve。
 
 原木加载失败已定位到 PAMI XML 声明，并以单变量 C 对照验证。新一轮侧向放置消除
 角色遮挡，X/Y/Z 在相同视角可见的三个面（-X、+Y、+Z）朝向分别核对通过，27 项
@@ -48,6 +52,15 @@ MC 存档已升级 schema 2，保存完整 properties；原木 x/y/z 状态可�
 可选资源身份头读取中两个实读资源的候选 RTTI 位置均为代码，因此旧结果保留 rejected。
 独立的构造／消费者限定模式已完成 76 项检查与实机双采样：两项父资源 +68 指向同一
 嵌套头，vtable RVA 0x5B426C0；类型、descriptor 与应用 ABI 仍未准入。没有执行换装。
+新增 schema 6 输入属性模式的 93 项隔离检查、40 个固定 EXE 字节窗口通过。实际
+双采样完整链稳定，PAB 声明为 `character/model/1_pc/1_phm/phm_01.pab`，PAC 声明
+为空；整体如实为 notReady，不能把输入属性等同于最终所选渲染模型。诊断前后完整
+MC 状态保持、原生对象 0、38 项原始资源哈希一致；这是安装前基线。
+随后十一资源包已完成一次真实安装／启动／退出后恢复。新会话的受控外观选项表
+实际包含两私有 basename，Body/Head 的默认候选均为 0 且合法，确认新配置被读取；
+窗口接管再次被物理 Escape 停止，未取得游戏内模型画面，显示／动画仍未验收。
+用户退出后按实际进程结束恢复；原始文件一致，无临时目录／待恢复收据，最新存档
+逐文件保持、MC 完整状态未变。没有把这次配置观测记为持续 Steve 已实现。
 持久操作日志及
 会话／对象条件已接入正式蓝代理同步，实机放置／恢复／拆除、后台重启验证通过。
 现有观测不证明所选渲染资源、应用 ABI、刷新线程或恢复生命周期。
@@ -1174,3 +1187,75 @@ application／Steve loaded 全部 false。旧 RTTI 拒绝结果保留。没有�
 下一步把已验证补偿用于私有头身组合，并继续从 `0x5B426C0` 自身的构造/消费者核对
 嵌套类型和实际资源路径，不能把相邻 vtable 的 getter 当作本类成员。之后才接通
 受控应用、重载保持和恢复，完整持续目标仍 active。
+
+## 2026-10-07 十一资源首测包、实际选项读取与恢复
+
+当前身体补偿已组合到两私有头身 PAC、对应材质、三 DDS、两 prefab 和一个 descriptor。
+固定十项资源的纯准入验证完整报告、三个来源报告、模板及 payload；原生 Head0001
+变体未覆盖唯一赋权头骨 93，因此头保留原 split 字节。PAB 回退误差约 2.42e-8 m，
+假设继承身体 neutral 时约 7.06e-5 m；这两种离线假设不证明原生合并语义。
+身体仍为 2.705741e-5 m 中立回放误差，HeadScale 0.92／CharacterScale 1.02571 保留。
+
+新增 appearance 候选仅将固定 Kliff meshparam 中默认 Body／Head 的 MeshFileName
+改为私有 basename；逆替换逐字恢复原模板。七组选项、PABC、发须、装备和其余 XML
+均保持。其作用范围是使用同一 meshparam 的实例，尚非 actor-local 或启用即持续模式。
+原 app 内的 Prefab 引用未改，实际最终装配消费和装备遮挡必须独立验收。
+
+新专用 overlay 包含十项新资源及一项原路径替换，安装种类为
+`steve-mesh-parameters`。原木 CLI 保持 oak-log，错误种类在恢复写入前拒绝，共用
+active receipt／锁防止两包并存。Windows 本地报告路径先规范分隔符再检查 build
+边界；游戏虚拟路径保持严格 POSIX。测试夹具复用完整事务，故障仅注入隔离副本，
+真实游戏和个人存档不被测试修改。
+
+| 检查 | 结果 |
+| --- | --- |
+| `py -3.12 -B tools/check_steve_assembly.py --rebuild` | **12/12**；十资源完整重建、四 LOD、纯 loader 和损坏拒绝 |
+| `py -3.12 -B tools/check_steve_appearance.py --rebuild` | **12/12**；真实提取、仅两属性变化及逆向恢复 |
+| `py -3.12 -B tools/check_steve_probe.py --rebuild` | **21/21**；真实包往返、发布／恢复故障、后来存档、并发、错种类、越界和精确重建 |
+| `py -3.12 -B tools/check_asset_overlay.py --verify-game` | **13/13**；扩展后的通用原木预演回归，在临时包安装前运行 |
+| `py -3.12 -B tools/check_asset_probe.py` | **16/16**；共用事务扩展后的原木回归，在临时包安装前运行 |
+| `py -3.12 -B tools/check_appearance_controller.py` | **93/93**；新增输入路径模式及既有只读合同 |
+| 固定 EXE 字节窗口 | 输入路径模式 **40/40**；默认 27 加专用 13 |
+
+首次 Steve 故障检查发现 Windows 本地路径被按虚拟路径拒绝，修复后重跑。
+测试继承时误保留的原木单报告用例也已由 Steve 双报告用例正确覆盖；最终 21 项全过，
+没有以跳过失败充当成功。所有源代码检查和独立资源范围审查未发现本轮阻塞问题。
+
+原版会话的 `--render-input-paths` 双采样稳定：PAC 声明为空，PAB 声明为
+`character/model/1_pc/1_phm/phm_01.pab`。两属性类型和 owner 成立，但整体 notReady；
+这不是“无渲染模型”的证据。报告是 `runtime/appearance-render-input-paths-20261007.json`，
+诊断前后完整 MC 状态、原生对象 0、会话与 38 项原始文件保持。
+
+用户重新授权后正常退出游戏，确认实际进程结束才安装。真实收据
+`eb24ffb9f1354a6aa94127a9e54a11e3` 绑定十一资源包，所有安装文件及原始索引复核一致，
+游戏启动到标题界面。前台画面反复被另一游戏覆盖，用户随后回复已进入世界，但
+工具再次报告物理 Escape；立刻停止窗口输入，没有获得 Steve 模型截图。
+
+在同一次新会话完成一次默认只读双采样，报告
+`runtime/steve-first-display-options-20261007.json`：受控 controller／Scene／Skinned
+完整链稳定；已加载的 `meshparam_example_kliff.xml` 中，group 0／1 的名字分别为
+`crimsonmc_steve_body_1_21_1`／`crimsonmc_steve_head_1_21_1`。两组 rawChoice／preset
+均 FF，按原生已知规则回退 groupDefault 0，候选在合法范围。这证明新配置进入了
+运行时选项表；未读取最终选中模型 descriptor，所有外观应用／Steve 显示标志仍 false。
+
+用户确认退出后再次核对所有 CrimsonDesert 进程结束，专用恢复入口返回 restored。
+`runtime/steve-first-display-20261007-installed.json`、`-before-restore.json`、
+`-restored.json` 绑定实际收据、原始文件和 MC 状态；恢复后 38 项原始文件一致，
+0041 和 active receipt 均不存在，恢复前后的最新存档逐文件相同，完整 MC 状态保持
+revision 22。没有创建测试对象、消耗材料、更换 ASI 或写游戏进程内存。
+
+本地报告 SHA256：
+
+- assembly：`2f167887d0abcae102f293d98f34c6421b52d7b5153eb1b9393e2d6da57b8f33`。
+- appearance：`a4f8712cc74967dbe1a0c5dc5e239f388538397a164d4accec7012786673f1f9`。
+- overlay：`792a9d00664e466925d63b1752228c53cecf960975359aec1b0bace861dcecbb`。
+- 原版输入路径观测：`a2f3449f8b02cd260092e66e05abfddbe9a358dfcc18516653c9619971ef6948`。
+- 临时包新选项观测：`96828904e12dacae944085dedea3c0440cc099f8990647dbb103ad9860f558b3`。
+
+下一步需要恢复窗口接管或用户提供实际画面证据，验证头身显示、动画、尺度和装备
+遮挡，再调整原生装配。两份 skinned pac_xml 无 XML 声明，但去掉了原模板 BOM，
+若加载失败可作单变量格式对照；原木静态 PAMI 的成功不能外推为此处已验收。
+当前游戏已关闭，测试包已恢复，无待清理项；窗口接管保持停止，完整目标仍 active。
+提交前 12 个 Python AST、7 份文档的 55 条相对链接及 `git diff --check` 通过；
+实际恢复核对 38 个原始文件和 36 个最新存档文件。资产、原始报告、地址与存档均
+留 ignored 路径，待提交仅源代码和文档。

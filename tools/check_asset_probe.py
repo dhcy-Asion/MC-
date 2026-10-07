@@ -20,13 +20,14 @@ import prepare_native_steve as native
 
 class ProbeChecks(unittest.TestCase):
     plan = native.ROOT / "build/native-asset-overlay"
+    plan_loader = staticmethod(probe.load_plan)
     source = native.ROOT / "build/cdmw-fixed-source"
     deps = native.ROOT / "build/cdmw-deps"
 
     @classmethod
     def setUpClass(cls):
         native.load_cdmw(cls.source, cls.deps)
-        cls.reviewed = probe.load_plan(cls.plan)
+        cls.reviewed = cls.plan_loader(cls.plan)
         cls.temporary = tempfile.TemporaryDirectory(dir=native.ROOT / "build", prefix="probe-check-")
         cls.root = Path(cls.temporary.name)
         cls.base = cls.root / "baseline"
@@ -279,7 +280,7 @@ class ProbeChecks(unittest.TestCase):
             pass
         self.assert_original()
 
-    def test_16_plan_must_name_exactly_one_report_and_match_its_resources(self):
+    def test_16_plan_provenance_matches_resource_set(self):
         plan = self.test_root / "plan"
         shutil.copytree(self.plan, plan)
         report_path = plan / "reports/overlay-report.json"
