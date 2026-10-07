@@ -231,3 +231,74 @@ SHA EXE 重新读取的 **25/25 代码窗口逐字匹配**。检查覆盖未知�
 这些函数包含资源引用更新及后续操作，不能用孤立指针替换代替完整应用／恢复合同。
 调用 ABI、游戏线程上下文、私有外观切换、恢复、跨重载持续应用及 Steve 加载均
 未验证；本轮没有调用原生函数或写入游戏内存。
+
+### 2026-10-07 原版资源会话的完整 Scene 双采样
+
+临时原木包恢复后，以原版资源启动新游戏实例，运行
+`py -3.12 -B tools/probe_appearance_controller.py --pid 36352 --output
+runtime/appearance-render-typed-20261007.json`，本次 **observed**，两次样本完全一致。
+控制器恰好出现在 owner 的 45 个组件中一次，唯一 CharacterScene、Scene→owner、
+参数资源→Scene 弱回链均通过；实际渲染链接的 SkinnedMeshComponent 精确反射
+类型通过，其对象与受控 owner 不同。资源选择容器有两个非空输入，当前 index=1；
+此基础采样不解引用所选资源，renderedDescriptorVerified 与外观应用仍 false。
+
+原始截图和报告绑定于 `runtime/appearance-render-context-20261007.json`，本机
+会话 `36352:134358196715607705` 的进程时间及固定 EXE SHA 前后相同，MC 完整
+API 保持 revision 22。此前三份 gate 拒绝报告仍保留；新成功记录来自新分支和新
+实例，不更改旧失败结果。本次没有安装资源、创建对象、消费材料或写游戏内存。
+
+### 2026-10-07 私有全身资产与装备遮挡的缺口
+
+对固定 `0009/0.pamt` 的七份原文、四个已观测 prefab 和两套七资源候选逐项核对后，
+确认旧候选只重定向 CD_Nude，仍带 CD_Underwear。实际四 prefab 共 11 个蒙皮对象：
+身体 2 个，头 7 个（头、左右眼、眉、睫毛、牙和面部绒毛），独立 Hair 和 Beard
+各 1 个。原始共享身体也被 Lorenzo appearance 消费；直接覆盖它会改变其他使用者。
+私有替换必须同时处理这些部件，空眉选项组或 FF 默认回退均不能代替排除原部件。
+
+实际 Macduff 身体 descriptor 使用 `01_0002.pabc`、`BaseCharacterScale=1.02571`
+和 `macduff.hkt`；旧候选仅复制 `00_0001.pabc` 的模板，不具有当前描述符等价性。
+需要保留当前绑定基线的私有描述符及 actor-local 选择/组合，不能借改共享基线来
+规避恢复。私有 meshparam／preset／decoration 绑定与加载、恢复尚未实现。
+
+原文还证明部件名、shrink tag 与装备遮挡耦合：44 条 partshrink 规则涉及 Nude、
+Underwear、Hair、Beard，postfix `_F` 中部分规则按 CD_Head 等名字隐藏。现候选把
+Steve 头装在 CD_Nude 下的 PAC draw 0，尚无 CD_Head 等价遮挡映射。静态 appearance
+的 8 个常规 Armor 基底和 4 个 Preview 条目不是当前装备状态，也不代表全装备覆盖。
+必须独立处理 Steve 头／帽层与身体的组合及装备行为，再做实际换装对照。
+原文、固定索引来源和报告留在 `build/steve-fullbody-review-20261007/`；此检查只读，
+没有安装资源或更改原版存档。
+
+### 2026-10-07 两个选择资源的身份头观测
+
+schema 4 的 `--render-resource-identities` 为可选只读扩展：从同一次受控 Scene
+已验证的两个输入中，每个非空资源只读自身的 8 字节 vtable，随后仅在主模块内读
+候选 locator 的 24 字节。标准主对象 COL 门禁通过才读最多 192 字节且必须 NUL
+终止的 ASCII RTTI 名称。即使名称成功也不准入未知布局，exactResourceClassVerified
+仍 false。默认模式不解引用这两个资源；新增两个消费代码窗口固定在 EXE 上。
+
+两项同级资源分别记录失败；失败项不再跟随其未知字段，但可以读另一项的身份。
+最终重新核对 Scene、参数回链、渲染类型、pair/index 和成功身份后，任一项失败仍
+拒绝整个结果，不提升稳定性或描述符标记。失败时没有完成 sample 末尾的完整
+controller 复读或第二样本，所以部分头信息不能称为完整稳定受控身份。
+`check_appearance_controller.py` **62/62**、固定 EXE **27/27** 字节窗口通过。
+
+实际首次 `runtime/appearance-render-resources-20261007.json` 在 slot 0 拒绝。
+扩展同级记录后，`runtime/appearance-render-resource-pair-20261007.json` 读到两项
+都是 vtable RVA `0x5B3FC58`；`vtable-8` 都指向 `0x3600C0`，已读 24 字节为
+`mov al,1; ret`、填充和后一小函数开头，sig 并非 1，均不是有效 COL。
+当前 index=1，因此最后报告 selectedResourceDereferenced=true 仅指读了选中资源
+的 8 字节身份头；没有读 `+0x68`、descriptor、PABC 或资源名称。整体 rejected，
+所有全局成功标记和应用标记 false。基础模式另存
+`runtime/appearance-render-schema4-baseline-20261007.json`，双采样仍 observed。
+
+固定 EXE 后续只读静态检查确认 3 个生产调用均先分配 `0xA0` 字节；构造跳转
+`0x2CC7F00→0x109DB720` 在 `0x109DB74F` 写上述 vtable，析构
+`0x2CC7AA0→0x109D5170→0x2CC7970→0x109D0B40` 在 `0x109D0B57`
+写回并释放内部引用。`+0x10/+0x14/+0x15/+0x16` 的引用计数／失效消费有字节依据；
+资源 `+0x68` 也有消费者，但嵌套对象类型未确定。此表的后续地址含析构代码，不能
+直接套用 CharacterScene 的 slot-8 反射 getter 规则。没有用 exact vtable 独自
+升级为已知 descriptor，也没有调用这些函数。
+
+可复建脚本 `build/steve-render-scene-research-20261007/inspect_unknown_selector_resource.py`
+和 `unknown-selector-resource-static.json` 保留 12 个关键字节窗口及 7 个有界片段。
+它们只是固定 EXE 的构造／释放事实，精确类名、嵌套资源类型和应用／恢复合同仍未完成。

@@ -77,6 +77,7 @@ the earlier copy under Desktop/Git.
 | 原生源码 | 准备固定上游、构建、补丁可重建检查及相关游戏内行为验证；更新插件前关闭游戏 |
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |
 | Steve 离线资产 | `python tools/build_steve_asset.py`；`python tools/check_steve_asset.py`；产物留 ignored build，不安装为原生角色 |
+| Steve 分段蒙皮候选 | `py -3.12 -B tools/check_steve_segmented.py --rebuild`；真实 palette、四 LOD 表面／UV、原始 byte 权重、inverse bind 与合成弯曲；仍使用旧模板 PABC，不代表当前角色描述符、装备或实机动画验收 |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |
 | 全方块注册表 | `python -B tools/check_block_registry.py --rebuild`；固定 vanilla 数据生成器、合法状态乘积/ID/默认状态及客户端资源核对，不启动世界 |

@@ -412,3 +412,36 @@ py -3.12 -B tools/check_steve_orientation.py --rebuild
 独立检查原始 frame/绕序/每级完整性及源输入不变。固定 donor 的 11476 条唯一强样本
 支持 packed V 与 bit31 符号约定，但 shader ABI、实际光照/朝向仍待实测。报告的全部
 集成标志保持 false；这项候选没有解决关节中心差异、控制身份、应用/恢复和装备。
+
+## Steve 四肢分段蒙皮候选（2026-10-07）
+
+旧候选每个逻辑部位为单骨权重，整个手臂／腿只跟随 UpArmTwist／Thigh；真实骨架的
+Forearm／Hand 和 Calf／Foot 分支对这些顶点没有影响，因而不能跟随原生屈肘、屈膝
+和手足旋转。新工具从固定朝向候选生成另一套资源，不改旧候选或安装游戏。
+
+```powershell
+py -3.12 -B tools/prepare_steve_segmented.py
+py -3.12 -B tools/check_steve_segmented.py --rebuild
+```
+
+默认输出 `build/steve-segmented`；生成器拒绝已有目录。它要求前述固定原版几何、
+PAB/PAC/PABC、prefab 和朝向候选已生成，读取过程中核对 SHA 与输入快照。四肢在
+真实肘／腕／膝／踝的 bind 高度添加共面截面和一 MC 像素宽的两骨过渡，保持六个
+逻辑部位的静态表面和 UV。原生 palette 仍为 189，PAB 仍为 447 骨；腕以下完全
+跟随 Hand，踝以下完全跟随 Foot，中段使用实际 donor 已赋权的 Forearm_sub／Calf_Sub。
+
+四个 LOD 每级 **1056 顶点／528 三角形**，原始 PAC byte 权重总和 255，混合节点
+为 127/128。独立仿射 UV、面面积／绕序、重复位置一致权重、所有 LOD、CDMW 独立
+inverseBind×pose 和真实重建逐字一致共 **12/12 通过**。24 个 30° 合成轴旋转
+证明远端现在响应以前零影响的骨链。量化最大位置误差 `2.6676e-5 m`、UV 误差
+`1.7468e-4`；PAB rest 位移 `4.699e-8 m`，旧 PABC neutral 位移 `2.008e-6 m`。
+
+只有 PAC 改变，其余六项候选资源和所有模板逐字保持。报告 SHA256
+`e7a879dfb26e38b64fe0d65322b89e98b792018ae1bd7762ad47c7367b4ae0fd`；PAC SHA256
+`dd1143464bedc9b8aab9a5a39a3eaa9381753690497d2eda35cd8bb3edcfaf1a`。
+
+该候选仍使用旧 **00_0001.pabc**，没有验证当前受控资源的 01_0002 描述符和 scale。
+头／躯干／肩髋旋转中心、原头和内衣排除、独立 CD_Head 装备遮挡仍未解决。
+Bip_Weapon_L/R 是 Hand 子骨且 bind 点处于手骨赋权区域，但实际装备是否使用该接点
+未验证。合成弯曲不是原生动画或渲染验收；新候选改变四肢动态变形，不宣称保持原版
+MC 刚体运动。所有安装、外观应用、动画和装备验收标记仍 false，资源留 ignored build。

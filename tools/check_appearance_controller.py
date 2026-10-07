@@ -21,6 +21,31 @@ OPTIONS = {"meshParams": 0x100000, "preset": 0x101000, "decorationParams": 0x102
 SCENE = {"scene": 0x200000, "ownerWeak": 0x201000, "parameter": 0x202000,
          "sceneWeak": 0x203000, "renderWeak": 0x204000, "selector": 0x205000,
          "buffer0": 0x206000, "buffer1": 0x207000}
+RENDER_IDENTITIES = ({"vtable": BASE + 0x91000, "col": BASE + 0x92000,
+                      "descriptor": BASE + 0x93000, "hierarchy": BASE + 0x94000},
+                     {"vtable": BASE + 0x95000, "col": BASE + 0x96000,
+                      "descriptor": BASE + 0x97000, "hierarchy": BASE + 0x98000})
+
+
+def resource_scene_fixture(skinned=True):
+    reader = skinned_scene_fixture() if skinned else scene_fixture()
+    for slot, layout in enumerate(RENDER_IDENTITIES):
+        primary = SCENE[f"buffer{slot}"]
+        # Exactly eight readable heap bytes: any descriptor/member read fails.
+        reader.block(primary, 8)
+        reader.put(primary, layout["vtable"])
+        reader.put(layout["vtable"] - 8, layout["col"])
+        reader.segments[layout["col"]] = bytearray(struct.pack("<6I", 1, 0, 0,
+            layout["descriptor"] - BASE, layout["hierarchy"] - BASE, layout["col"] - BASE))
+        reader.block(layout["descriptor"] + 16, 192)
+        name = f".?AVSyntheticRenderInput{slot}@fixture@@".encode("ascii")
+        reader.segments[layout["descriptor"] + 16][:len(name)] = name
+    reader.reads.clear()
+    return reader
+
+
+def collect_resource_identities(reader, pause=lambda _: None):
+    return probe.collect(reader, BASE, LENGTH, pause, render_resource_identities=True)
 
 
 def scene_fixture():
@@ -553,7 +578,7 @@ class AppearanceControllerChecks(unittest.TestCase):
         reader = scene_fixture()
         result = collect(reader)
         self.assertEqual(result["state"], "observed")
-        self.assertEqual(result["schemaVersion"], 3)
+        self.assertEqual(result["schemaVersion"], 4)
         self.assertTrue(result["stableTwoSamples"] and result["characterSceneObserved"])
         self.assertTrue(result["sceneRenderSelectorObserved"])
         scene = result["samples"][0]["characterScene"]
@@ -889,6 +914,310 @@ class AppearanceControllerChecks(unittest.TestCase):
         self.assertEqual(result["state"], "rejected")
         self.assertFalse(result["stableTwoSamples"] or result["sceneRenderSelectorObserved"])
         self.assertEqual(len(result["samples"]), 1)
+
+    def test_49_render_resource_success_is_two_bounded_identity_reads_not_a_layout(self):
+        for skinned in (False, True):
+            with self.subTest(skinned=skinned):
+                reader = resource_scene_fixture(skinned)
+                original_rtti = reader.rtti
+                def rtti(address, base, length):
+                    self.assertNotIn(address, (SCENE["buffer0"], SCENE["buffer1"]))
+                    return original_rtti(address, base, length)
+                reader.rtti = rtti
+                result = collect_resource_identities(reader)
+                self.assertEqual(result["state"], "observed")
+                self.assertEqual(result["schemaVersion"], 4)
+                self.assertTrue(result["stableTwoSamples"] and result["renderResourceIdentitiesRequested"]
+                                and result["renderResourceIdentitiesObserved"])
+                for sample in result["samples"]:
+                    scene = sample["characterScene"]
+                    selector = scene["renderSelector"]
+                    self.assertTrue(selector["resourceReadsIdentityOnly"] and selector["selectedResourceDereferenced"])
+                    self.assertEqual(len(selector["resourceIdentities"]), 2)
+                    self.assertFalse(scene["selectedResourceTypeVerified"] or scene["renderedDescriptorVerified"])
+                    for slot, identity in enumerate(selector["resourceIdentities"]):
+                        self.assertEqual(identity["rtti"], f".?AVSyntheticRenderInput{slot}@fixture@@")
+                        self.assertEqual(identity["pointer"], hex(SCENE[f"buffer{slot}"]))
+                        self.assertTrue(identity["identityOnly"] and identity["rttiNameObserved"])
+                        self.assertFalse(identity["layoutInterpreted"] or identity["exactResourceClassVerified"])
+                        self.assertEqual(identity["failedChecks"], [])
+                reads = [(address, size) for address, size in reader.reads
+                         if SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x1000]
+                self.assertEqual(set(reads), {(SCENE["buffer0"], 8), (SCENE["buffer1"], 8)})
+                self.assertFalse(any(address in (SCENE["buffer0"] + 0x68, SCENE["buffer1"] + 0x68)
+                                     for address, _ in reader.reads))
+                for field in ("nativeFunctionsInvoked", "gameMemoryWritten", "heapScanned", "renderedDescriptorVerified",
+                              "appearanceApplicationVerified", "appearanceRestoreVerified", "steveModelLoaded", "snapshotAtomic"):
+                    self.assertIs(result[field], False)
+
+    def test_50_resource_identity_mode_is_opt_in_and_default_never_dereferences_pair(self):
+        reader = resource_scene_fixture()
+        result = collect(reader)
+        self.assertEqual(result["state"], "observed")
+        self.assertFalse(result["renderResourceIdentitiesRequested"] or result["renderResourceIdentitiesObserved"])
+        self.assertNotIn("resourceIdentities", result["samples"][0]["characterScene"]["renderSelector"])
+        self.assertFalse(any(SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x1000 for address, _ in reader.reads))
+
+    def test_51_null_resource_slots_are_recorded_without_identity_or_null_reads(self):
+        for nulls in ((0,), (1,), (0, 1)):
+            with self.subTest(nulls=nulls):
+                reader = resource_scene_fixture()
+                for slot in nulls:
+                    reader.put(SCENE["selector"] + 0x18 + slot * 8, 0)
+                result = collect_resource_identities(reader)
+                self.assertEqual(result["state"], "observed")
+                self.assertEqual(result["renderResourceIdentitiesObserved"], len(nulls) < 2)
+                selector = result["samples"][0]["characterScene"]["renderSelector"]
+                self.assertEqual(selector["selectedResourceDereferenced"], 1 not in nulls)
+                self.assertEqual(len(selector["resourceIdentities"]), 2)
+                for slot in nulls:
+                    self.assertEqual(selector["resourceIdentities"][slot], {"slot": slot, "present": False})
+                    self.assertNotIn((SCENE[f"buffer{slot}"], 8), reader.reads)
+                self.assertFalse(any(address == 0 for address, _ in reader.reads))
+
+    def test_52_resource_vtable_and_locator_bounds_stop_before_descendant_reads(self):
+        layout = RENDER_IDENTITIES[0]
+        for field, value, failed in (
+                ("vtable", BASE, "vtable-main-image-bounds"),
+                ("vtable", BASE + LENGTH - 7, "vtable-main-image-bounds"),
+                ("col", BASE - 8, "locator-main-image-bounds"),
+                ("col", BASE + LENGTH - 23, "locator-main-image-bounds")):
+            with self.subTest(field=field, value=hex(value)):
+                reader = resource_scene_fixture(); evidence = {}
+                reader.put(SCENE["buffer0"] if field == "vtable" else layout["vtable"] - 8, value)
+                with self.assertRaisesRegex(probe.ProbeError, failed):
+                    probe.resource_identity(reader, SCENE["buffer0"], BASE, LENGTH, evidence)
+                self.assertEqual(evidence["failedChecks"], [failed])
+                self.assertFalse(evidence["rttiNameObserved"] or evidence["layoutInterpreted"])
+                self.assertNotIn((layout["descriptor"] + 16, 192), reader.reads)
+                if field == "vtable":
+                    self.assertEqual(reader.reads, [(SCENE["buffer0"], 8)])
+                else:
+                    self.assertEqual(reader.reads, [(SCENE["buffer0"], 8), (layout["vtable"] - 8, 8)])
+
+    def test_53_resource_col_signature_primary_offset_self_and_image_rvas_fail_closed(self):
+        layout = RENDER_IDENTITIES[0]
+        cases = ((0, 0, "signature-equals-one"), (1, 0x28, "primary-this-offset-zero"),
+                 (5, 0, "locator-self-rva"), (3, 0, "type-descriptor-main-image-bounds"),
+                 (3, LENGTH - 207, "type-descriptor-main-image-bounds"),
+                 (4, 0, "class-hierarchy-main-image-bounds"),
+                 (4, LENGTH, "class-hierarchy-main-image-bounds"))
+        for field, value, failed in cases:
+            with self.subTest(field=field, value=value):
+                reader = resource_scene_fixture(); evidence = {}
+                reader.put(layout["col"] + field * 4, value, "<I")
+                header = bytes(reader.segments[layout["col"]])
+                with self.assertRaisesRegex(probe.ProbeError, failed):
+                    probe.resource_identity(reader, SCENE["buffer0"], BASE, LENGTH, evidence)
+                self.assertEqual(evidence["candidateLocatorHeaderHex"], header.hex())
+                self.assertEqual(evidence["failedChecks"], [failed])
+                self.assertNotIn((layout["descriptor"] + 16, 192), reader.reads)
+                self.assertEqual(len(reader.reads), 3)
+
+    def test_54_resource_rtti_requires_complete_bounded_terminated_printable_ascii(self):
+        chars = RENDER_IDENTITIES[0]["descriptor"] + 16
+        for raw, failed in ((b"A" * 192, "bounded-terminated-rtti-name"),
+                            (b"bad\xff\0", "ascii-rtti-name"), (b"bad\n\0", "ascii-rtti-name"),
+                            (b"\0", "ascii-rtti-name")):
+            with self.subTest(raw=raw[:12]):
+                reader = resource_scene_fixture(); evidence = {}
+                reader.segments[chars][:len(raw)] = raw
+                with self.assertRaisesRegex(probe.ProbeError, failed):
+                    probe.resource_identity(reader, SCENE["buffer0"], BASE, LENGTH, evidence)
+                self.assertFalse(evidence["rttiNameObserved"])
+                self.assertEqual(evidence["failedChecks"], [failed])
+        reader = resource_scene_fixture(); evidence = {}
+        reader.segments[chars] = bytearray(b"X" * 191 + b"\0")
+        result = probe.resource_identity(reader, SCENE["buffer0"], BASE, LENGTH, evidence)
+        self.assertEqual(result["rtti"], "X" * 191)
+        reader = resource_scene_fixture(); evidence = {}
+        reader.segments[chars] = reader.segments[chars][:191]
+        with self.assertRaisesRegex(probe.ProbeError, "complete readable span"):
+            probe.resource_identity(reader, SCENE["buffer0"], BASE, LENGTH, evidence)
+        self.assertIn("failureReason", evidence)
+        self.assertFalse(evidence["rttiNameObserved"])
+
+    def test_55_every_interpreted_resource_identity_byte_is_rechecked(self):
+        layout = RENDER_IDENTITIES[0]
+        for watched in ((SCENE["buffer0"], 8), (layout["vtable"] - 8, 8),
+                        (layout["col"], 24), (layout["descriptor"] + 16, 192)):
+            with self.subTest(watched=watched):
+                reader = resource_scene_fixture(); original = reader.read; seen = []
+                def changed(address, size):
+                    raw = original(address, size)
+                    if (address, size) == watched:
+                        seen.append(1)
+                        if len(seen) == 2:
+                            return bytes([raw[0] ^ 1]) + raw[1:]
+                    return raw
+                reader.read = changed; evidence = {}
+                with self.assertRaisesRegex(probe.ProbeError, "stable-identity-bytes"):
+                    probe.resource_identity(reader, SCENE["buffer0"], BASE, LENGTH, evidence)
+                self.assertFalse(evidence["rttiNameObserved"])
+                self.assertEqual(evidence["failedChecks"], ["stable-identity-bytes"])
+
+    def test_56_resource_reidentification_catches_new_but_individually_stable_identity(self):
+        reader = resource_scene_fixture(); original = reader.read; seen = []
+        def changed(address, size):
+            raw = original(address, size)
+            if address == SCENE["buffer0"] and size == 8:
+                seen.append(1)
+                if len(seen) >= 3:
+                    return struct.pack("<Q", RENDER_IDENTITIES[1]["vtable"])
+            return raw
+        reader.read = changed
+        result = collect_resource_identities(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertIn("identity changed within", result["reason"])
+        self.assertFalse(result["renderResourceIdentitiesObserved"] or result["stableTwoSamples"])
+        first = result["samples"][0]["characterScene"]["renderSelector"]["resourceIdentities"][0]
+        self.assertTrue(first["rttiNameObserved"])
+        self.assertEqual(first["rtti"], ".?AVSyntheticRenderInput0@fixture@@")
+
+    def test_57_pair_is_rechecked_after_the_final_identity_reads(self):
+        reader = resource_scene_fixture(); original = reader.read; seen = []
+        chars = RENDER_IDENTITIES[1]["descriptor"] + 16
+        def changed(address, size):
+            raw = original(address, size)
+            if address == chars and size == 192:
+                seen.append(1)
+                if len(seen) == 4:
+                    reader.put(SCENE["selector"] + 0x28, 0, "<B")
+            return raw
+        reader.read = changed
+        result = collect_resource_identities(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertIn("Scene interpreted fields changed", result["reason"])
+        self.assertFalse(result["renderResourceIdentitiesObserved"] or result["sceneRenderSelectorObserved"])
+        self.assertEqual(len(result["samples"]), 1)
+
+    def test_58_two_sample_pair_or_identity_change_preserves_both_without_global_success(self):
+        for change in ("pair", "identity"):
+            with self.subTest(change=change):
+                reader = resource_scene_fixture()
+                def changed(_):
+                    if change == "pair":
+                        reader.put(SCENE["selector"] + 0x18, SCENE["buffer1"])
+                        reader.put(SCENE["selector"] + 0x20, SCENE["buffer0"])
+                    else:
+                        reader.segments[RENDER_IDENTITIES[1]["descriptor"] + 16][5] = ord("Z")
+                result = collect_resource_identities(reader, changed)
+                self.assertEqual(result["state"], "unstable")
+                self.assertFalse(result["renderResourceIdentitiesObserved"] or result["stableTwoSamples"])
+                self.assertEqual(len(result["samples"]), 2)
+                self.assertTrue(all(s["characterScene"]["renderResourceIdentitiesObserved"] for s in result["samples"]))
+                self.assertNotEqual(result["samples"][0]["characterScene"]["renderSelector"],
+                                    result["samples"][1]["characterScene"]["renderSelector"])
+
+    def test_59_cli_final_module_or_digest_change_clears_new_observation_flag(self):
+        for changed in ("module", "digest"):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory(dir=probe.ROOT / "runtime") as temp:
+                reader = resource_scene_fixture()
+                exe, output = Path(temp) / "CrimsonDesert.exe", Path(temp) / "changed.json"
+                reader.module = mock.Mock(side_effect=[(BASE, LENGTH, exe),
+                    (BASE + (0x1000 if changed == "module" else 0), LENGTH, exe)])
+                reader.close = mock.Mock()
+                with mock.patch("sys.argv", ["probe", "--pid", "42123", "--render-resource-identities", "--output", str(output)]),\
+                        mock.patch.object(probe.core, "Reader", return_value=reader),\
+                        mock.patch.object(probe.subprocess, "check_output", return_value=probe.roster.VERSION),\
+                        mock.patch.object(probe, "file_digest", side_effect=[probe.roster.SHA256, "0" * 64]),\
+                        mock.patch("builtins.print"):
+                    self.assertEqual(probe.main(), 1)
+                result = json.loads(output.read_bytes())
+                self.assertTrue(result["renderResourceIdentitiesRequested"])
+                self.assertEqual(result["state"], "unstable")
+                for flag in ("renderResourceIdentitiesObserved", "stableTwoSamples", "controlledControllerChainObserved",
+                             "characterSceneObserved", "sceneRenderSelectorObserved", "renderedDescriptorVerified",
+                             "appearanceApplicationVerified", "appearanceRestoreVerified", "steveModelLoaded"):
+                    self.assertIs(result[flag], False)
+                self.assertTrue(all(s["characterScene"]["renderResourceIdentitiesObserved"] for s in result["samples"]))
+                reader.close.assert_called_once()
+
+    def test_60_second_resource_failure_keeps_first_and_exact_failure_evidence_in_report(self):
+        reader = resource_scene_fixture()
+        reader.put(RENDER_IDENTITIES[1]["col"] + 4, 0x28, "<I")
+        result = collect_resource_identities(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertFalse(result["renderResourceIdentitiesObserved"] or result["renderedDescriptorVerified"]
+                         or result["appearanceApplicationVerified"])
+        identities = result["samples"][0]["characterScene"]["renderSelector"]["resourceIdentities"]
+        self.assertEqual(len(identities), 2)
+        self.assertTrue(identities[0]["rttiNameObserved"])
+        self.assertFalse(identities[1]["rttiNameObserved"])
+        self.assertEqual(identities[1]["failedChecks"], ["primary-this-offset-zero"])
+        self.assertEqual(identities[1]["failureReason"], result["reason"])
+        self.assertEqual(identities[1]["candidateLocatorFields"]["primaryThisOffset"], 0x28)
+        self.assertNotIn((RENDER_IDENTITIES[1]["descriptor"] + 16, 192), reader.reads)
+        with tempfile.TemporaryDirectory(dir=probe.ROOT / "runtime") as temp:
+            path = Path(temp) / "resource-identity-failure.json"
+            probe.write_report(path, result)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), result)
+
+    def test_61_first_resource_non_col_does_not_hide_second_identity_or_promote_partial_scene(self):
+        reader = resource_scene_fixture()
+        # Simulate a vtable predecessor pointing at in-image code, not a COL.
+        code_address = BASE + 0xA1000
+        raw_code = bytes.fromhex("4883e928e900000000") + b"\xcc" * 15
+        reader.put(RENDER_IDENTITIES[0]["vtable"] - 8, code_address)
+        reader.segments[code_address] = bytearray(raw_code)
+        result = collect_resource_identities(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertEqual(len(result["samples"]), 1)
+        scene = result["samples"][0]["characterScene"]
+        identities = scene["renderSelector"]["resourceIdentities"]
+        self.assertEqual(len(identities), 2)
+        self.assertEqual(identities[0]["slot"], 0)
+        self.assertEqual(identities[0]["candidateLocatorHeaderHex"], raw_code.hex())
+        self.assertEqual(identities[0]["failedChecks"], ["signature-equals-one"])
+        self.assertFalse(identities[0]["rttiNameObserved"])
+        self.assertEqual(result["reason"], identities[0]["failureReason"])
+        self.assertEqual(identities[1]["slot"], 1)
+        self.assertTrue(identities[1]["rttiNameObserved"])
+        self.assertEqual(identities[1]["rtti"], ".?AVSyntheticRenderInput1@fixture@@")
+        self.assertNotIn((RENDER_IDENTITIES[0]["descriptor"] + 16, 192), reader.reads)
+        self.assertIn((RENDER_IDENTITIES[1]["descriptor"] + 16, 192), reader.reads)
+        self.assertFalse(scene["renderResourceIdentitiesObserved"] or scene["renderedDescriptorVerified"]
+                         or scene["selectedResourceTypeVerified"] or scene["appearanceApplicationVerified"])
+        for flag in ("stableTwoSamples", "controlledControllerChainObserved", "characterSceneObserved",
+                     "sceneRenderSelectorObserved", "renderResourceIdentitiesObserved", "renderedDescriptorVerified",
+                     "appearanceApplicationVerified", "appearanceRestoreVerified", "steveModelLoaded",
+                     "nativeFunctionsInvoked", "gameMemoryWritten", "snapshotAtomic"):
+            self.assertIs(result[flag], False, flag)
+        reads = [(address, size) for address, size in reader.reads
+                 if SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x1000]
+        self.assertEqual(set(reads), {(SCENE["buffer0"], 8), (SCENE["buffer1"], 8)})
+
+    def test_62_both_resource_rejections_keep_independent_failures_and_no_layout_reads(self):
+        reader = resource_scene_fixture()
+        reader.put(RENDER_IDENTITIES[0]["col"], 0xCCCCCCCC, "<I")
+        reader.put(RENDER_IDENTITIES[1]["col"] + 4, 0x28, "<I")
+        result = collect_resource_identities(reader)
+        self.assertEqual(result["state"], "rejected")
+        self.assertEqual(len(result["samples"]), 1)
+        scene = result["samples"][0]["characterScene"]
+        identities = scene["renderSelector"]["resourceIdentities"]
+        self.assertEqual(len(identities), 2)
+        for slot, failed in enumerate(("signature-equals-one", "primary-this-offset-zero")):
+            identity = identities[slot]
+            self.assertEqual(identity["slot"], slot)
+            self.assertEqual(identity["pointer"], hex(SCENE[f"buffer{slot}"]))
+            self.assertEqual(identity["failedChecks"], [failed])
+            self.assertIn(failed, identity["failureReason"])
+            self.assertEqual(identity["candidateLocatorHeaderHex"], bytes(reader.segments[RENDER_IDENTITIES[slot]["col"]]).hex())
+            self.assertFalse(identity["rttiNameObserved"] or identity["layoutInterpreted"] or identity["exactResourceClassVerified"])
+            self.assertNotIn((RENDER_IDENTITIES[slot]["descriptor"] + 16, 192), reader.reads)
+        self.assertNotEqual(identities[0]["failureReason"], identities[1]["failureReason"])
+        self.assertEqual(result["reason"], identities[0]["failureReason"])
+        self.assertFalse(scene["renderResourceIdentitiesObserved"] or scene["selectedResourceTypeVerified"]
+                         or scene["renderedDescriptorVerified"] or scene["appearanceApplicationVerified"])
+        for flag in ("stableTwoSamples", "controlledControllerChainObserved", "characterSceneObserved",
+                     "sceneRenderSelectorObserved", "renderResourceIdentitiesObserved", "renderedDescriptorVerified",
+                     "appearanceApplicationVerified", "appearanceRestoreVerified", "steveModelLoaded",
+                     "nativeFunctionsInvoked", "gameMemoryWritten", "snapshotAtomic"):
+            self.assertIs(result[flag], False, flag)
+        reads = [(address, size) for address, size in reader.reads
+                 if SCENE["buffer0"] <= address < SCENE["buffer1"] + 0x1000]
+        self.assertEqual(set(reads), {(SCENE["buffer0"], 8), (SCENE["buffer1"], 8)})
 
 
 if __name__ == "__main__":
