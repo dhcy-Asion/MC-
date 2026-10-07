@@ -12,7 +12,9 @@ if($mcState -and $mcState.engine -ne 'Minecraft Java 1.21.1'){throw 'Port 8766 i
 if(-not $mcState){
     if(Get-NetTCPConnection -LocalPort 8766 -State Listen -ErrorAction SilentlyContinue){throw 'Port 8766 is occupied; do not start a duplicate server.'}
     $buildScript=Join-Path $PSScriptRoot 'build_minecraft.ps1'
-    $mcProcess=Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$buildScript+'"'),'-Task','runServer') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtimeRoot 'mc-start.stdout.log') -RedirectStandardError (Join-Path $runtimeRoot 'mc-start.stderr.log') -PassThru
+    # Keep the child on this host's engine/module set when launched from PowerShell 7.
+    $mcShell=Join-Path $PSHOME $(if($PSVersionTable.PSEdition -eq 'Core'){'pwsh.exe'}else{'powershell.exe'})
+    $mcProcess=Start-Process -FilePath $mcShell -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"'+$buildScript+'"'),'-Task','runServer') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtimeRoot 'mc-start.stdout.log') -RedirectStandardError (Join-Path $runtimeRoot 'mc-start.stderr.log') -PassThru
     Write-Host 'Starting Minecraft rules server...'
     $deadline=(Get-Date).AddMinutes(3)
     do {

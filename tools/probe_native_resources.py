@@ -139,6 +139,9 @@ def load_assets(report_path: Path) -> dict:
         raise ProbeError("Unknown native asset probe variant")
     if variant == "static-oak-log" and "control" in report:
         raise ProbeError("A control report cannot claim the ordinary oak variant")
+    corrected_materials = "materialSerialization" in report
+    if corrected_materials and (variant != "static-oak-log" or report["materialSerialization"] != block.MATERIAL_SERIALIZATION):
+        raise ProbeError("Unknown material serialization or a control claiming the normal serialization marker")
     if (type(report.get("schemaVersion")) is not int or report["schemaVersion"] != 1
             or report.get("supportedExeSha256") != native.EXE_SHA256
             or report.get("archiveIndex") != "0000/0.pamt" or report.get("archiveIndexSha256") != INDEX_SHA):
@@ -205,6 +208,15 @@ def load_assets(report_path: Path) -> dict:
     elif any(resources["oak_y_" + suffix]["sha256"] == resources["blue_" + suffix]["sha256"]
              for suffix in ("prefab", "pami")):
         raise ProbeError("An original blue prefab/material alias must be explicitly labelled as a control")
+    elif corrected_materials:
+        # A label alone must never legitimize the one-axis C control or an
+        # arbitrary material. All three payloads must equal the exact corrected
+        # serialization of the already hash-verified real native template.
+        template = payloads["template/" + block.BASE + ".pami"]
+        for axis in "xyz":
+            path = resources["oak_" + axis + "_pami"]["localFile"]
+            if payloads[path] != block.make_material(template, axis):
+                raise ProbeError("Corrected normal PAMI must match exact template-derived bytes for all three axes")
     elif resources["oak_y_pami"]["sha256"] == NO_DECLARATION_PAMI_SHA256:
         raise ProbeError("A PAMI declaration control must be explicitly labelled as a control")
     return {"reportPath": str(report_path), "reportSha256": hashlib.sha256(raw).hexdigest(),
@@ -457,7 +469,7 @@ class ResourceProbe:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--assets", type=Path, default=ROOT / "build/native-block/native-block-report.json")
+    parser.add_argument("--assets", type=Path, default=block.DEFAULT_OUTPUT / "native-block-report.json")
     parser.add_argument("--output", type=Path, default=ROOT / "runtime/native-resource-probe.json")
     parser.add_argument("--group", choices=("blue", "oak", "all"), default="default",
                         help="blue=6 original templates; oak=Y-axis six plus atlas three; all=27; default=blue+oak")

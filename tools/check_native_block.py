@@ -23,7 +23,7 @@ import prepare_native_block as block
 
 
 class NativeBlockChecks(unittest.TestCase):
-    output = block.ROOT / "build/native-block"
+    output = block.DEFAULT_OUTPUT
     source = block.ROOT / "build/cdmw-fixed-source"
     deps = block.ROOT / "build/cdmw-deps"
     asset = block.ROOT / "build/block-assets-1.21.1"
@@ -48,6 +48,7 @@ class NativeBlockChecks(unittest.TestCase):
         self.assertEqual(self.report["cdmw"]["commit"], block.native.CDMW_COMMIT)
         self.assertEqual(self.report["mcInputs"], block.MC_HASHES)
         self.assertEqual(self.report["archiveIndex"], "0000/0.pamt")
+        self.assertEqual(self.report["materialSerialization"], block.MATERIAL_SERIALIZATION)
         for name, digest in self.report["files"].items():
             self.assertEqual(block.native.file_hash(self.output / name), digest)
         for path, digest in block.TEMPLATE_HASHES.items():
@@ -206,6 +207,67 @@ class NativeBlockChecks(unittest.TestCase):
             self.assertEqual(rebuilt, self.report)
             for name in self.report["files"]:
                 self.assertEqual((Path(temp) / name).read_bytes(), (self.output / name).read_bytes())
+
+    def test_14_pami_exact_headerless_template_and_successful_y_control_bytes(self) -> None:
+        fixed = {"x": "da9bcb2c96c973619a07764b6f7437c8ef8b57258400f6550b72cef81e7978cd",
+                 "y": "13594ac365e4dcb4f52f652c4a892c845bf9524b700d1fe521a88cf9e22fa07d",
+                 "z": "c3bce47b47c68c489a2004352b2069ae11eaf5d185df0ab70cb892e4662e9832"}
+        template = self.payloads[block.BASE + ".pami"]
+        self.assertTrue(template.startswith(b'<StaticMeshInstance Version="1">'))
+        prefix = b"<?xml version='1.0' encoding='utf-8'?>\n"
+        for axis in "xyz":
+            result = block.make_material(template, axis)
+            self.assertEqual(result, self.candidate(axis, ".pami"))
+            self.assertEqual(block.native.sha256(result), fixed[axis])
+            self.assertEqual(len(result), 721)
+            self.assertTrue(result.startswith(b'<StaticMeshInstance Version="1">'))
+            self.assertNotIn(b"<?xml", result)
+            self.assertFalse(result.startswith(b"\xef\xbb\xbf"))
+            # Retained diagnostic files provide extra local evidence, but are
+            # not distributed and must not be prerequisites on a fresh checkout.
+            historical = block.ROOT / f"build/native-block/candidate/object/00_common/system/crimsonmc_oak_log_{axis}.pami"
+            if historical.is_file():
+                legacy = historical.read_bytes()
+                self.assertTrue(legacy.startswith(prefix))
+                self.assertEqual(result, legacy[len(prefix):])
+        successful_y = block.ROOT / "build/native-block-oak-no-declaration/candidate/object/00_common/system/crimsonmc_oak_log_y.pami"
+        if successful_y.is_file():
+            self.assertEqual(self.candidate("y", ".pami"), successful_y.read_bytes())
+
+    def test_15_corrected_package_loads_as_normal_without_http(self) -> None:
+        import probe_native_resources as probe
+        with mock.patch.object(probe.LoopbackAPI, "request", side_effect=AssertionError("No real HTTP allowed")):
+            verified = probe.load_assets(self.output / "native-block-report.json")
+        self.assertEqual(verified["probeVariant"], "static-oak-log")
+        self.assertEqual(verified["resources"]["oak_y_pami"]["sha256"], probe.NO_DECLARATION_PAMI_SHA256)
+
+    def test_16_reject_old_output_before_native_reads_and_unknown_material_inputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="native-block-existing-output-", dir=block.ROOT / "build") as temporary:
+            output = Path(temporary)
+            sentinel = output / "keep-existing.txt"
+            sentinel.write_bytes(b"existing output must remain unchanged")
+            with mock.patch.object(block.native, "load_cdmw") as native_load:
+                with self.assertRaisesRegex(ValueError, "historical assets"):
+                    block.prepare(Path("unused-game"), output, self.source, self.deps, self.asset, self.decoder)
+                native_load.assert_not_called()
+            self.assertEqual(sentinel.read_bytes(), b"existing output must remain unchanged")
+            self.assertEqual(list(output.iterdir()), [sentinel])
+        for axis, data in (("invalid", self.payloads[block.BASE + ".pami"]), ("y", b"<fake/>")):
+            with self.assertRaisesRegex(ValueError, "fixed native template"):
+                block.make_material(data, axis)
+
+    def test_17_only_three_pami_files_change_from_historical_normal(self) -> None:
+        historical = block.ROOT / "build/native-block"
+        report_path = historical / "native-block-report.json"
+        if not report_path.is_file():
+            self.skipTest("Optional local historical normal package is absent; corrected template/hash checks remain mandatory")
+        report = json.loads(report_path.read_bytes())
+        changed = []
+        for name in report["files"]:
+            if (historical / name).read_bytes() != (self.output / name).read_bytes():
+                changed.append(name)
+        self.assertEqual(set(changed), {f"candidate/object/00_common/system/crimsonmc_oak_log_{axis}.pami" for axis in "xyz"})
+        self.assertTrue(all(value is False for value in self.report["integration"].values()))
 
 
 def main() -> None:

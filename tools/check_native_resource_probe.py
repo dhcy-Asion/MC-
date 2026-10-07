@@ -472,6 +472,75 @@ class ResourceChecks(unittest.TestCase):
             probe.load_assets(output)
         self.assertEqual(self.fake.calls, [])
 
+    def corrected_inputs(self):
+        folder, output, report = self.copy_inputs()
+        template = (folder / ("template/" + probe.block.BASE + ".pami")).read_bytes()
+        for axis in "xyz":
+            row = next(row for row in report["candidateResources"] if row["virtualPath"] == probe.RESOURCES["oak_" + axis + "_pami"])
+            data = probe.block.make_material(template, axis)
+            (folder / row["localFile"]).write_bytes(data)
+            row["sha256"] = probe.hashlib.sha256(data).hexdigest()
+            report["files"][row["localFile"]] = row["sha256"]
+        report["materialSerialization"] = probe.block.MATERIAL_SERIALIZATION
+        output.write_text(json.dumps(report), encoding="utf-8")
+        return folder, output, report
+
+    def test_25_corrected_normal_materials_require_exact_all_axis_proof(self):
+        folder, output, report = self.corrected_inputs()
+        verified = probe.load_assets(output)
+        self.assertEqual(verified["probeVariant"], "static-oak-log")
+        for axis in "xyz":
+            self.assertEqual(verified["resources"]["oak_" + axis + "_pami"]["length"], 721)
+        # Even a valid report/file hash cannot make an additional serialization
+        # change into the already proved headerless native material format.
+        for axis in "xyz":
+            row = next(row for row in report["candidateResources"] if row["virtualPath"] == probe.RESOURCES["oak_" + axis + "_pami"])
+            path = folder / row["localFile"]
+            original = path.read_bytes()
+            changed = original + b"\n"
+            path.write_bytes(changed)
+            row["sha256"] = probe.hashlib.sha256(changed).hexdigest()
+            report["files"][row["localFile"]] = row["sha256"]
+            output.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(axis=axis), self.assertRaisesRegex(probe.ProbeError, "all three axes"):
+                probe.load_assets(output)
+            path.write_bytes(original)
+            row["sha256"] = probe.hashlib.sha256(original).hexdigest()
+            report["files"][row["localFile"]] = row["sha256"]
+        self.assertEqual(self.fake.calls, [])
+
+    def test_26_marker_alone_and_y_only_control_cannot_claim_corrected_normal(self):
+        folder, output, report = self.copy_inputs()
+        report["materialSerialization"] = probe.block.MATERIAL_SERIALIZATION
+        output.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(probe.ProbeError, "all three axes"):
+            probe.load_assets(output)
+        row = next(row for row in report["candidateResources"] if row["virtualPath"] == probe.RESOURCES["oak_y_pami"])
+        path = folder / row["localFile"]
+        data = path.read_bytes()[39:]
+        path.write_bytes(data)
+        row["sha256"] = probe.hashlib.sha256(data).hexdigest()
+        self.assertEqual(row["sha256"], probe.NO_DECLARATION_PAMI_SHA256)
+        report["files"][row["localFile"]] = row["sha256"]
+        output.write_text(json.dumps(report), encoding="utf-8")
+        with self.assertRaisesRegex(probe.ProbeError, "all three axes"):
+            probe.load_assets(output)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_27_unknown_marker_or_control_relabelling_is_rejected(self):
+        folder, output, report = self.corrected_inputs()
+        for value in (None, {}, True, "unknown-format"):
+            changed = {**report, "materialSerialization": value}
+            output.write_text(json.dumps(changed), encoding="utf-8")
+            with self.assertRaisesRegex(probe.ProbeError, "serialization"):
+                probe.load_assets(output)
+        for variant in ("blue-template-alias", "blue-material-alias", "oak-pami-no-declaration"):
+            changed = {**report, "probeVariant": variant, "control": {}}
+            output.write_text(json.dumps(changed), encoding="utf-8")
+            with self.assertRaisesRegex(probe.ProbeError, "serialization"):
+                probe.load_assets(output)
+        self.assertEqual(self.fake.calls, [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

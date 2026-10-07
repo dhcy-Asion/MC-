@@ -193,8 +193,8 @@ def main():
     try:
         initial = server.start()
         migrated = json.loads(server.state_file.read_text(encoding="utf-8"))
-        check(migrated["schemaVersion"] == 1 and migrated["selectedSlot"] == 0, "Legacy snapshot was not migrated")
-        check(migrated["slots"] == old_slots and migrated["touched"] == legacy["touched"], "Legacy migration lost existing materials/blocks")
+        check(migrated["schemaVersion"] == 2 and migrated["selectedSlot"] == 0, "Legacy snapshot was not migrated")
+        check(migrated["slots"] == old_slots and migrated["touched"] == [{**b, "properties": {}} for b in legacy["touched"]], "Legacy migration lost existing materials/blocks")
         check(initial["slots"][2]["name"] == "用户命名的剑", "Custom item name lost during localization")
         check(initial["revision"] == 23 and initial["inventory"] == {"minecraft:oak_planks": 6, "minecraft:iron_sword": 1}, "Legacy state changed")
         check(len(initial["slots"]) == 36 and [s["slot"] for s in initial["slots"]] == list(range(36)), "Slot contract invalid")
@@ -371,10 +371,10 @@ def main():
         server.stop()
 
         future = json.loads(server.state_file.read_text(encoding="utf-8"))
-        future["schemaVersion"] = 2
+        future["schemaVersion"] = 3
         server.write_snapshot(future)
         expected_hash = hashlib.sha256(server.state_file.read_bytes()).hexdigest()
-        server.start(expected_failure="unsupported future inventory schema 2")
+        server.start(expected_failure="unsupported future inventory schema 3")
         check(hashlib.sha256(server.state_file.read_bytes()).hexdigest() == expected_hash, "Unknown future format was overwritten")
         server.stop(authority=False)
         evidence["checks"].append("Unknown future schema disables authority without truncating or overwriting its file")

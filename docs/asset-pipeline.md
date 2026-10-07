@@ -1,6 +1,6 @@
 # MC 与红沙原生资产：可复建的离线管线
 
-2026-10-06。离线准备工具已生成并检查真实资产，输出留在忽略上传的 `build/`。
+2026-10-07。离线准备工具已生成并检查真实资产，输出留在忽略上传的 `build/`。
 后面的临时探针另有可恢复安装与实机步骤，当前验证结果见进度文件。正式桥接仍使用
 蓝色方块代理，受控角色仍是原角色；候选资产不等于全部 MC 内容或 Steve 模式已接通。
 
@@ -43,7 +43,7 @@ python -B tools/check_block_registry.py --rebuild
 自定义相对客户端/Java 路径在切换工作目录前固定，发布拒绝与输入同路径或同硬链接的
 最终/临时输出，避免覆盖已验证的客户端或依赖。
 
-目前导出六种已有基线：橡木原木、橡木木板、圆石、泥土、石头、工作台。
+此基线 glTF 工具导出六种已有基线：橡木原木、橡木木板、圆石、泥土、石头、工作台。
 保留原木三轴、泥土四方向及石头四个普通/镜像选项，共 14 个 glTF、9 张原版纹理、84 个面。
 顶点、默认 UV、UV 旋转及状态旋转通过固定官方 Java 模型类计算。
 随机模型选项和权重都保留，没有假称执行了原版的位置随机选择；独立纹理不使用 atlas 的 UV 缩边。
@@ -52,6 +52,75 @@ python -B tools/check_block_registry.py --rebuild
 141 个资源 ID 的 158 个选项没有 JSON cuboid elements，包括流体、箱子、床、告示牌、
 旗帜等特殊渲染类型；工具没有拿立方体或空模型冒充它们。
 原生 PAC/材质、透明、动画、光照、碰撞和实际放置仍须逐类实现。
+
+## 全部合法状态到模型的对应关系
+
+```powershell
+py -3.12 -B tools/build_block_state_models.py --download
+py -3.12 -B tools/check_block_state_models.py --rebuild
+```
+
+需先生成上面的固定注册表与资源覆盖文件。新输出目录必须不存在；默认
+`build/block-state-models-1.21.1/`，重复导出使用新的 `--output`，不覆盖已有结果。
+`--download` 仅获取缺失且固定哈希的官方依赖／映射表。工具只初始化原版注册表，
+不启动 MC 世界、客户端或后台服务。
+
+`block-state-models.json` 记录全部 **1060 方块、26684 状态、6529 选择组、6762 模型
+选项及 1921 唯一模型**。每个状态引用全部匹配组；multipart 组同时组合，每组内部
+保留完整加权备选、旋转及 uvlock，不提前随机选择，也不以默认状态代替其他状态。
+与固定客户端原版 `BlockStateModelLoader`／`Selector` 谓词逐状态核对零差异，原版
+`BlockModelDefinition`／`Variant` 解析结果也逐选项一致。14 项独立检查通过，包含
+21 个谓词边界案例和重新执行 Java 后五个输出文件逐字节相同。
+
+`model-dependencies.json` 保留真实依赖，其中 1849 个模型含 JSON elements，72 个
+为空。原版 RenderShape 按状态计为 MODEL 24334、INVISIBLE 1934、ENTITYBLOCK_ANIMATED
+416；RenderShape 和是否含几何分别记录，合法空墙组合保留为空。流体、方块实体、
+透明、染色和动画尚未接通，不用假立方体填补。注册方块映射与前述 1062 资源清单
+数量不同，是因为后者还包含不属于注册方块的普通／发光展示框资源。
+
+报告 SHA256 `e52b62c1e877232007db234bd5a58d3ffb8f354069d77a08cefa2056b76d19e3`；
+选择表 SHA256 `574053e2d0a5d6bde2b3c72a4479420c2ea12375caac77debab46efee737f74e`。
+全部原生集成标志保持 false。MC Authority 本轮另保存完整属性与运行 stateId，
+但仍只开放六种基线方块，尚未将此离线映射接入原生渲染与碰撞。
+
+## 全资源模型的真实面几何
+
+```powershell
+py -3.12 -B tools/build_block_model_geometry.py
+py -3.12 -B tools/check_block_model_geometry.py --rebuild
+```
+
+默认输出 `build/block-model-geometry-1.21.1/`，必须是尚不存在的目录；再次导出用新的
+`--output`。复用已校验的客户端与 Java 21 缓存，检查程序另外需要包含 Pillow 的
+Python，默认取 PATH 的 `python`，可用 `--decoder-python` 指定。本机使用 Pillow
+12.2.0 独立核对 Java ImageIO 的解码结果。工具不启动 MC 世界、游戏或后台服务，
+没有安装步骤，六种基线 glTF 与原木候选输入保持原样。
+
+`resource-models.json` 保留 1062 份资源的全部 6766 个选项及原有条件、顺序、权重；
+`geometry.json` 按完整 `(model,x,y,uvlock)` 共用 **5163 项几何变体、51059 个真实面**。
+其中 5091 项有面、72 项为空，引用 1925 个唯一模型；与合法状态表的 6762 个选项逐项
+连接成功，资源清单额外含两个展示框。导出格式为可直接读取的四边形数据，包含顶点、
+UV、原始面信息、变换后 cullface、三角绕序和每三角法线，不是新增 glTF 或游戏渲染器。
+
+固定原版 `FaceBakery` 方法按实际顺序执行元素旋转／rescale、方块状态变换、朝向计算，
+并仅在没有元素 rotation 对象时重排绕序。3852 个面带元素旋转、1218 个面使用 rescale；
+反向坐标、零厚度和 160 个退化面均保留，退化三角的法线为 null，不补造法线或立方体。
+原版脚手架中四处 `cullface:"bottom"` 也原样保留，并按原版 Direction 解析为 null，
+不猜成 down。独立纹理 UV 不使用 atlas 位置或缩边，动画纹理 UV 为帧内坐标。
+
+973 张面纹理 PNG 与对应 mcmeta 逐字保持，实际像素为 565 张全不透明、360 张二值
+alpha、48 张分数 alpha；47 张带动画 metadata。403 个面保留 tintIndex，另保留 shade
+与 ambient occlusion。像素 alpha **不能代替 MC render layer**：透明／裁切绘制策略、
+生物群系染色、动画帧采样、邻面裁剪和光照均未实现；流体、方块实体及特殊渲染器也没有
+补造几何。原生网格／材质／碰撞和游戏内显示仍未接通，所有集成标志为 false。
+
+14 项检查通过：全部来源及权重、独立旋转／缩放数学核对全部 51059 面、未锁 UV 的
+顶点关联、完整立方体 16 种旋转／96 个面的 UV lock 世界坐标投影、独立 Pillow 解码全部 973 张 PNG、
+真实 Java 重建逐文件一致、首次 build 目录创建、相对客户端／JDK 路径及输出保护。
+固定源中不存在会改变父模型继承结果的“空 elements 覆盖非空父级”情况；不将这一检查
+推广到其它客户端或资源包。报告 SHA256
+`917755b2d860950b82ab90ab1fa7268bf7ebbe07bcdaca26046cc16da6df16f3`；几何表 SHA256
+`bf7da867191441a330a50445de22c4f608d002472180529c9d4d180e2f515df4`。
 
 ## 红沙真实模板和 Steve PAC 候选
 
@@ -95,11 +164,25 @@ py -3.12 -B tools/check_native_block.py --rebuild
 三轴端面与侧面更新 UV。低 LOD 由原来的 13 顶点/6 三角补全为 24/12，材质名与 PAMI
 一致；prefab 由完整结构解析后替换 PAMI 引用并重定位指针。
 
-`build/native-block/native-block-report.json` 列出 21 个候选资源：三张 DDS，以及三轴各六项
+当前默认 `build/native-block-declaration-fixed/native-block-report.json` 列出 21 个候选
+资源：三张 DDS，以及三轴各六项
 模型/材质/碰撞/描述资源。两张原版 16×16 纹理组成 32×16 atlas，最近邻放大到 128×64，
 共八层 mip。独立 Pillow 12.2.0 逐层解码；底层最大 RGB 误差 4，低 mip 最大误差 21，
-并非无损贴图。13 项检查包含真实档案重建、MC 三轴映射、材质一致性及输出保护。
-原生过滤、atlas 接缝、UV 方向、光照和实际碰撞加载仍未验收，不能推广为全部方块支持。
+并非无损贴图。当前真实重建 **17/17 检查通过**，包含真实档案重建、MC 三轴映射、
+材质一致性及输出保护。生成拒绝非空输出，保留历史 `build/native-block` 的原始候选；
+重复生成请指定新的 `--output`，不要覆写 A/B/C 的已记录来源。
+
+2026-10-07，C 单变量实测确认该版本下删除生成 PAMI 的固定 XML 声明后，Y 轴原木
+可见且有碰撞，详见下文。普通生成器因此将三轴 PAMI 改为不带声明的 UTF-8，并记录
+`materialSerialization="pami-utf8-no-declaration-v1"`。相较历史普通候选，仅三份
+PAMI 从 760 变为 721 字节，另 18 项资源不变；Y PAMI 与已实测 C 字节完全相同。
+报告 SHA256 `7fd02bb439f52738b829472c2fa7cdc658be3123ebb733252187eaac21287417`。
+
+资源客户端要求该明确标记、普通候选身份和三轴 PAMI 与真实模板生成的预期字节全部
+一致，不能只删去对照身份后冒充普通候选，也未放宽历史 C 来源保护。资源客户端
+27 项、对照生成 27 项、实体探针 42 项检查通过。结论限于固定 EXE 和本生成器的精确
+声明格式，不推广为原生解析器拒绝所有 XML 声明。修正后三轴包尚未安装验收；X/Z 未
+实机显示，Y 轴全部面 UV、过滤、atlas 接缝与光照仍未验收，不能推广为全部方块支持。
 
 ## Steve 皮肤与材质候选
 
@@ -141,8 +224,8 @@ py -3.12 -B tools/check_asset_overlay.py --output build/steve-prefab-overlay --v
 ## 独立资源包与索引预演
 
 ```powershell
-py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block/native-block-report.json
-py -3.12 -B tools/check_asset_overlay.py --verify-game
+py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block-declaration-fixed/native-block-report.json --output build/native-declaration-fixed-overlay
+py -3.12 -B tools/check_asset_overlay.py --output build/native-declaration-fixed-overlay --verify-game
 py -3.12 -B tools/prepare_asset_overlay.py --report build/steve-material/steve-material-report.json --output build/steve-overlay-rehearsal
 py -3.12 -B tools/check_asset_overlay.py --output build/steve-overlay-rehearsal --verify-game
 ```
@@ -163,17 +246,21 @@ PartialDDS 模板的分块存储；材料 XML 按原生 LZ4/ChaCha flags 回编�
 离线预演报告的安装/显示/加载标志保持 false。挂载与卸载另有新鲜预检、所有权收据和恢复验证；
 原版 PAZ/PAMT 无须被改写。
 
+上面的普通候选命令使用新的独立输出，须在上一临时包恢复后按原始索引快照生成，
+不复用历史 `build/native-asset-overlay` 或 A/B/C 计划。最新挂载/恢复状态以
+[progress.md](progress.md) 为准；存在安装中收据时先完成其恢复，不把它收入新基线。
+
 ## 可恢复的原木实机探针
 
 ```powershell
-py -3.12 -B tools/check_asset_probe.py
+py -3.12 -B tools/check_asset_probe.py --plan build/native-declaration-fixed-overlay
 python tools/check_native_block_probe.py
 # 关闭游戏后安装；只接受本项目 21 项固定资源及已校验的普通/对照报告
-py -3.12 -B tools/install_asset_probe.py --install --plan build/native-asset-overlay
+py -3.12 -B tools/install_asset_probe.py --install --plan build/native-declaration-fixed-overlay
 # 启动并进入世界，等待原生 ready/buildOk，再生成一块诊断原木
-python tools/probe_native_block.py --spawn
+python tools/probe_native_block.py --spawn --journal runtime/native-block-declaration-fixed-first.json
 # 同一游戏进程内清理，随后正常退出游戏
-python tools/probe_native_block.py --cleanup
+python tools/probe_native_block.py --cleanup --journal runtime/native-block-declaration-fixed-first.json
 py -3.12 -B tools/install_asset_probe.py --restore
 ```
 
@@ -204,13 +291,17 @@ Steve 继续验证原生骨变换和安全可恢复的外观选择。
 长度、前 16 字节和 FNV-1a64；本地资源仍使用 SHA256 校验，FNV 不作为安全哈希。
 
 ```powershell
-python -B tools/probe_native_resources.py --output runtime/native-resource-probe-first.json
+python -B tools/probe_native_resources.py --assets build/native-block-declaration-fixed/native-block-report.json --output runtime/native-resource-declaration-fixed-first.json
 ```
 
 每项只提交一次；超时或失联保留已有 ticket，不重放。输出必须是 ignored runtime
 中的新文件，已有报告不覆盖；前后核对支持版本、同一游戏实例和真实 MC 状态。
 这个诊断不安装包、不生成实体、不修改库存；全部文件读取一致也不能代替画面和碰撞
 验收。完整命令、检查与实机结果见 [progress.md](progress.md)。
+
+客户端的 `--assets` 默认已跟随普通生成器，指向
+`build/native-block-declaration-fixed/native-block-report.json`；上例保留显式参数以便
+审阅。测试历史普通候选或 A/B/C 时须传实际已安装报告，不能混用不同文件身份。
 
 2026-10-06 默认 15 项已实测全部首次读取成功，长度/头部/FNV 与本地资源一致，前后
 游戏实例及 MC 状态保持。X/Z 两轴未在该次读取；未复试生成或验收显示/碰撞。之后
@@ -228,8 +319,8 @@ python -B tools/probe_native_resources.py --output runtime/native-resource-probe
 仍引用原 PAM/DDS，其余 20 项不变。两种生成及来源保护检查最终 21/21 通过。
 
 ```powershell
-py -3.12 -B tools/prepare_native_block_control.py
-py -3.12 -B tools/prepare_native_block_control.py --variant blue-material-alias
+py -3.12 -B tools/prepare_native_block_control.py --source build/native-block/native-block-report.json
+py -3.12 -B tools/prepare_native_block_control.py --source build/native-block/native-block-report.json --variant blue-material-alias
 py -3.12 -B tools/check_native_block_control.py
 # 原木包恢复后，按新的游戏索引快照准备独立控制计划
 py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block-blue-alias/native-block-report.json --output build/native-blue-alias-overlay
@@ -249,13 +340,38 @@ py -3.12 -B tools/prepare_asset_overlay.py --report build/native-block-blue-alia
 对象探针最终 41 项隔离检查通过，碰撞循环现在保留首末采样、次数和 min/max 差值，
 清理阶段失败也会保存。最新临时包是否恢复以 [progress.md](progress.md) 当前状态为准。
 
-第三种 `oak-pami-no-declaration` 仅删除正常 Y PAMI 固定的 39 字节 XML 声明，文件
-760→721 字节；保留剩余字节和其他 20 项资源，独立 XML 树语义相同。它用于区分
-序列化因素，不能预先称为修复。`prepare_native_block_control.py --variant
-oak-pami-no-declaration` 生成独立候选，报告增加原资源 SHA、删除前缀与语义验证。
+第三种 `oak-pami-no-declaration` 仅删除历史普通 Y PAMI 固定的 39 字节 XML 声明，文件
+760→721 字节；保留剩余字节和其他 20 项资源，独立 XML 树语义相同。初始假设仅用于
+区分序列化因素；下节记录后来的实际结果。生成时必须沿用历史普通候选来源：
+
+```powershell
+py -3.12 -B tools/prepare_native_block_control.py --source build/native-block/native-block-report.json --variant oak-pami-no-declaration
+```
+
+报告增加原资源 SHA、删除前缀与语义验证。已修正的普通三轴候选不能成为这个删除声明
+对照的输入，否则不再是原来的单变量实验。
 生成器 27 项检查、资源客户端 24 项检查通过；C 封装/隔离恢复通过后短暂安装，启动
-接管时 Escape 停止，确认游戏未运行后已恢复，尚未实测。资源诊断预检失败
+接管时 Escape 停止，确认游戏未运行后已恢复，当时尚未实测。资源诊断预检失败
 也保存实际状态响应，仍在 ready/buildOk 均成功后才提交读取。
+
+### 2026-10-07 C 原木显示与碰撞实测
+
+用户随后明确恢复游戏接管。本次 C 收据 `c2fb925c9d2b423996d764886408cf1a`，同一
+游戏实例先读取 **15/15 项全部一致**，再只生成一块 Y 轴原木。日志
+`runtime/native-block-oak-no-declaration-20261007.json` 的 runId 为
+`6618070e-0a9a-4c2a-a307-e2dd1b23d252`、UID 1，实际碰撞增量 **1.151980 米**。
+画面可见像素化棕色原木侧面及顶面，部分被当前角色遮挡；截图
+`runtime/native-oak-no-declaration-visible-20261007.jpg`，独立视觉记录在
+`runtime/native-oak-no-declaration-visual-20261007.json`。自动探针 visualVerified
+仍为 false，实际显示结论来自独立画面观测；并未验收全部面 UV 或光照。
+
+同进程清理后登记和实际碰撞均移除，地面增量为 0，画面对象消失；MC 状态保持
+schema 2、revision 18，未消费材料。这为本固定版本、模板和精确序列化差异提供实机
+证据，普通生成器已按上节修正。C 成功不表示修正后的 X/Z 已验收，也未接通正式方块映射。
+
+当前该 C 收据仍为 installed，游戏 PID 4900 停在退出确认，等待用户手动正常退出；
+因此此处只记对象已清理，尚不记临时包已恢复。确认进程退出后才能恢复并核对原始文件，
+最终收尾见 [progress.md](progress.md)。
 
 ## Steve 骨骼与朝向的离线证据
 

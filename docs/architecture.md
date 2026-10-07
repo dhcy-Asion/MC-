@@ -32,10 +32,12 @@ flowchart LR
 | `tools/build_steve_asset.py`、`SteveModelDump.java` | 离线执行哈希固定的 MC 模型构造并导出 glTF、UV、刚性关节和皮肤 | 输出仅在 ignored build；六个 MC 关节不等于已验证的红沙动画 |
 | `tools/build_block_assets.py`、`check_block_assets.py` | 核对官方客户端方块资源依赖，并用原版 Java 模型类导出六种基线的真实几何/UV/纹理 | 1062 份资源清单不等于完整注册状态表；14 项离线模型尚未在红沙加载 |
 | `tools/build_block_registry.py`、`check_block_registry.py` | 在隔离 build 目录运行固定官方 vanilla 数据生成器，核对 1060 种方块、26684 个合法状态及客户端资源 | 不启动世界；不是 Fabric 实际运行注册表，不表示原生模型/碰撞/特殊渲染已接通 |
+| `tools/build_block_state_models.py`、`check_block_state_models.py` | 将全部 26684 状态映射至原版 variants／multipart 的全部匹配组，与原版 Java 逐项核对 | 保留加权备选和特殊渲染分类，不随机选模型，不声称原生显示或碰撞完成 |
+| `tools/build_block_model_geometry.py`、`check_block_model_geometry.py` | 按完整模型／旋转／uvlock 导出 5163 项资源几何变体、51059 个原版面及原始纹理，保留真实旋转、退化面和空模型 | 可与合法状态选择表连接；alpha 像素不代替 render layer，没有染色／动画绘制、特殊渲染器、原生网格或碰撞 |
 | `tools/prepare_native_steve.py`、`check_native_steve.py` | 只读提取真实红沙 PAB/PAC 及相关模板，重建并生成真实 palette 的 Steve PAC 候选 | 所有资源仅本地 build；四个 LOD 已回读，材质、动画、装备、原生显示仍未验收 |
 | `tools/prepare_steve_material.py`、`check_steve_material.py` | 编码 Steve BC3/BC5/DXT1 材质候选，用独立 Pillow 解码每层 mip，重写已核对的原生材质参数 | 仅本地候选；没有 actor 引用，透明/动画/装备/受控外观未验证 |
 | `tools/prepare_steve_prefab.py`、`check_steve_prefab.py` | 完整解析原生 nude prefab，仅改 CD_Nude 的 PAC 路径；保留内衣、descriptor 与骨骼依赖，生成七资源报告 | 离线候选，不选择受控角色身体，也不提供已验证的动画控制或刷新生命周期 |
-| `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 单位立方碰撞不适用于特殊形状；原生光照/采样/加载未验收 |
+| `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 去声明 Y 轴对照已显示纹理并通过碰撞/清理；三轴完整验收、原生光照/采样仍未完成；单位立方碰撞不适用于特殊形状 |
 | `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 只写 ignored build；预演不安装，也不证明引擎渲染 |
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 关闭游戏时临时安装/恢复自有 21 项原木 overlay，核对新鲜索引、存档备份、所有权与并发锁 | 拒绝外部修改；恢复不覆盖后来存档；不安装 Steve 或接通正式 MC 映射 |
 | `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木，分别记录登记与实际碰撞证据 | 画面须另验；只清理精确自有 UID/变换，不消费 MC 材料；上游可能创建空编辑项目 |
@@ -71,8 +73,8 @@ HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 4
 | `GET /ui/state` | 无 | 读取 MC 与红沙就绪情况、库存数量、方块数和最近操作信息 |
 | `POST /ui/anchor` | `{}` | 无建筑时，在角色前方约四米建立原点并保存 |
 | `POST /ui/reconnect` | `{}` | 按 MC 状态恢复／对齐本项目的红沙方块代理 |
-| `POST /ui/place` | `block,x,y,z` | 在相对原点的指定格子放置 |
-| `POST /ui/front` | `block` | 在前方最近列按地面及列高度放置，不是准星命中面的完整 MC 操作 |
+| `POST /ui/place` | `block,x,y,z,properties?` | 在相对原点的指定格子放置 |
+| `POST /ui/front` | `block,properties?` | 在前方最近列按地面及列高度放置，不是准星命中面的完整 MC 操作 |
 | `POST /ui/break` | `x,y,z` | 拆除相对坐标指定方块 |
 | `POST /ui/break-last` | `{}` | 拆除当前 MC 记录的最后一个非空气方块 |
 | `GET /ui/catalog` | query `search,offset,limit` | MC 物品目录搜索／分页；TSV，limit 为 1～100、offset 不超出过滤后总数 |
@@ -81,8 +83,8 @@ HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 4
 | `POST /ui/add-item` | `item,count,player?` | 按 ID／中文或英文名称直接添加 1～6400 件，按原版堆叠分格；全部放不下则回滚；player 默认为 console，只接受此实验背包 |
 | `POST /ui/select` | `slot` | 选择 0～35，可选空槽，不替代可见手持 |
 | `POST /ui/consume` | `{}` | 明确消耗当前非方块物品 1 件；未执行弓／桶／食物用途 |
-| `POST /ui/place-selected` | `x,y,z` | 由 MC 从所选格放置；兼容现有六种方块，仍是指定坐标 |
-| `POST /ui/front-selected` | `{}` | 所选格放置到旧前方列算法；仍不是鼠标准星命中面 |
+| `POST /ui/place-selected` | `x,y,z,properties?` | 由 MC 从所选格放置；兼容现有六种方块，仍是指定坐标 |
+| `POST /ui/front-selected` | `properties?` | 所选格放置到旧前方列算法；仍不是鼠标准星命中面 |
 | `POST /ui/shutdown` | `{}` | 停止桥接 HTTP 服务；不停止 MC 或拆除原生实体 |
 
 桥接以互斥锁串行执行操作／摘要读取，给 MC 修改生成 UUID `operationId`。
@@ -135,8 +137,8 @@ HTTP 线程把工作提交到 **MC 服务端线程**，等待最多五秒。参�
 | `POST /api/add-item` | `operationId,item,count,player?` | item 可为完整／裸 ID 或精确中文／英文名；名称有歧义时拒绝并列出 ID；count 为整数 1～6400 且受 36 格实际容量限制；默认唯一目标 console；部分添加、写盘失败均回滚 |
 | `POST /api/select` | `operationId,slot` | 服务端保存选中格 0～35，允许空格 |
 | `POST /api/consume` | `operationId` | 仅扣所选非 BlockItem 1 个；空格／方块拒绝，不跨格替补 |
-| `POST /api/place-selected` | `operationId,x,y,z` | 只扣所选格，兼容六种方块；不按 ID 自动找别的格 |
-| `POST /api/place` | `operationId,block,x,y,z` | MC 接受后扣一个材料、增加 revision、保存并返回状态与 operationId |
+| `POST /api/place-selected` | `operationId,x,y,z,properties?` | 只扣所选格，兼容六种方块；不按 ID 自动找别的格 |
+| `POST /api/place` | `operationId,block,x,y,z,properties?` | MC 校验属性并接受后扣一个材料、增加 revision、保存并返回状态与 operationId |
 | `POST /api/break` | `operationId,x,y,z` | MC 掉落表计算，当前固定钻石镐；掉落进入库存，方块变空气 |
 | `POST /api/shutdown` | `{}` | 返回 `stopping:true`，随后正常停止 MC 并保存区块 |
 
@@ -144,10 +146,19 @@ MC API 使用 MC 坐标：X/Z 为 `-16..16`，Y 为 `64..95`。支持六种方�
 圆石、泥土、石头、工作台。原型不再提供合成：`/ui/craft` 返回 404，`/api/craft` 返回 400，库存与 revision 不变。原版 MC 配方资源未删除，已有工作台和材料保留。旧建造下拉框列五种材料，选中格路径支持六种。
 最多记录 512 个曾触碰的坐标，空气墓碑也计入。
 
+放置请求的可选 `properties` 是字符串键值对象，例如原木 `{"axis":"x"}`。省略或空对象
+使用该方块默认状态；显式 null、未知属性和非法值拒绝，由 MC `Property.parse` 决定域。
+桥接四条放置路由均原样转发，限制最多 32 项、名称 1～64 字符、值 1～128 字符。
+返回的 `blocks` 为真实世界中已记录坐标的非空气状态，每项包含 `x,y,z,block,properties,stateId`；
+properties 完整，stateId 仅表示当前运行 MC 注册表，不写入跨版本存档。
+目前仍仅开放六类基线方块；原生侧仍显示蓝色碰撞代理，面板尚无朝向选择控件。
+
 修改前保存库存／方块状态快照，规则或保存失败会尝试回滚。成功操作的收据仅在内存
 保留最近 256 个，相同 `operationId` 在收据仍保留时返回原结果，不重复消费。
 收据绑定路径和 JSON 正文，相同 ID 发出不同操作会拒绝。收据仍不跨重启持久化；
 返回的重复收据是当时的结果，调用方需要最新状态时另外读取 `/api/state`。
+回滚和启动修复使用已提交的完整方块状态日志；尚不跟踪控制台外部编辑、邻居更新或
+动态方块造成的日志外变化，不能据此宣称这些变化也能持久化。
 
 slots 是 `[{slot,empty:true}]` 或 `[{slot,empty:false,id,name,count,maxCount,isBlock,placeSupported}]`，
 selectedItem 为 null 或所选非空格的同一结构。用完设置为空 ItemStack，selectedSlot 不变。
@@ -209,16 +220,19 @@ MC 状态后执行恢复，不能重复发送一次新的放置来“补显示�
 
 | 状态 | 保存位置／格式 |
 | --- | --- |
-| MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`schemaVersion:1,selectedSlot,revision,slots,touched`；36 格 ItemStack.CODEC，包含空气墓碑 |
+| MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`schemaVersion:2,selectedSlot,revision,slots,touched`；36 格 ItemStack.CODEC，每个 touched 保存 block 与完整 properties，包含空气墓碑 |
 | MC 实际区块 | 同目录中的原版世界文件；正常停止时保存 |
 | 红沙锚点 | `runtime/bridge-origin.json`：红沙世界坐标 `x,y,z` |
 | 安装归属 | `runtime/installation.json`：游戏路径、备份路径及已安装文件的 SHA |
 | 诊断输出 | `runtime/character-*.json`：原始指针／本机路径，只留本机 |
 
 MC 状态写临时文件后替换，优先原子移动，不支持时回退替换。重启按 `touched` 修复实验
-坐标，正常加载不重新发初始材料。锚点不能与已有建筑分离删除。旧无 schemaVersion
-存档完整校验后迁移为版本 1，默认选择槽 0，原有 revision／材料／建筑不变。
-版本 1 强制 36 格、合法选中格与实验坐标；未知未来版本禁用权威 API，不覆盖其文件。
+坐标及完整朝向，正常加载不重新发初始材料。锚点不能与已有建筑分离删除。旧无
+schemaVersion（版本 0）及版本 1 完整校验后迁移为版本 2：旧 block ID 使用 MC 默认
+状态，版本 0 默认选择槽 0，版本 1 保留选择槽；原有 revision／材料／建筑不变。
+版本 2 强制完整合法 properties（空气及无属性方块为 `{}`），不保存原始 stateId。
+36 格、合法选中格与实验坐标检查仍保留；无效属性或未知未来版本禁用权威 API，
+不覆盖其文件。版本 2 文件不能直接交给旧版插件；升级前备份留在本机 backups。
 仍未引入真实 PlayerInventory／装备，引入时要新增迁移；`/api/equip` 和伤害接口不存在。
 
 ## 构建与可重建来源

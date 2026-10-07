@@ -47,6 +47,18 @@ C 仅去除 XML 声明的对照完成封装/隔离检查并短暂安装，启动
 静态结果见 [native-character-contract.md](native-character-contract.md)，路线复核见
 [native-character-feasibility.md](native-character-feasibility.md)。
 
+2026-10-07 继续完成方块状态前置：MC 存档升级 schema 2，保存完整 properties，
+运行状态返回实际世界的 properties／stateId，原木 x/y/z 朝向可放置并重启恢复。
+正式后台已先仅以 `-NoGame` 启动，用户库存／选择／revision／原点保持。
+全部 26684 合法状态到原版模型选择的离线映射已完成；红沙仍是六类蓝色代理。
+详细检查和边界见本文件末尾的“完整方块状态与模型映射”。
+
+随后用户明确恢复接管，本次 C 对照已实机读回 15/15、原木像素纹理可见（角色部分
+遮挡）、碰撞高度增量 1.15198 米，UID 1 已清理、地面回到 0，MC 状态保持。
+**当前 C 收据 `c2fb925c9d2b423996d764886408cf1a` 仍 installed；退出确认界面已打开，
+正在等待用户手动确认退出后恢复。不得在游戏运行时卸载此临时包。**
+本次外观控制器只读链两次稳定采样也成功；尚未写入外观或加载 Steve。
+
 M1 已完成并提交为 `1bb0775`。M6a 独立背包保持进行中：全物品官方中文图标目录、
 中文悬停、整组领取、控制台按数量添加、36 格选择和实际消耗已实现，兼容六种方块放置。
 用户已确认游戏内图片／悬停显示，按钮点击验收仍保留未验证；可见手持和装备用途尚未接入。
@@ -735,3 +747,157 @@ PROCESS_VM_READ/QUERY_INFORMATION，沿固定代码支持的当前身体组件�
 共同静态验证：50 个 Python AST、7 个公开 JSON、修改文档的 22 个相对链接和
 `git diff --check` 通过。本轮 ASI/JAR 未改，MC revision18/原材料保持。持续目标仍进行
 中，游戏接管需明确恢复；不以此次 Escape 将完整目标误记 complete 或 paused。
+
+## 2026-10-07 完整方块状态与模型映射
+
+本轮补上“原木 ID 相同但朝向不同”的基础状态边界：MC 仍是实际放置、属性域、掉落、
+材料及保存的权威。`Authority.java` 将已提交的 touched 记录从 block ID 改为完整
+`BlockState`，存档升级为 schema 2。放置接口接受可选字符串对象 `properties`，例如
+`{"axis":"x"}`；MC 原生 Property 校验属性名称和值，未指定属性使用默认值。两个 MC
+放置入口及四个桥接放置入口均支持透传，桥接只检查对象/字符串长度，不复制属性域。
+
+`GET /api/state` 对已记录坐标读取真实世界的非空气方块，返回完整 properties 和当前
+注册表的 stateId。磁盘只存 block ID 与完整 properties，不保存易随版本变化的原始
+stateId。版本 0/1 经完整校验后按原版默认属性迁移，保留 36 格 ItemStack 组件、选择、
+revision、建筑及空气墓碑；版本 2 缺失/错误属性、未知未来版本均停止启动权威接口，
+不覆盖原文件。失败回滚及启动修复使用已提交日志；尚不跟踪控制台外部编辑、邻居更新
+或动态状态，不能把这些场景的真实世界快照恢复也算作完成。
+
+### 真实服务检查与正式存档迁移
+
+| 命令/步骤 | 本次实际结果 |
+| --- | --- |
+| `pwsh -NoProfile -File tools/build_minecraft.ps1` | MC 构建通过；新 JAR 21188 字节，SHA256 `eeb9ecc2a77349b2927b50cda0a6350dcefd95325378ad379c95f4f952aa8b38` |
+| `py -3.12 -B tools/check_block_states.py` | 独立 8768/25580 世界 **7 组通过**：schema 1 迁移、三轴实际 stateId、两个入口、收据/非法属性、写盘失败回滚、正常重启、空气墓碑修复及坏存档保护；正常停服，无强停 |
+| `py -3.12 -B tools/check_inventory.py` | 独立世界 **15 组通过**；1332 个实际物品/官方中文、36 格/组件/选择、64/16/1 堆叠、满背包/写盘回滚、掉落、正常重启和未来 schema 拒绝保持；正常停服，无强停 |
+| `py -3.12 -B tools/check_inventory_bridge.py` | 隔离 HTTP **25 项通过**，含四条放置路由属性透传、格式拒绝及原生失败后不重放已消费请求 |
+| `pwsh -NoProfile -File tools/start_prototype.ps1 -NoGame` | 第一次由 PowerShell 7 启动 PowerShell 5 子进程时，`Get-FileHash` 模块载入失败；改为复用 `$PSHOME` 对应引擎后，真实 MC/桥接启动成功。该步骤未启动红沙 |
+| `py -3.12 -B tools/check_authority.py` | 正式服务只读及 **7 项拒绝请求通过**，1332 项官方名称一致，用户状态保持 |
+
+新测试原始证据分别在 ignored `runtime/block-state-checks.json`、
+`runtime/inventory-checks.json`、`runtime/authority-checks.json`。正式升级前确认后台未运行，
+完整世界备份至 `backups/schema2-20261007-104139-a51027b8`，19 个世界文件哈希记录，
+并保留旧 JAR 和桥接原点。启动后记录在 `runtime/schema2-upgrade-checks.json`：原存档
+schema 1→2，仅两个空气墓碑新增 `properties:{}`；revision 18、selectedSlot 1、
+全部 36 格及物品组件、桥接原点保持，blocks 仍为空。原木 14、圆石 64、泥土 32、木板 2、
+木棍 4、工作台 1 均保持。新构建产物已更新到 `artifacts/minecraft/`。
+
+### 全部合法状态的原版模型选择
+
+新增 `build_block_state_models.py` / `check_block_state_models.py`。使用固定官方
+MC 1.21.1 客户端、映射及原版注册表报告，独立 Java 进程仅初始化注册表，调用原始
+BlockModelDefinition/Variant 解析器、BlockStateModelLoader/Selector 谓词，并与
+Python 独立选择结果逐状态比较；未启动世界、MC 客户端或游戏服务。
+
+```powershell
+py -3.12 -B tools/build_block_state_models.py
+py -3.12 -B tools/check_block_state_models.py --rebuild
+```
+
+已存在的输出不覆盖；重跑生成须指定新的 ignored build 输出。需要前置方块注册表和
+资源覆盖报告，缺失官方依赖可显式加 `--download`。相对 JDK 路径在隔离工作目录执行
+前解析为绝对路径。固定输入 SHA、原版类哈希、依赖树、输出目录及输入前后摘要均检查。
+
+真实覆盖 **1060 种方块、26684 个合法状态、6529 个组、6762 个选项、1921 个模型**，
+全部状态及选项与原版 Java **零差异**，另 21 个谓词边界案例一致。保留 variants 精确
+匹配、multipart 所有同时生效组、组内全部加权备选、旋转及 uvlock，不随机选一个模型
+或用默认状态替代其它状态。1062 个资源文件中另两个为未注册的 item_frame/glow_item_frame，
+因此注册状态映射不将它们计入 1060 个方块。
+
+`check_block_state_models.py --rebuild` **14/14 通过**，含重新执行原版 Java 后五个输出
+文件逐字一致、每个原始选择、三轴原木、栅栏多部件、75 组多备选/6 组非默认权重、
+特殊渲染、合法空墙组合、来源变动与输出保护。1921 模型中 1849 有 JSON elements，
+72 为空模型；RenderShape 从真实原版状态读取：MODEL 24334、INVISIBLE 1934、
+ENTITYBLOCK_ANIMATED 416。空气/流体、箱子等特殊情况保持分类，不用立方体代替。
+
+产物在 `build/block-state-models-1.21.1`：选择表 SHA256
+`574053e2d0a5d6bde2b3c72a4479420c2ea12375caac77debab46efee737f74e`，报告 SHA256
+`e52b62c1e877232007db234bd5a58d3ffb8f354069d77a08cefa2056b76d19e3`。
+选择表通过精确 `(model,x,y,uvlock)` 对接几何；依赖表保留原纹理/动画元数据和摘要。
+这仍是固定 vanilla 离线映射，不代表运行 Fabric 注册表或红沙原生模型已全量接通。
+
+### 全资源模型几何及真实纹理
+
+新增 `build_block_model_geometry.py` / `check_block_model_geometry.py`，从固定客户端
+全部 1062 个方块资源文件提取 6766 个选择、1925 个模型，按精确选择元组去重得到
+**5163 个几何变体：5091 个有面、72 个为空**。比注册状态映射多出的四个模型选择来自
+两个未注册的物品展示框资源，不把资源数量当作合法方块数量。
+
+```powershell
+py -3.12 -B tools/build_block_model_geometry.py
+py -3.12 -B tools/check_block_model_geometry.py --rebuild
+```
+
+真实原版 FaceBakery 组件方法处理元素旋转/rescale、模型变换、朝向、绕序与 uvlock，
+输出 **51059 个面**，其中元素旋转面 3852、rescale 面 1218、tint 面 403、退化面 160。
+原始零厚度/退化几何保留，退化三角法线为 null；空模型和特殊渲染不生成虚构立方体。
+这未运行完整客户端 baking，独立 UV 没有图集缩边和图集摆放；实际 render layers、
+染色、动画、遮挡剔除、碰撞及原生导入均未实现。
+
+973 张原 PNG 及 47 份动画元数据逐字保持。独立 Pillow 12.2.0 解码所有 PNG：565 张
+不透明、360 张二值 alpha、48 张分数 alpha；分类是纹理事实，不等于已实现正确渲染层。
+最终 **14/14 检查通过**，包括全部 51059 面的独立旋转/rescale 数学核对、原始顶点/UV
+关联、16 种立方旋转/96 面的 uvlock 世界投影、全部 6762 个合法状态模型选项与几何的
+精确元组关联，以及完整原版 Java 重建逐字一致、新 build 根目录及相对客户端/JDK路径。
+
+产物在 `build/block-model-geometry-1.21.1`：manifest SHA256
+`917755b2d860950b82ab90ab1fa7268bf7ebbe07bcdaca26046cc16da6df16f3`，geometry SHA256
+`bf7da867191441a330a50445de22c4f608d002472180529c9d4d180e2f515df4`。原资源及派生
+输出全部 ignored，仅工具/公开说明上传。细节和限制见 [asset-pipeline.md](asset-pipeline.md)。
+
+当前运行时仍限六种方块及蓝色碰撞代理，没有朝向选择 UI；完整形状/碰撞、流体、染色、
+方块实体、动画和全部物品用途继续未完成。模型及映射报告的原生集成标志均为 false。
+本节的后端/离线检查不包含正在进行的 C 原木游戏内对照；实机结果必须另行记录。
+
+## 2026-10-07 C 对照首次显示／碰撞与生成器修复
+
+用户明确回复恢复接管并完成测试及恢复后，挂载 C 收据
+`c2fb925c9d2b423996d764886408cf1a`。新进程 PID 4900，EXE 版本/哈希仍为固定已支持
+版本；世界 ready/buildOk 后执行 `probe_native_resources.py`，15 项资源全部首次读回
+且长度/头部/FNV 匹配，实例和 MC 状态保持。日志为
+`runtime/native-resource-oak-no-declaration-20261007.json`。
+
+Y 轴实体探针 runId `6618070e-0a9a-4c2a-a307-e2dd1b23d252`，UID 1。普通原木 prefab、
+PAM、纹理与其他 20 项资源均未改，唯一差别为 Y PAMI 删除 39 字节声明。实际画面
+出现 MC 像素原木侧面/顶面，部分被角色遮挡；物理探针高度增量 **1.15198 米**。
+截图留 `runtime/native-oak-no-declaration-visible-20261007.jpg`，人工画面观察另记
+`runtime/native-oak-no-declaration-visual-20261007.json`；不篡改自动探针的
+visualVerified=false 字段，也不据局部可见画面宣称所有面、UV、光照/采样已正确。
+
+随后使用同一进程/UID 清理，实体注册表 404、碰撞增量回到 **0**，MC 状态不变。
+`runtime/native-block-oak-no-declaration-20261007.json` 当前 phase=cleaned、
+registryRemoved/collisionRemovedVerified/mcStateUnchanged 均为 true。诊断未消费
+MC 材料，没有将对象写入 MC 建筑；正式桥接仍使用原蓝色代理。
+
+成功 C 与此前新进程普通候选失败、A/B 对照成功相结合，支持修复这一固定生成格式。
+`prepare_native_block.py` 的 PAMI 改为 `xml_declaration=False`，并校验原模板 SHA
+和三轴白名单；Steve 的原 SkinnedMesh 材质本来就没有此声明，未将该结论推广到它。
+新的默认输出 `build/native-block-declaration-fixed` 拒绝非空目录，保留历史普通和
+A/B/C 输入。新普通报告标记 `materialSerialization=pami-utf8-no-declaration-v1`；
+资源客户端还要求三轴 PAMI 全部等于固定真实模板推导的完整字节，单有标签或只改 Y
+不能冒充普通包。资源读取 CLI 默认改为新候选目录，历史对照仍显式使用历史报告。
+
+新包 21 项候选中只有三份 PAMI 改变（每份 760→721 字节），Y 与实际成功 C 逐字
+相同。报告 SHA256 `7fd02bb439f52738b829472c2fa7cdc658be3123ebb733252187eaac21287417`。
+`check_native_block.py --output build/native-block-declaration-fixed --rebuild` **17/17**、
+`check_native_resource_probe.py` **27/27**、历史对照 **27/27**、实体探针 **42/42** 通过。
+首次新测试的 XML 根标签断言误写，核对真实模板为 StaticMeshInstance 后修正并通过，
+没有改模板或放宽字节比较。新三轴包未安装，X/Z 仍未实机验收。
+
+本次还运行既有 `probe_appearance_controller.py`，在同一真实进程中两次稳定采样
+通过，当前身体/组件/控制器/owner 双向关联一致，owner 组件 count/capacity=45/64，
+控制器恰好一次。mesh count/capacity=16/16，全部 FF；decoration=250/250，其中
+117 字节非零。FF 不能解释为隐藏全部网格，静态消费者存在 preset/default 回退。
+加载选项边界仍未核对，没有调用原生函数或写内存；Steve 应用/恢复仍为 false。
+原始地址仅保留本机 `runtime/appearance-controller-20261007.json`，公开说明见
+[native-character-contract.md](native-character-contract.md)。
+
+测试清理后 Alt+F4 已打开红沙“是否结束游戏”确认框；自动点击/短按未完成确认。
+已请求用户手动结束游戏。**当前仍有游戏 PID 4900，C 包为 installed，等待实际退出
+后才能恢复；没有未清理测试实体。** 这不是恢复完成，不修改仍被游戏使用的资源包。
+
+收尾静态检查：55 个 Python AST、7 个公开 JSON、修改文档的相对文件链接、启动脚本
+PowerShell 语法及 `git diff --check` 通过。新原木检查的固定模板/成功 Y 哈希证明为
+必需项，本机历史包额外逐字比较；模拟干净环境缺少历史包时必需检查仍通过，历史
+比较明确跳过，不要求重新生成已知失败格式。ASI 未改，JAR 已更新，所有官方/派生
+模型、纹理、世界、截图、地址和安装备份仍 ignored。

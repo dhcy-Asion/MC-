@@ -8,6 +8,8 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.BlockState;
+import net.minecraft.state.property.Property;
 import net.minecraft.inventory.SimpleInventory;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
@@ -40,14 +42,14 @@ public final class Authority implements ModInitializer {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
     private static final Set<String> BLOCK_IDS = Set.of("minecraft:oak_log", "minecraft:oak_planks",
             "minecraft:cobblestone", "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table");
-    private static final int SCHEMA_VERSION = 1;
+    private static final int SCHEMA_VERSION = 2;
     // One console target for this slice; the prototype has no real MC player entity yet.
     private static final String CONSOLE_PLAYER = "console";
     private final Map<Item, String> englishNames = new HashMap<>();
     private Language originalLanguage, chineseLanguage;
     private final SimpleInventory inventory = new SimpleInventory(36);
     // Tombstones are retained so a restart repairs stale chunk saves after a crash.
-    private final Map<BlockPos, String> touched = new LinkedHashMap<>();
+    private final Map<BlockPos, BlockState> touched = new LinkedHashMap<>();
     private record Receipt(String path, JsonObject request, JsonObject result) { }
     private final Map<String, Receipt> receipts = new LinkedHashMap<>();
     private MinecraftServer server;
@@ -71,7 +73,7 @@ public final class Authority implements ModInitializer {
                 JsonObject saved = JsonParser.parseString(Files.readString(stateFile)).getAsJsonObject();
                 load(saved);
                 // Migrate only a validated legacy snapshot; never overwrite an unknown future format.
-                if (!saved.has("schemaVersion")) save();
+                if (!saved.has("schemaVersion") || saved.get("schemaVersion").getAsInt() < SCHEMA_VERSION) save();
             }
             else {
                 inventory.addStack(new ItemStack(Registries.ITEM.get(Identifier.of("minecraft:oak_log")), 16));
@@ -81,7 +83,7 @@ public final class Authority implements ModInitializer {
             }
             // Only our recorded experiment coordinates are reconciled.
             for (var e : touched.entrySet())
-                s.getOverworld().setBlockState(e.getKey(), Registries.BLOCK.get(Identifier.of(e.getValue())).getDefaultState(), 3);
+                s.getOverworld().setBlockState(e.getKey(), e.getValue(), 3);
             http = HttpServer.create(new InetSocketAddress(InetAddress.getByName("127.0.0.1"),
                     Integer.getInteger("crimsonmc.port", 8766)), 16);
             httpWorkers = Executors.newFixedThreadPool(2, r -> { Thread t = new Thread(r, "crimsonmc-http"); t.setDaemon(true); return t; });
@@ -168,7 +170,7 @@ public final class Authority implements ModInitializer {
             load(before);
             changed.addAll(touched.keySet());
             for (BlockPos pos : changed) server.getOverworld().setBlockState(pos,
-                    Registries.BLOCK.get(Identifier.of(touched.getOrDefault(pos, "minecraft:air"))).getDefaultState(), 3);
+                    touched.getOrDefault(pos, Blocks.AIR.getDefaultState()), 3);
             throw error instanceof RuntimeException re ? re : new RuntimeException(error);
         }
         JsonObject result = state();
@@ -202,13 +204,55 @@ public final class Authority implements ModInitializer {
     }
 
     private void placeFromSlot(JsonObject req, int slot, String id) {
+        BlockState requestedState = blockState(id, req.get("properties"), false);
         BlockPos pos = position(req);
         var world = server.getOverworld();
         if (!world.getBlockState(pos).isAir()) throw new BadRequest("cell occupied");
-        if (!world.setBlockState(pos, Registries.BLOCK.get(Identifier.of(id)).getDefaultState(), 3))
+        if (!world.setBlockState(pos, requestedState, 3))
             throw new BadRequest("Minecraft refused placement");
         decrementSlot(slot);
-        touched.put(pos, id);
+        touched.put(pos, world.getBlockState(pos));
+    }
+
+    /** Minecraft owns property domains; raw state IDs are never persisted across versions. */
+    private static BlockState blockState(String id, JsonElement properties, boolean complete) {
+        Identifier key = Identifier.tryParse(id);
+        if (key == null || !Registries.BLOCK.containsId(key)) throw new BadRequest("unknown Minecraft block");
+        BlockState state = Registries.BLOCK.get(key).getDefaultState();
+        if (properties == null && !complete) return state;
+        if (properties == null || !properties.isJsonObject()) throw new BadRequest("properties must be an object");
+        JsonObject values = properties.getAsJsonObject();
+        Set<String> names = new HashSet<>();
+        for (Property<?> property : state.getProperties()) names.add(property.getName());
+        if (complete && !values.keySet().equals(names)) throw new BadRequest("saved block properties must be complete");
+        for (var entry : values.entrySet()) {
+            Property<?> property = state.getBlock().getStateManager().getProperty(entry.getKey());
+            if (property == null) throw new BadRequest("unknown block property " + entry.getKey());
+            if (!entry.getValue().isJsonPrimitive() || !entry.getValue().getAsJsonPrimitive().isString())
+                throw new BadRequest("block property values must be strings");
+            state = withProperty(state, property, entry.getValue().getAsString());
+        }
+        return state;
+    }
+
+    private static <T extends Comparable<T>> BlockState withProperty(BlockState state, Property<T> property, String value) {
+        return state.with(property, property.parse(value).orElseThrow(() -> new BadRequest("invalid block property " + property.getName())));
+    }
+
+    private static <T extends Comparable<T>> String propertyValue(BlockState state, Property<T> property) {
+        return property.name(state.get(property));
+    }
+
+    private static JsonObject blockDescription(BlockPos pos, BlockState state, boolean runtime) {
+        JsonObject result = new JsonObject();
+        result.addProperty("x", pos.getX()); result.addProperty("y", pos.getY()); result.addProperty("z", pos.getZ());
+        result.addProperty("block", Registries.BLOCK.getId(state.getBlock()).toString());
+        JsonObject properties = new JsonObject();
+        state.getProperties().stream().sorted(Comparator.comparing(Property::getName))
+                .forEach(property -> properties.addProperty(property.getName(), propertyValue(state, property)));
+        result.add("properties", properties);
+        if (runtime) result.addProperty("stateId", Block.getRawIdFromState(state));
+        return result;
     }
 
     private void grant(JsonObject req) {
@@ -270,7 +314,7 @@ public final class Authority implements ModInitializer {
 
     private void breakBlock(JsonObject req) {
         BlockPos pos = position(req);
-        if (!touched.containsKey(pos) || touched.get(pos).equals("minecraft:air")) throw new BadRequest("no prototype block here");
+        if (!touched.containsKey(pos) || touched.get(pos).isAir()) throw new BadRequest("no prototype block here");
         var world = server.getOverworld();
         var state = world.getBlockState(pos);
         // Actual MC loot tables, with a diamond pickaxe for this first build slice.
@@ -278,7 +322,7 @@ public final class Authority implements ModInitializer {
                 new ItemStack(Registries.ITEM.get(Identifier.of("minecraft:diamond_pickaxe"))));
         for (ItemStack drop : drops) if (!inventory.addStack(drop.copy()).isEmpty()) throw new BadRequest("inventory full");
         if (!world.setBlockState(pos, Blocks.AIR.getDefaultState(), 3)) throw new BadRequest("Minecraft refused removal");
-        touched.put(pos, "minecraft:air");
+        touched.put(pos, Blocks.AIR.getDefaultState());
     }
 
     /**
@@ -394,9 +438,9 @@ public final class Authority implements ModInitializer {
         result.add("inventory", counts);
         JsonArray blocks = new JsonArray();
         for (var entry : touched.entrySet()) {
-            if (entry.getValue().equals("minecraft:air")) continue;
-            JsonObject b = new JsonObject(); b.addProperty("x", entry.getKey().getX()); b.addProperty("y", entry.getKey().getY());
-            b.addProperty("z", entry.getKey().getZ()); b.addProperty("block", entry.getValue()); blocks.add(b);
+            // Read actual world state so the response also verifies restart reconciliation.
+            BlockState actual = server.getOverworld().getBlockState(entry.getKey());
+            if (!actual.isAir()) blocks.add(blockDescription(entry.getKey(), actual, true));
         }
         result.add("blocks", blocks);
         return result;
@@ -412,8 +456,7 @@ public final class Authority implements ModInitializer {
                 ItemStack.CODEC.encodeStart(ops, inventory.getStack(i)).getOrThrow());
         result.add("slots", slots);
         JsonArray cells = new JsonArray();
-        touched.forEach((pos,id) -> { JsonObject b = new JsonObject(); b.addProperty("x",pos.getX()); b.addProperty("y",pos.getY());
-            b.addProperty("z",pos.getZ()); b.addProperty("block",id); cells.add(b); });
+        touched.forEach((pos,block) -> cells.add(blockDescription(pos, block, false)));
         result.add("touched", cells);
         return result;
     }
@@ -434,7 +477,7 @@ public final class Authority implements ModInitializer {
                 throw new BadRequest("saved inventory stack exceeds its Minecraft maximum");
             stacks.add(stack);
         }
-        Map<BlockPos, String> cells = new LinkedHashMap<>();
+        Map<BlockPos, BlockState> cells = new LinkedHashMap<>();
         JsonArray savedCells = data.getAsJsonArray("touched");
         if (savedCells == null || savedCells.size() > 512) throw new BadRequest("invalid saved touched cells");
         for (JsonElement cell : savedCells) {
@@ -442,7 +485,9 @@ public final class Authority implements ModInitializer {
             BlockPos pos = new BlockPos(integer(b, "x", -16, 16), integer(b, "y", 64, 95), integer(b, "z", -16, 16));
             String id = required(b, "block");
             if (!id.equals("minecraft:air") && !BLOCK_IDS.contains(id)) throw new BadRequest("unknown saved prototype block");
-            if (cells.put(pos, id) != null) throw new BadRequest("duplicate saved cell");
+            if (version < 2 && b.has("properties")) throw new BadRequest("legacy block record unexpectedly contains properties");
+            BlockState state = blockState(id, b.get("properties"), version >= 2);
+            if (cells.put(pos, state) != null) throw new BadRequest("duplicate saved cell");
         }
         // Parse and validate the complete snapshot before replacing any live state.
         inventory.clear(); touched.clear();

@@ -34,6 +34,16 @@ def strict_integer(value, name, minimum, maximum):
     return value
 
 
+def block_properties(value):
+    """Bound the transport shape; Minecraft validates actual property domains."""
+    if (not isinstance(value, dict) or len(value) > 32
+            or any(not isinstance(key, str) or not 1 <= len(key) <= 64
+                   or not isinstance(item, str) or not 1 <= len(item) <= 128
+                   for key, item in value.items())):
+        raise GameAPIError("properties must be an object of bounded string names and values")
+    return dict(value)
+
+
 def tsv_text(value):
     if not isinstance(value, str):
         raise GameAPIError("Minecraft item text must be a string")
@@ -218,6 +228,8 @@ class Bridge:
             if abs(x) > 16 or abs(z) > 16 or not 0 <= y <= 31:
                 raise GameAPIError("Stay within the 33 x 32 x 33 prototype grid")
             mutation = {"x": x, "y": y+64, "z": z, "operationId": str(uuid.uuid4())}
+            if path in PLACEMENT_ACTIONS and "properties" in body:
+                mutation["properties"] = block_properties(body["properties"])
             if selected_placement:
                 result = mutate_mc("/api/place-selected", mutation)
                 verb = "Placed"

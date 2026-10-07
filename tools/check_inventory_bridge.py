@@ -19,6 +19,8 @@ sys.path.insert(0, str(ROOT))
 from bridge import service
 from bridge.red_side import GameAPIError
 
+PLACEMENT_ROUTES = ("/ui/place", "/ui/front", "/ui/place-selected", "/ui/front-selected")
+
 
 class FakeMC:
     def __init__(self):
@@ -33,6 +35,7 @@ class FakeMC:
         self.fill(0, self.items[0], 2)
         self.fill(1, self.items[1], 1)
         self.blocks = []
+        self.placement_metadata = {}
         self.timeout_after_commit = False
 
     def fill(self, index, item, count):
@@ -43,7 +46,7 @@ class FakeMC:
         for slot in self.slots:
             if not slot["empty"]:
                 inventory[slot["id"]] = inventory.get(slot["id"], 0) + slot["count"]
-        return deepcopy({"engine": "Minecraft Java 1.21.1", "schemaVersion": 1, "revision": self.revision,
+        return deepcopy({"engine": "Minecraft Java 1.21.1", "schemaVersion": 2, "revision": self.revision,
                          "slots": self.slots, "selectedSlot": self.selected,
                          "selectedItem": None if self.slots[self.selected]["empty"] else self.slots[self.selected],
                          "inventory": inventory, "blocks": self.blocks})
@@ -71,16 +74,23 @@ class FakeMC:
             # Fixture only tests forwarding; real split/rollback is checked against MC.
         elif path == "/api/select":
             self.selected = body["slot"]
-        elif path in {"/api/consume", "/api/place-selected"}:
-            slot = self.slots[self.selected]
+        elif path in {"/api/consume", "/api/place", "/api/place-selected"}:
+            index = self.selected
+            if path == "/api/place":
+                index = next((row["slot"] for row in self.slots
+                              if not row["empty"] and row["id"] == body["block"]), None)
+                if index is None: raise GameAPIError("No fixture material")
+            slot = self.slots[index]
             if slot["empty"]: raise GameAPIError("Selected slot empty")
             if path == "/api/consume" and slot["isBlock"]:
                 raise GameAPIError("Place block items instead of consuming them")
-            if path == "/api/place-selected":
+            if path in {"/api/place", "/api/place-selected"}:
                 if not slot["placeSupported"]: raise GameAPIError("Unsupported block")
-                self.blocks.append({"id": slot["id"], **{axis: body[axis] for axis in "xyz"}})
+                # Supplied response metadata tests transport, not Minecraft state rules.
+                self.blocks.append({"block": slot["id"], **{axis: body[axis] for axis in "xyz"},
+                                    **deepcopy(self.placement_metadata)})
             slot["count"] -= 1
-            if not slot["count"]: self.slots[self.selected] = {"slot": self.selected, "empty": True}
+            if not slot["count"]: self.slots[index] = {"slot": index, "empty": True}
         else:
             raise GameAPIError("Unexpected fake MC mutation")
         self.revision += 1
@@ -150,6 +160,26 @@ class BridgeHTTPChecks(unittest.TestCase):
     def enable_building(self):
         self.red.available = True
         self.bridge.origin = {"x": 0, "y": 0.03, "z": 0}
+
+    def prepare_property_placement(self):
+        self.enable_building()
+        self.mc.calls.clear()
+        self.mc.blocks.clear()
+        self.mc.revision, self.mc.selected = 4, 0
+        self.mc.timeout_after_commit = False
+        self.mc.fill(0, {"id": "minecraft:oak_log", "name": "橡木原木", "maxCount": 64,
+                         "isBlock": True, "placeSupported": True}, 64)
+        self.mc.placement_metadata = {"properties": {"axis": "x"}, "stateId": 130}
+        self.red.calls.clear()
+        self.red.objects.clear()
+        self.red.fail_spawn = False
+
+    @staticmethod
+    def property_placement_body(path, **extra):
+        body = {"x": 1, "y": 2, "z": -1, **extra}
+        if path in {"/ui/place", "/ui/front"}:
+            body["block"] = "minecraft:oak_log"
+        return body
 
     def test_add_item_needs_neither_red_nor_anchor(self):
         # Console-style direct add: item, explicit count and a target player.
@@ -294,6 +324,135 @@ class BridgeHTTPChecks(unittest.TestCase):
         self.assertIn("do not repeat", text)
         self.assertEqual(self.mc.slots[0]["count"], 1)
         self.assertEqual(len([path for path, body in self.mc.calls if body is not None]), 1)
+
+    def test_all_placement_routes_forward_properties_and_preserve_mc_state(self):
+        for route in PLACEMENT_ROUTES:
+            with self.subTest(route=route):
+                self.prepare_property_placement()
+                body = self.property_placement_body(route, properties={"axis": "x"})
+                with patch.object(self.bridge, "sync", wraps=self.bridge.sync) as sync:
+                    code, text = self.request(route, body)
+                self.assertEqual(code, 200, text)
+                writes = [(path, body) for path, body in self.mc.calls if body is not None]
+                self.assertEqual(len(writes), 1)
+                expected = "/api/place-selected" if route.endswith("-selected") else "/api/place"
+                self.assertEqual(writes[0][0], expected)
+                forwarded = writes[0][1]
+                self.assertEqual(forwarded["properties"], {"axis": "x"})
+                self.assertIsInstance(forwarded["operationId"], str)
+                self.assertTrue(forwarded["operationId"])
+                self.assertEqual("block" in forwarded, expected == "/api/place")
+                if "block" in forwarded:
+                    self.assertEqual(forwarded["block"], "minecraft:oak_log")
+                expected_cell = {"x": 3, "y": 64, "z": 0} if "/front" in route else {"x": 1, "y": 66, "z": -1}
+                self.assertEqual({key: forwarded[key] for key in "xyz"}, expected_cell)
+                sync.assert_called_once()
+                self.assertEqual(sync.call_args.args[0], self.mc.state())
+                self.assertEqual(sync.call_args.args[0]["blocks"][0],
+                                 {"block": "minecraft:oak_log", **expected_cell,
+                                  "properties": {"axis": "x"}, "stateId": 130})
+                self.assertEqual(self.mc.slots[0]["count"], 63)
+                self.assertEqual(self.mc.revision, 5)
+                self.assertEqual(len(self.red.objects), 1)
+
+    def test_empty_placement_properties_are_forwarded(self):
+        for route in PLACEMENT_ROUTES:
+            with self.subTest(route=route):
+                self.prepare_property_placement()
+                self.mc.placement_metadata = {"properties": {"axis": "y"}, "stateId": 131}
+                code, text = self.request(route, self.property_placement_body(route, properties={}))
+                self.assertEqual(code, 200, text)
+                writes = [body for _, body in self.mc.calls if body is not None]
+                self.assertEqual(len(writes), 1)
+                self.assertIn("properties", writes[0])
+                self.assertEqual(writes[0]["properties"], {})
+                self.assertEqual(self.mc.blocks[0]["properties"], {"axis": "y"})
+
+    def test_omitted_placement_properties_are_not_invented(self):
+        for route in PLACEMENT_ROUTES:
+            with self.subTest(route=route):
+                self.prepare_property_placement()
+                self.mc.placement_metadata = {"properties": {"axis": "y"}, "stateId": 131}
+                code, text = self.request(route, self.property_placement_body(route))
+                self.assertEqual(code, 200, text)
+                writes = [body for _, body in self.mc.calls if body is not None]
+                self.assertEqual(len(writes), 1)
+                self.assertNotIn("properties", writes[0])
+                self.assertEqual(self.mc.blocks[0]["properties"], {"axis": "y"})
+
+    def test_malformed_properties_never_mutate_mc_or_native(self):
+        invalid = (None, [], "axis=x", True, 1, 1.5,
+                   {"axis": None}, {"axis": True}, {"axis": 1}, {"axis": []}, {"axis": {}},
+                   {"": "x"}, {"x" * 65: "x"}, {"axis": ""}, {"axis": "x" * 129},
+                   {f"key{index}": "x" for index in range(33)})
+        for route in PLACEMENT_ROUTES:
+            for properties in invalid:
+                with self.subTest(route=route, properties=properties):
+                    self.prepare_property_placement()
+                    before = self.mc.state()
+                    code, text = self.request(route, self.property_placement_body(route, properties=properties))
+                    self.assertEqual(code, 400, text)
+                    self.assertIn("properties must be an object", text)
+                    self.assertFalse(any(body is not None for _, body in self.mc.calls))
+                    self.assertEqual(self.mc.state(), before)
+                    self.assertFalse(any(method in {"POST", "DELETE", "PUT", "PATCH"}
+                                         for _, method, _ in self.red.calls))
+                    self.assertEqual(self.red.objects, [])
+
+    def test_native_failure_preserves_property_commit_and_does_not_retry(self):
+        for route in PLACEMENT_ROUTES:
+            with self.subTest(route=route):
+                self.prepare_property_placement()
+                self.red.fail_spawn = True
+                code, text = self.request(route, self.property_placement_body(route, properties={"axis": "x"}))
+                self.assertEqual(code, 400)
+                self.assertIn("Minecraft committed revision 5", text)
+                self.assertIn("Restore blocks", text)
+                self.assertIn("do not repeat", text)
+                writes = [body for _, body in self.mc.calls if body is not None]
+                self.assertEqual(len(writes), 1)
+                self.assertEqual(writes[0]["properties"], {"axis": "x"})
+                self.assertEqual(self.mc.blocks[0]["properties"], {"axis": "x"})
+                self.assertEqual(self.mc.blocks[0]["stateId"], 130)
+                self.assertEqual(self.mc.slots[0]["count"], 63)
+                self.assertEqual(self.mc.revision, 5)
+                self.assertEqual(self.red.objects, [])
+
+    def test_lost_property_placement_response_is_not_retried(self):
+        for route in PLACEMENT_ROUTES:
+            with self.subTest(route=route):
+                self.prepare_property_placement()
+                self.mc.timeout_after_commit = True
+                code, text = self.request(route, self.property_placement_body(route, properties={"axis": "x"}))
+                self.assertEqual(code, 400)
+                self.assertIn("result unknown", text)
+                self.assertEqual(len([body for _, body in self.mc.calls if body is not None]), 1)
+                self.assertEqual(self.mc.blocks[0]["properties"], {"axis": "x"})
+                self.assertEqual(self.mc.slots[0]["count"], 63)
+                self.assertEqual(self.mc.revision, 5)
+                self.assertFalse(any(method == "POST" for _, method, _ in self.red.calls))
+
+    def test_mc_property_rejection_has_no_native_writes_or_substitution(self):
+        for route in PLACEMENT_ROUTES:
+            with self.subTest(route=route):
+                self.prepare_property_placement()
+                before = self.mc.state()
+                submitted = []
+
+                def rejecting_mc(path="/api/state", body=None):
+                    if body is not None:
+                        submitted.append((path, deepcopy(body)))
+                        raise GameAPIError("Minecraft rejected invalid block property axis")
+                    return self.mc(path, body)
+
+                with patch.object(service, "mc", rejecting_mc):
+                    code, text = self.request(route, self.property_placement_body(route, properties={"axis": "invalid"}))
+                self.assertEqual(code, 400)
+                self.assertIn("Minecraft rejected invalid block property axis", text)
+                self.assertEqual(len(submitted), 1)
+                self.assertEqual(submitted[0][1]["properties"], {"axis": "invalid"})
+                self.assertEqual(self.mc.state(), before)
+                self.assertFalse(any(method == "POST" for _, method, _ in self.red.calls))
 
     def test_lost_mc_response_is_not_retried(self):
         self.mc.timeout_after_commit = True

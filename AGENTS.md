@@ -69,6 +69,7 @@ the earlier copy under Desktop/Git.
 | --- | --- |
 | 文档／诊断 | 检查相对链接和 JSON；`python tools/check_character_probe.py`；Python 语法检查；已支持版本运行只读探针 |
 | MC 规则 | `tools/build_minecraft.ps1` 构建；按变更运行 `tools/check_authority.py` 或新增有意义的规则检查 |
+| 方块属性／存档迁移 | `py -3.12 -B tools/check_block_states.py` 使用独立世界；与 `check_inventory.py` 顺序运行（共用 8768／25580）；桥接转发运行 `check_inventory_bridge.py`；原生实际显示仍须另验收 |
 | 背包 | MC 构建；`python tools/check_inventory.py` 使用独立测试世界；`python tools/check_inventory_bridge.py`；`python tools/check_inventory_ui.py`；原生构建和游戏内面板检查 |
 | 跨游戏方块同步 | `tools/check_bridge.py`；保存／重启改动再运行 `tools/check_restart.py` |
 | 原生源码 | 准备固定上游、构建、补丁可重建检查及相关游戏内行为验证；更新插件前关闭游戏 |
@@ -77,6 +78,8 @@ the earlier copy under Desktop/Git.
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |
 | 全方块注册表 | `python -B tools/check_block_registry.py --rebuild`；固定 vanilla 数据生成器、合法状态乘积/ID/默认状态及客户端资源核对，不启动世界 |
+| 全状态模型映射 | `py -3.12 -B tools/check_block_state_models.py --rebuild`；固定原版 Java 谓词／解析、全部合法状态及加权／多部件组合，不启动世界 |
+| 全资源面几何 | `py -3.12 -B tools/check_block_model_geometry.py --rebuild`；原版 FaceBakery、独立旋转／UV 检查、Pillow 纹理及全状态选项连接，不启动世界、不将 alpha 像素当作 render layer |
 | 独立资源包预演 | `py -3.12 -B tools/check_asset_overlay.py --verify-game`；原索引保留、完整 DDS、逐项解包、路径与报告输出保护；预演不写游戏 |
 | 临时原木资源探针 | `py -3.12 -B tools/check_asset_probe.py`（隔离副本）；`python tools/check_native_block_probe.py`（隔离 HTTP）；实际安装／恢复先关闭游戏并核对备份／所有权，实机显示与碰撞另验收 |
 | 原生资源读取客户端 | `py -3.12 -B tools/check_native_resource_probe.py`，使用隔离 HTTP/假进程身份及真实本地资源摘要；实际引擎读取单独记录，不等于模型显示 |

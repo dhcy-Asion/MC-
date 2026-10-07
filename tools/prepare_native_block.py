@@ -42,6 +42,8 @@ MC_HASHES = {
     "textures/minecraft/block/oak_log_top.png": "62f38b25ae28b6c4842ee5a83f790394b1ec4d6c6f20dd52044394855346a2a7",
 }
 TEXTURE_TARGET = "object/texture/crimsonmc_oak_log_atlas"
+MATERIAL_SERIALIZATION = "pami-utf8-no-declaration-v1"
+DEFAULT_OUTPUT = ROOT / "build/native-block-declaration-fixed"
 
 
 def read_mc(asset: Path) -> tuple[dict, dict[str, list[dict]]]:
@@ -231,6 +233,8 @@ def validate_geometry(pam_data: bytes, lod_data: bytes, mapped: list[dict]) -> N
 
 
 def make_material(payload: bytes, axis: str) -> bytes:
+    if axis not in ("x", "y", "z") or native.sha256(payload) != TEMPLATE_HASHES[BASE + ".pami"]:
+        raise ValueError("PAMI requires a known axis and the fixed native template")
     doc = ET.fromstring(payload)
     doc.find("StaticMesh").set("Path", f"object/00_common/system/crimsonmc_oak_log_{axis}.pam")
     material = doc.find("MaterialData/Material")
@@ -240,7 +244,10 @@ def make_material(payload: bytes, axis: str) -> bytes:
     names = {"_baseColorTexture": ".dds", "_normalTexture": "_n.dds", "_materialTexture": "_sp.dds"}
     for node in material.findall("Parameters/MaterialParameterTexture"):
         node.set("Value", TEXTURE_TARGET + names[node.get("Name")])
-    return ET.tostring(doc, encoding="utf-8", xml_declaration=True)
+    # The real native PAMI begins directly with StaticMeshInstance. The isolated Y
+    # control proved that removing only the prior 39-byte declaration enables
+    # loading. Keep the exact ElementTree body, UTF-8 encoding and spacing.
+    return ET.tostring(doc, encoding="utf-8", xml_declaration=False)
 
 
 def textures_candidate(payloads: dict, files: dict, decoder_python: Path) -> tuple[dict, dict, dict]:
@@ -310,6 +317,8 @@ def publish(output: Path, files: dict[str, bytes], report: dict) -> None:
 def prepare(game: Path, output: Path, source: Path, deps: Path | None, asset: Path,
             decoder_python: Path) -> dict:
     output = native.output_directory(output)
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ValueError("Native candidate output must be new or empty; historical assets are never overwritten")
     native.check_links(game)
     provenance = native.load_cdmw(source, deps)
     if native.file_hash(game / "bin64/CrimsonDesert.exe") != native.EXE_SHA256:
@@ -368,6 +377,7 @@ def prepare(game: Path, output: Path, source: Path, deps: Path | None, asset: Pa
     # All original-class MC files are checked again before publishing too.
     read_mc(asset)
     report = {"schemaVersion": 1, "supportedExeSha256": native.EXE_SHA256, "cdmw": provenance,
+              "materialSerialization": MATERIAL_SERIALIZATION,
               "archiveIndex": "0000/0.pamt", "archiveIndexSha256": index_hash,
               "templateNoEditRebuildByteIdentical": {"pam": True, "pamlod": True, "prefab": True},
               "mcInputs": MC_HASHES, "candidateResources": resources, "variants": variants,
@@ -385,6 +395,8 @@ def prepare(game: Path, output: Path, source: Path, deps: Path | None, asset: Pa
                   "Original HKX and binary meshinfo are copied without edits; collision loading, resource lifecycle, engine metadata registration and game load require separate acceptance.",
                   "Local licensed game/MC assets and derivatives must remain in ignored build and must not be redistributed.",
               ]}
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ValueError("Native candidate output changed during preparation; historical assets are never overwritten")
     publish(output, files, report)
     return report
 
@@ -392,7 +404,7 @@ def prepare(game: Path, output: Path, source: Path, deps: Path | None, asset: Pa
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--game-root", type=Path)
-    parser.add_argument("--output", type=Path, default=ROOT / "build/native-block")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--cdmw-source", type=Path, default=ROOT / "build/cdmw-fixed-source")
     parser.add_argument("--deps", type=Path, default=ROOT / "build/cdmw-deps")
     parser.add_argument("--block-asset", type=Path, default=ROOT / "build/block-assets-1.21.1")
