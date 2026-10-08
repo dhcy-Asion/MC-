@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from check_asset_probe import ProbeChecks
 import install_asset_probe as transaction
@@ -269,12 +270,113 @@ class SteveInitialAppProbeChecks(StevePartTableProbeChecks):
         self.assert_original()
 
 
+class SteveNativeHeadProbeChecks(StevePartTableProbeChecks):
+    plan = steve.steve.NATIVE_HEAD_OUTPUT
+    baseline_plan = steve.steve.PART_TABLE_OUTPUT
+    expected_variant = "steve-kliff-native-head-part-table-v2"
+    control_reports = (*StevePartTableProbeChecks.control_reports, "steve-head-mesh-control-report.json")
+    rebuild_args = (*StevePartTableProbeChecks.rebuild_args,
+                    "--head-mesh-control-report", str(steve.steve.HEAD_MESH_CONTROL_REPORT))
+
+    def test_22_control_adds_exactly_one_reviewed_resource(self):
+        old = steve.load_plan(self.baseline_plan)
+        target = steve.steve.NATIVE_HEAD_PREFAB
+        self.assertEqual(set(self.reviewed["payloads"]), set(old["payloads"]))
+        self.assertEqual(len(self.reviewed["payloads"]), 13)
+        self.assertEqual({path for path, data in old["payloads"].items()
+                          if self.reviewed["payloads"][path] != data}, {target})
+        self.assertEqual(steve.native.sha256(old["payloads"][target]), steve.steve.ASSEMBLY_HEAD_SHA256)
+        self.assertEqual(self.reviewed["before"], old["before"])
+        self.assertEqual(self.reviewed["after"]["meta/0.pathc"], old["after"]["meta/0.pathc"])
+        expected_inputs = dict(old["report"]["candidateReports"])
+        control = steve.steve.HEAD_MESH_CONTROL_REPORT
+        expected_inputs[str(control.relative_to(steve.ROOT))] = steve.native.file_hash(control)
+        self.assertEqual(self.reviewed["report"]["candidateReports"], expected_inputs)
+        before_row = next(row for row in old["report"]["resources"] if row["virtualPath"] == target)
+        after_row = next(row for row in self.reviewed["report"]["resources"] if row["virtualPath"] == target)
+        self.assertEqual(after_row["archiveFlags"], 0)
+        for key in ("virtualPath", "kind", "templatePath", "templateSha256"):
+            self.assertEqual(after_row[key], before_row[key])
+        self.assertEqual(self.reviewed["probeVariant"], self.expected_variant)
+        self.assertEqual(steve.steve.audit_part_components(self.reviewed["payloads"]),
+                         {"body": ["CD_Nude"], "head": ["CD_Head"]})
+        receipt = self.install()
+        self.assertEqual(receipt["probeVariant"], self.expected_variant)
+        self.assertEqual(receipt["planSha256"], self.reviewed["reportSha256"])
+        self.restore()
+        self.assert_original()
+
+    def test_26_native_head_requires_both_controls_and_excludes_app_before_io(self):
+        helper = steve.steve
+        for changes in ({"head_descriptor_path": None}, {"part_table_path": None},
+                        {"app_path": self.test_root / "unused-app-report.json"}):
+            options = {"head_descriptor_path": helper.HEAD_DESCRIPTOR_REPORT,
+                       "part_table_path": helper.PART_TABLE_REPORT,
+                       "head_mesh_control_path": helper.HEAD_MESH_CONTROL_REPORT, **changes}
+            with self.subTest(changes=changes), mock.patch.object(helper.assembly, "load_candidate") as opened:
+                with self.assertRaises(ValueError):
+                    helper.candidates(helper.DEFAULT_ASSEMBLY, helper.DEFAULT_APPEARANCE, **options)
+                opened.assert_not_called()
+        for reports, changes in (([helper.DEFAULT_ASSEMBLY], {}),
+                                 ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT], {"part_table_report": None}),
+                                 ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT],
+                                  {"initial_appearance_report": self.test_root / "unused-app-report.json"})):
+            options = {"replacement_report": helper.DEFAULT_APPEARANCE,
+                       "part_table_report": helper.PART_TABLE_REPORT,
+                       "head_mesh_control_report": helper.HEAD_MESH_CONTROL_REPORT, **changes}
+            with self.subTest(changes=changes, reports=reports), mock.patch.object(steve.native, "load_cdmw") as opened:
+                with self.assertRaises(ValueError):
+                    helper.overlay.prepare(self.game, reports, self.test_root / "rejected-overlay",
+                                           self.source, self.deps, **options)
+                opened.assert_not_called()
+
+    def test_27_native_head_exact_report_set_rejects_app_and_replaced_dependencies(self):
+        plan, path, original = self.altered_plan()
+        app_path = "build/unused-app/steve-app-report.json"
+        for missing in (None, "steve-head-descriptor-report.json", "steve-part-table-report.json"):
+            report = json.loads(json.dumps(original))
+            report["candidateReports"][app_path] = "0" * 64
+            if missing:
+                name = next(name for name in report["candidateReports"] if name.endswith(missing))
+                del report["candidateReports"][name]
+            path.write_text(json.dumps(report), encoding="utf-8")
+            # Invalid combinations must be rejected before even reading the
+            # fictitious app report, including the six-report mixed control.
+            with self.subTest(missing=missing), mock.patch.object(steve.native, "file_hash") as hashed:
+                with self.assertRaises(ValueError):
+                    steve.load_plan(plan)
+                hashed.assert_not_called()
+        self.assert_original()
+
+    def test_28_native_head_pins_original_assembly_and_keeps_generic_duplicates_rejected(self):
+        helper = steve.steve
+        model, files, snapshot = helper.assembly.load_candidate(helper.DEFAULT_ASSEMBLY)
+        head = next(row for row in model["candidateResources"] if row["virtualPath"] == helper.NATIVE_HEAD_PREFAB)
+        for change in ("digest", "payload"):
+            changed_model = json.loads(json.dumps(model))
+            changed_files = dict(files)
+            if change == "digest":
+                next(row for row in changed_model["candidateResources"]
+                     if row["virtualPath"] == helper.NATIVE_HEAD_PREFAB)["sha256"] = "0" * 64
+            else:
+                changed_files[head["localFile"]] += b"altered"
+            with self.subTest(change=change), mock.patch.object(helper.assembly, "load_candidate",
+                    return_value=(changed_model, changed_files, snapshot)):
+                with self.assertRaisesRegex(ValueError, "fixed original assembly head"):
+                    helper.candidates(helper.DEFAULT_ASSEMBLY, helper.DEFAULT_APPEARANCE,
+                                      helper.HEAD_DESCRIPTOR_REPORT, part_table_path=helper.PART_TABLE_REPORT,
+                                      head_mesh_control_path=helper.HEAD_MESH_CONTROL_REPORT)
+        with self.assertRaisesRegex(ValueError, "Duplicate overlay resource"):
+            helper.overlay.load_resources([helper.DEFAULT_ASSEMBLY, helper.HEAD_MESH_CONTROL_REPORT])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--head-descriptor", action="store_true")
     mode.add_argument("--part-table", action="store_true")
+    mode.add_argument("--native-head", action="store_true")
     mode.add_argument("--app-variant", choices=("macduff-00000", "macduff-00002"))
     parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
@@ -282,7 +384,7 @@ def main():
         case = SteveInitialAppProbeChecks
         case.select_variant(args.app_variant)
     else:
-        case = StevePartTableProbeChecks if args.part_table else SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks
+        case = SteveNativeHeadProbeChecks if args.native_head else StevePartTableProbeChecks if args.part_table else SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks
     case.plan, case.rebuild = args.plan or case.plan, args.rebuild
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(case))
     raise SystemExit(not result.wasSuccessful())

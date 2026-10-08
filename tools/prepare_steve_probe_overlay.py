@@ -24,6 +24,10 @@ HEAD_DESCRIPTOR_REPORT = ROOT / "build/steve-head-descriptor/steve-head-descript
 HEAD_DESCRIPTOR_OUTPUT = ROOT / "build/steve-head-descriptor-probe-overlay"
 PART_TABLE_REPORT = ROOT / "build/steve-part-table-v2/steve-part-table-report.json"
 PART_TABLE_OUTPUT = ROOT / "build/steve-part-table-v2-probe-overlay"
+HEAD_MESH_CONTROL_REPORT = ROOT / "build/steve-head-mesh-control/steve-head-mesh-control-report.json"
+NATIVE_HEAD_OUTPUT = ROOT / "build/steve-native-head-probe-overlay"
+NATIVE_HEAD_PREFAB = "character/bin__/prefab/1_pc/01_phm/head/head/crimsonmc_steve_head_1_21_1.prefab"
+ASSEMBLY_HEAD_SHA256 = "36aef15ab3d1b085846a8b7837ab8108d79073e7379899f85ea69fe5ca2d6df0"
 
 
 def app_output(report_path):
@@ -59,7 +63,13 @@ def replacement_paths(resources):
                   if item["row"]["kind"] in ("appearanceMeshParams", "appearanceDefinition", "partPrefabTable"))
 
 
-def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None):
+def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
+               head_mesh_control_path=None):
+    if head_mesh_control_path is not None:
+        if app_path is not None:
+            raise ValueError("Native-head mesh control cannot be combined with an initial app control")
+        if head_descriptor_path is None or part_table_path is None:
+            raise ValueError("Native-head mesh control requires the private head descriptor and v2 part table")
     if (app_path is not None or part_table_path is not None) and head_descriptor_path is None:
         raise ValueError("Steve registration/initial app control requires the fixed private head descriptor")
     if app_path is not None and part_table_path is None:
@@ -113,6 +123,28 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
                            "payload": table_payloads[path]}
         reports[str(part_table_path.relative_to(ROOT))] = native.file_hash(part_table_path)
         snapshot.update(table_snapshot)
+    if head_mesh_control_path is not None:
+        import prepare_steve_head_mesh_control as head_mesh
+        original = resources.get(NATIVE_HEAD_PREFAB)
+        if (original is None or original["row"].get("sha256") != ASSEMBLY_HEAD_SHA256
+                or native.sha256(original["payload"]) != ASSEMBLY_HEAD_SHA256):
+            raise ValueError("Native-head control requires the fixed original assembly head prefab")
+        head_mesh_control_path = native.output_directory(head_mesh_control_path)
+        candidate, control_payloads, control_snapshot = head_mesh.load_candidate(head_mesh_control_path)
+        rows = candidate["candidateResources"]
+        if len(rows) != 1 or set(control_payloads) != {NATIVE_HEAD_PREFAB}:
+            raise ValueError("Native-head control must override exactly the fixed private head prefab")
+        row = rows[0]
+        if (row.get("kind") != "prefab" or row.get("archiveFlags") != 0
+                or any(row.get(key) != original["row"][key]
+                       for key in ("virtualPath", "kind", "templatePath", "templateSha256"))
+                or row.get("sha256") != native.sha256(control_payloads[NATIVE_HEAD_PREFAB])
+                or row["sha256"] == ASSEMBLY_HEAD_SHA256):
+            raise ValueError("Native-head control resource identity differs from the reviewed assembly donor")
+        resources[NATIVE_HEAD_PREFAB] = {"row": row, "localPath": head_mesh_control_path.parent / row["localFile"],
+                                         "payload": control_payloads[NATIVE_HEAD_PREFAB]}
+        reports[str(head_mesh_control_path.relative_to(ROOT))] = native.file_hash(head_mesh_control_path)
+        snapshot.update(control_snapshot)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)
@@ -133,7 +165,7 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
 
 
 def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_descriptor_path=None,
-            app_path=None, part_table_path=None):
+            app_path=None, part_table_path=None, head_mesh_control_path=None):
     assembly_path, appearance_path = native.output_directory(assembly_path), native.output_directory(appearance_path)
     protected = [assembly_path.parent, appearance_path.parent, source, deps, game]
     private_reports = [assembly_path]
@@ -147,10 +179,15 @@ def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_
     if part_table_path is not None:
         part_table_path = native.output_directory(part_table_path)
         protected.append(part_table_path.parent)
+    if head_mesh_control_path is not None:
+        head_mesh_control_path = native.output_directory(head_mesh_control_path)
+        protected.append(head_mesh_control_path.parent)
     output = orientation.preflight(output, protected)
-    expected, _, snapshot = candidates(assembly_path, appearance_path, head_descriptor_path, app_path, part_table_path)
+    expected, _, snapshot = candidates(assembly_path, appearance_path, head_descriptor_path, app_path, part_table_path,
+                                       head_mesh_control_path)
     result = overlay.prepare(game, private_reports, output, source, deps, replacement_report=appearance_path,
-                             initial_appearance_report=app_path, part_table_report=part_table_path)
+                             initial_appearance_report=app_path, part_table_report=part_table_path,
+                             head_mesh_control_report=head_mesh_control_path)
     orientation.verify_snapshot(snapshot)
     if result["replacementPaths"] != replacement_paths(expected) or len(result["resources"]) != len(expected):
         raise ValueError("Prepared Steve package differs from its reviewed resource set")
@@ -168,6 +205,8 @@ def main():
                         help="Add one fixed initial appearance; requires --head-descriptor-report and --part-table-report")
     parser.add_argument("--part-table-report", type=Path,
                         help="Register the two private body/head stems; requires --head-descriptor-report")
+    parser.add_argument("--head-mesh-control-report", type=Path,
+                        help="Use the native head mesh in the fixed private prefab; requires the thirteen-resource v2 controls and excludes --app-report")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cdmw-source", type=Path, default=ROOT / "build/cdmw-fixed-source")
     parser.add_argument("--deps", type=Path, default=ROOT / "build/cdmw-deps")
@@ -176,13 +215,19 @@ def main():
         parser.error("Registration/initial app control requires --head-descriptor-report")
     if args.app_report and not args.part_table_report:
         parser.error("--app-report requires --part-table-report")
+    if args.head_mesh_control_report:
+        if args.app_report:
+            parser.error("--head-mesh-control-report cannot be combined with --app-report")
+        if not args.head_descriptor_report or not args.part_table_report:
+            parser.error("--head-mesh-control-report requires --head-descriptor-report and --part-table-report")
     game = args.game_root or Path(json.loads((ROOT / "runtime/installation.json").read_text(encoding="utf-8-sig"))["gameRoot"])
-    output = args.output or (app_output(args.app_report) if args.app_report else
+    output = args.output or (NATIVE_HEAD_OUTPUT if args.head_mesh_control_report else
+                            app_output(args.app_report) if args.app_report else
                             PART_TABLE_OUTPUT if args.part_table_report else
                             HEAD_DESCRIPTOR_OUTPUT if args.head_descriptor_report else DEFAULT_OUTPUT)
     result = prepare(game, args.assembly_report, args.appearance_report, output, args.cdmw_source, args.deps,
                      head_descriptor_path=args.head_descriptor_report, app_path=args.app_report,
-                     part_table_path=args.part_table_report)
+                     part_table_path=args.part_table_report, head_mesh_control_path=args.head_mesh_control_report)
     print(json.dumps({key: result[key] for key in ("directoryName", "replacementPaths", "packageAudit", "integration")}, indent=2))
 
 

@@ -32,13 +32,14 @@ flowchart LR
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断；保留状态记录原始标量 | `health_candidate.plausible` 仅表示数值有界；不推断最大 HP 或时间投影值，`hud_ready=false`；只读权限，不调用游戏函数 |
 | `tools/probe_health.py`、`check_health_probe.py` | 精确受控角色、ClientStatus 回链和三种元数据表映射的单条 Hp 只读观测；完整依赖回读、双采样及同句柄进程身份 | schema 2 区分 serialized key 与表索引，精确 stringKey=Hp；21 项检查及实机双采样通过，投影值、最大值、单位和 `hudReady` 保持 false |
-| `tools/probe_part_catalog.py`、`check_part_catalog.py` | 四个固定原名／私有名称在两张 PAPPT 目录的外部只读查询；构造身份、桶、节点、完整字符串及双采样 | 84 个固定窗口、21 项检查；原名基线正确才确认缺名，所有模型加载／渲染／应用标记保持 false，待实机 |
+| `tools/probe_part_catalog.py`、`check_part_catalog.py` | 四个固定原名／私有名称在两张 PAPPT 目录的外部只读查询；构造身份、桶、节点、完整字符串及双采样 | 84 个固定窗口、21 项检查；v2 实读两私有名在两目录均存在且稳定，模型加载／渲染／应用标记保持 false |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
 | `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认 schema 4；三个互斥 opt-in 分别读取 primary RTTI、schema 5 的 +68 引用头或 schema 7 的 Skinned PAC/PAB 与初始 Appearance 输入；不调用刷新或写选择 |
 | `tools/prepare_steve_segmented.py`、`check_steve_segmented.py` | 从固定朝向候选生成独立四肢分段蒙皮 PAC，四 LOD 表面／UV 与真实骨链检查 | 不改变旧候选／默认资源；旧 PABC、头部组合、实际装备接点和实机动画仍未验收 |
 | `tools/prepare_steve_parts.py`、`check_steve_parts.py` | 把固定分段候选拆成头／帽与身体／四肢两 PAC，分别配同名材质及共享 DDS | 四 LOD 的完整顶点记录与合并源一致；使用旧 neutral，不安装或选择角色 |
 | `tools/prepare_steve_parts_prefab.py`、`check_steve_parts_prefab.py` | 真实 Macduff 模板的独立 CD_Nude／CD_Head，严格组件 footer 与路径往返，原字节当前 descriptor | 保留部件名／shrink／空骨架字段；原发须、外部依赖、当前 rig 适配及 actor-local 应用仍需单独验证 |
 | `tools/prepare_steve_head_descriptor.py`、`check_steve_head_descriptor.py` | 为私有头 basename 复制原字节 HeadPrefabData，独立单资源报告及纯 loader | 固定 466 字节、七字段、flags 48；缺失配套文件的单变量对照，未证明运行时必需或已解决装配 |
+| `tools/prepare_steve_head_mesh_control.py`、`check_steve_head_mesh_control.py` | 将固定私有 CD_Head 的 PAC 引用改回原生头，保留单组件其余语义；独立固定字节生成与 CDMW 正逆向核对 | 1921 字节、flags 0，与原生 donor 首组件逐字一致；只作定位对照，不是 Steve 外观修复 |
 | `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
@@ -339,6 +340,13 @@ loader input key。两属性保留精确构造 vtable／直接 owner 门禁，�
 全部原行与描述目录保持；封装发布前及安装准入均独立解码真实 prefab，逐项比较
 注册组件名。旧报告不满足新准入而被拒绝；恢复只依已有收据／备份，旧 v1 恢复路径
 不受影响。模型、材质、骨架保持，不能据此宣称引擎崩溃或外观已修复。
+
+原生头定位对照在 v2 十三资源上仅覆盖固定私有 head prefab 的一个模型引用，
+新增 `steve-head-mesh-control-report.json` 来源，资源总数仍为 13。覆盖前必须匹配
+原 assembly head SHA，覆盖后比对固定 donor 元数据、其余十二资源与实际组件名。
+只接受 assembly／meshparam／head descriptor／PAPPT／head control 五报告集合，
+与单 app 五报告集合互斥，不接受混合六报告；通用 loader 的重复路径拒绝保持。
+variant 为 `steve-kliff-native-head-part-table-v2`，恢复仍依收据原有所有权与备份。
 
 角色诊断的 `health_candidate` 仅解码首 int32 为零的完整 0x38 字节记录。
 `current_stored_raw/base_raw/norm_raw/floor_raw/field_30_raw` 保留原始值，

@@ -206,7 +206,15 @@ def publish(output: Path, files: dict[str, bytes]) -> None:
 
 def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: Path,
             *, replacement_report: Path | None = None, initial_appearance_report: Path | None = None,
-            part_table_report: Path | None = None) -> dict:
+            part_table_report: Path | None = None, head_mesh_control_report: Path | None = None) -> dict:
+    if head_mesh_control_report is not None:
+        if initial_appearance_report is not None:
+            raise ValueError("Native-head mesh control cannot be combined with an initial app control")
+        if replacement_report is None or part_table_report is None:
+            raise ValueError("Native-head mesh control requires the thirteen-resource v2 controls")
+        base_reports = {path.name: path for path in reports}
+        if len(reports) != 2 or set(base_reports) != {"steve-assembly-report.json", "steve-head-descriptor-report.json"}:
+            raise ValueError("Native-head mesh control requires exactly the assembly and private head descriptor reports")
     if (initial_appearance_report is not None or part_table_report is not None) and replacement_report is None:
         raise ValueError("Steve registration/appearance control requires its fixed mesh-parameter candidate")
     if initial_appearance_report is not None and part_table_report is None:
@@ -253,13 +261,44 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
             raise ValueError("Unexpected Steve part table identity or duplicate resource")
         resources.append(dict(row, localFile=str((part_table_report.parent / row["localFile"]).relative_to(ROOT))))
         payloads[table_path] = table_payloads[table_path]
-        from prepare_steve_probe_overlay import audit_part_components
-        audit_part_components(payloads)
         replacement_paths.add(table_path)
         replacement_snapshot.update(table_snapshot)
         inputs[str(part_table_report.relative_to(ROOT))] = native.file_hash(part_table_report)
         if len(resources) > RESOURCE_LIMIT:
             raise ValueError("Too many candidate overlay resources")
+    if head_mesh_control_report is not None:
+        # This is one explicit override of the already admitted assembly, not
+        # duplicate-path support in the general candidate-resource loader.
+        import prepare_steve_probe_overlay as steve
+        head_mesh_control_report = native.output_directory(head_mesh_control_report)
+        expected, expected_inputs, control_snapshot = steve.candidates(
+            base_reports["steve-assembly-report.json"], replacement_report,
+            base_reports["steve-head-descriptor-report.json"], part_table_path=part_table_report,
+            head_mesh_control_path=head_mesh_control_report)
+        control_key = str(head_mesh_control_report.relative_to(ROOT))
+        if (len(resources) != 13 or set(payloads) != set(expected)
+                or inputs != {key: value for key, value in expected_inputs.items() if key != control_key}):
+            raise ValueError("Native-head control requires the exact thirteen-resource v2 provenance")
+        for index, resource in enumerate(resources):
+            path = resource["virtualPath"]
+            item = expected[path]
+            if any(resource.get(key) != item["row"][key]
+                   for key in ("virtualPath", "kind", "templatePath", "templateSha256")):
+                raise ValueError("Native-head control baseline resource identity differs")
+            if path == steve.NATIVE_HEAD_PREFAB:
+                if (resource["sha256"] != steve.ASSEMBLY_HEAD_SHA256
+                        or native.sha256(payloads[path]) != steve.ASSEMBLY_HEAD_SHA256):
+                    raise ValueError("Native-head control requires the fixed original assembly head prefab")
+                resources[index] = dict(item["row"], localFile=str(item["localPath"].relative_to(ROOT)))
+                payloads[path] = item["payload"]
+            elif (payloads[path] != item["payload"] or resource["sha256"] != item["row"]["sha256"]
+                  or native.output_directory(ROOT / resource["localFile"]) != item["localPath"].resolve()):
+                raise ValueError("Native-head control must preserve the other twelve resources")
+        inputs = expected_inputs
+        replacement_snapshot.update(control_snapshot)
+    if part_table_report is not None:
+        from prepare_steve_probe_overlay import audit_part_components
+        audit_part_components(payloads)
     if initial_appearance_report is not None:
         import prepare_steve_app as app
         initial_appearance_report = native.output_directory(initial_appearance_report)

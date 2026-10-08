@@ -8,9 +8,11 @@
 `90cdf0fca1ce4095aedc43d3515a1525` 已实际恢复；38 项原始哈希匹配，无 0041／active
 receipt，36 个最新存档、完整 MC 状态、原点及 ASI 保持。用户随后确认恢复后同一
 存档可正常进入、不再闪退。已发现新增注册项与私有 prefab 的组件列表不一致，
-v2 已修复并通过候选／事务检查。用户正常退出后已安装新版十三资源包，当前收据
-`045d94ec45d74007a5dfd1c53dd8e00a`，待手动进入及退出后恢复；**不能把静态修复记为
-闪退已修复**。当前交接见 [current-state.md](current-state.md)。
+v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已显示但定位错开且与原装备
+混叠，完整外观未通过。用户退出后，v2 收据 `045d94ec45d74007a5dfd1c53dd8e00a` 已
+恢复，原资源、最新存档与 MC 状态保持。随后原生头单引用对照已检查并安装，
+**当前收据 `57b18550c3e344c19278ecd6f0b9d2c6` 待实测及退出恢复**。
+当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
 用户已于 2026-10-06 将剩余移植工作设为持续目标并要求开始执行，之后再次要求继续。
@@ -1466,3 +1468,62 @@ PAZ 744160 字节，报告 SHA256
 before-install／installed 均通过；文件、MC、原点与 ASI 保持。已请求用户手动
 进入同一存档，待实际结果及退出恢复；没有写外观内存、换 ASI 或消费材料。
 当前修复验收仍分两步：先能正常进入，再核验 Steve 显示；不能以检查数量代替结果。
+
+随后新会话 PID 82292（10:35:56 启动）已出现受控角色；10:38 的 in-world 快照通过，
+完整 MC、原点、ASI 及所有安装文件保持，未重现 v1 进入即闪退。首次实际目录探针
+`runtime/steve-part-table-v2-20261008-catalog.json` 为 observed：part／descriptor 表
+计数分别 15568／2632，两私有头身均 present 且目录正确，原名基线成立、全部依赖及
+两次采样稳定。新表已实际加载，这不等于模型渲染。
+`runtime/steve-part-table-v2-20261008-appearance.json` 再次实读初始 app 为 00000；
+PAC 声明仍空、PAB 为 phm_01.pab，整体 notReady，未宣称已选中渲染资源。用户实际
+外观反馈仍待确认，临时 v2 包仍安装中，需游戏退出后恢复。
+
+用户随后明确反馈“正常进入，显示的不是原角色也不是史蒂夫”，并附图。
+`runtime/steve-crash-20261008/v2-user-visible-overlap.png` 可见 MC 方块头、蓝绿躯干和
+紫色下肢，位置与原角色明显错开，并与原衣服、头发及装备混叠；MC 资源已开始显示，
+完整人物装配未通过。图片无法单独区分旧 Nude／Head 重复、装备保留和蒙皮定位原因。
+主控请求用户正常退出后，已完成 v2 before-restore、专用恢复和 restored 全部检查：
+38 项原始哈希一致，无 0041／active receipt，36 个最新存档、完整 MC、原点与 ASI
+保持。v2 当前无待清理项。下一项限定为定位／骨架与旧部件残留的分开诊断，备用
+十四资源单 app v2 仍未安装，不把应用名改变当成骨架修复。
+
+## 2026-10-08 原生头单引用定位对照
+
+两项限定静态审查已收束。衣服、裤子、手套、靴子来自初始 app 的独立 Armor
+CD_Upperbody／CD_Lowerbody／CD_Hand／CD_Foot；主头发、胡须来自 Hair 与运行时
+mesh group 2／3。当前图像不证明旧裸体／头重复。备用十四包只改 Nude／Head Name，
+不改变这些装备、发型或骨架，本轮暂不增加 app 变量。
+
+位置审查直接解码既有 PAC：head LOD0 48、body 1008 记录的 guide 为零，byte39
+低六位为 63；头槽 8→PAB93、身体槽 136→PAB25 与固定 palette 一致，源位置没有
+图像中量级的整体左偏。固定报告中 head 两个 neutral 假设最大差约 0.000070628 m，
+body 补偿前最大 0.08877 m；这些离线值不证明原生装配正确，也未定位可直接修复的
+索引错误。本轮不凭截图平移零件或盲目补骨 93。
+
+新增 `prepare_steve_head_mesh_control.py` 与检查器：仅把固定私有 CD_Head prefab 的
+`_skinnedMeshFile` 指回原生 `character/model/1_pc/1_phm/head/head/cd_phm_00_head_00_0001_macduff.pac`。
+1918→1921 字节，只有一个引用和六个必需长度／指针字段变化，非路径语义完全保持；
+结果等于原生 donor 保留首个完整 CD_Head 组件的原字节。payload SHA256
+`c2d0af7e8bd3b90cc394545c852266356a7f48f0753052d536988698fab01601`；候选报告 SHA256
+`254501ee9de5bdae3a90cf66f8871ed53f7d20ed679101efcdfbc59c2e107861`。候选及原资源只留
+ignored build。真实重建、CDMW 独立往返、语义／footer、纯加载与拒绝检查 **9/9**
+通过（10.341 秒）。
+
+封装严格限定在已准入 v2 十三包内覆盖一个私有 prefab，保留原 assembly 和覆盖
+候选的双重来源；不放宽通用 duplicate 规则。独立五报告集合须同时有 meshparam、
+head descriptor、PAPPT，禁止与 app 控制混合；variant
+`steve-kliff-native-head-part-table-v2`。`check_steve_probe.py --native-head --rebuild`
+**27/27** 通过（91.390 秒），包括完整事务、十二资源保持、原摘要、缺依赖及混合拒绝。
+6 个 Python 文件 AST、62 个本地文档链接和 diff 格式检查通过。
+
+包 `build/steve-native-head-probe-overlay` 共 13 项、PAZ 743056 字节，计划 SHA256
+`043c8b22e074da3d24e2c6c2e25f388f4ce57865b289de97f365be508b7503a5`。与 v2 的唯一
+payload 差异为私有头 prefab，其余 12 项和 metadata-before 相同，证据
+`runtime/steve-crash-20261008/native-head-delta.json`。固定计划快照脚本
+`build/record-steve-native-head-20261008.py` 已完成 before-install／installed。
+
+主控确认游戏关闭且资源已恢复后，实际安装此对照，收据
+`57b18550c3e344c19278ecd6f0b9d2c6`。安装文件、完整 MC、原点与 ASI 保持；已请求
+用户手动进入同一存档并反馈原生头是否正常连接，待实机和退出恢复。这是诊断，
+不会把原生头当作 Steve 完成。结果仅区分私有 PAC 及依赖与共同装配路径，不能仅凭
+原生头正常就认定是权重错误；原生 PAC 会使用自己的材质链。

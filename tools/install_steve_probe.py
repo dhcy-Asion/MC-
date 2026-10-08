@@ -46,23 +46,26 @@ def load_plan(plan):
     required = {"steve-assembly-report.json", "steve-appearance-report.json"}
     with_head = required | {"steve-head-descriptor-report.json"}
     with_table = with_head | {"steve-part-table-report.json"}
-    allowed = with_table | {"steve-app-report.json"}
+    with_native_head = with_table | {"steve-head-mesh-control-report.json"}
+    allowed = with_native_head | {"steve-app-report.json"}
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
         if file.name not in allowed or file.name in by_name:
             raise ValueError("Unrecognized or ambiguous Steve candidate report name")
-        if native.file_hash(file) != digest:
-            raise ValueError("Steve candidate report changed or is ambiguous")
         by_name[file.name] = file
-    if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"}):
+    if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"}, with_native_head):
         raise ValueError("Unrecognized Steve candidate report names")
+    for path, digest in candidate_reports.items():
+        if native.file_hash(build_path(path)) != digest:
+            raise ValueError("Steve candidate report changed or is ambiguous")
     models = by_name["steve-assembly-report.json"]
     appearance = by_name["steve-appearance-report.json"]
     head_descriptor = by_name.get("steve-head-descriptor-report.json")
     part_table = by_name.get("steve-part-table-report.json")
     app = by_name.get("steve-app-report.json")
-    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table)
+    head_mesh_control = by_name.get("steve-head-mesh-control-report.json")
+    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table, head_mesh_control)
     if report.get("replacementPaths") != steve.replacement_paths(expected):
         raise ValueError("Steve probe exact replacement targets differ")
     if inputs != candidate_reports:
@@ -105,6 +108,8 @@ def load_plan(plan):
     variant = "steve-kliff-head-descriptor-v1" if head_descriptor else "steve-kliff-meshparams-v1"
     if part_table:
         variant = "steve-kliff-part-table-v2"
+    if head_mesh_control:
+        variant = "steve-kliff-native-head-part-table-v2"
     if app:
         path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
         number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")

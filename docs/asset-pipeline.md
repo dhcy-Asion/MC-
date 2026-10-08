@@ -678,3 +678,32 @@ v2 只修新 part 行的组件列表，并在封装／安装入口与实际 pref
 描述目录、其余资源和旧失败产物保持。新版完整检查及实机结果以进度记录为准，
 静态修正不是闪退根因或显示成功的证明。当前实际收据及待恢复状态以
 [current-state.md](current-state.md) 为准；不要同时安装两个包。
+
+## 原生头网格单引用定位对照
+
+十三资源 v2 的用户画面已出现 MC 块体，但位置错开，且仍有原版独立 Armor／Hair。
+仅改初始 app 的十四资源包不会移除这些装备和发型，也不能直接验证模型定位。
+当前先使用独立原生头对照：保留 v2 的私有 CD_Head prefab，只把 `_skinnedMeshFile`
+从私有 Steve PAC 改回原生 `cd_phm_00_head_00_0001_macduff.pac`，实际完整路径见报告。
+
+```powershell
+py -3.12 -B tools/prepare_steve_head_mesh_control.py
+py -3.12 -B tools/check_steve_head_mesh_control.py --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table-v2/steve-part-table-report.json --head-mesh-control-report build/steve-head-mesh-control/steve-head-mesh-control-report.json
+py -3.12 -B tools/check_steve_probe.py --native-head --rebuild
+```
+
+候选为 `build/steve-head-mesh-control/steve-head-mesh-control-report.json`，同一私有
+prefab 路径、单 CD_Head、flags 0；1918→1921 字节，只改一条资源引用及其必需的
+六个尺寸／指针字段。固定字节变换与 CDMW 独立正逆往返一致，结果还与原生 donor
+首组件逐字相同。其余 shrink、owner、空骨架字段及 breath 脚本保持。
+
+封装输出 `build/steve-native-head-probe-overlay`，仍是 13 项，只有一个 payload
+改变；其余 12 项与 metadata-before 保持。入口必须同时有 v2 注册表及头描述文件，
+与 app 对照互斥；通用资源入口仍拒绝重复路径。专用五报告集合同时绑定原 assembly
+和覆盖候选，安装 variant 为 `steve-kliff-native-head-part-table-v2`，沿用原恢复事务。
+当前完整检查、实际安装／恢复状态以进度和 current-state 为准。
+
+预期只判断原生头的位置：若正确，优先查私有 PAC 及其资源链；若仍错位，优先查
+共同的组件／descriptor 装配。该对照连带使用原生 PAC 自己的材质依赖，因此不能
+仅凭结果把根因限定为骨权重。它不修身体、不隐藏装备，也不应作为 Steve 成品使用。
