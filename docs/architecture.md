@@ -48,6 +48,16 @@ MAIN／OFF，真实Pose只映射model.sneaking，不伪造夹具Pose。实际age
 8/8独立JVM重建通过；仅playerStateCaptured和officialModelReplayedFromPlayerState为true，
 renderer／native／combat及完整动画系统仍false。工具只接受固定capture，非生产帧端点。
 
+六刚体视觉路线另使用明确的脚底模型坐标：先从静态 glTF 顶点扣除绑定关节平移，
+当前关节 TRS 再带回平移，统一应用根比例 0.9375。六关节均直接从属根，原生 Rot 的
+YXZ 顺序须从 MC ZYX 四元数转换。它不包含实际 owner 朝向、renderer 世界偏移或
+SceneObject 生命周期；原生位置接口里的父四元数不能替代人物朝向。局部几何和旋转
+转换的离线证明与运行时跟随分开验收，详见[资产流程](asset-pipeline.md)。
+
+当前蓝方块 prefab 只有一个明示 MeshComponent，唯一绘制资源为 PAMI；没有可单独
+删除的 collision 组件，PAMI 也没有显式总碰撞开关。该模板已有碰撞实测结果，不能据
+组件列表推断无碰撞，也不能靠删除伴随 HKX 文件猜测禁用。无碰撞载体仍须另行证明。
+
 头UV对照新增严格10报告／14资源封装：从固定九报告本地包只换一个头PAC，保留其他
 13项编码、PAMI和DDS，元数据按实际归档CRC重建；安装仍走相同所有权／关闭游戏／
 源索引／恢复事务。头材质只读客户端分别绑定九／十／十一报告完整计划SHA与variant，同一个固定

@@ -4,7 +4,48 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：真实世界／人物 tick 的动作时序
+## 2026-10-08 最新：六刚体离线坐标转换
+
+新增`tools/build_steve_rigid_adapter.py`和`tools/check_steve_rigid_adapter.py`，只接已准入的
+真实Player96帧模型回放与固定官方Steve静态几何，不启动MC／JVM／红沙。六组关节各含
+base／outer几何，共12mesh／288顶点；从glTF POSITION扣除对应绑定pivot，保留UV／法线／
+索引，输出未缩放的pivot-local部件。当前pivot与统一scale各应用一次0.9375；MC ZYX四元数
+转换为native YXZ度数，明确identity root／脚底原点，不猜受控人物朝向或renderer世界偏移。
+单位声明为1 model metre=1 native world unit，尚未实机校准；没有UID、prefab或安装动作。
+
+实际命令`py -3.12 -B tools/check_steve_rigid_adapter.py --rebuild --output build/steve-rigid-adapter-check-20261008-final`
+**9/9通过，6.056秒**。checker原样提取固定QMul／MakeTransform和Vec3／Rot，在隔离C++
+程序执行590项：576真实关节＋12复合／奇点＋2正负tile。独立oracle直接由官方raw Euler
+组成C·RzRyRx·C，并逐个计算raw cuboid顶点，覆盖27,648个变换顶点；没有镜像adapter逆公式。
+真实矩阵max2.829850e-7、顶点max1.803647e-7，阈值均3e-6；实际q norm误差1.208589e-7。
+源保护、非有限值、非均匀／非正及float32下溢scale、输出覆写、来源变化和篡改拒绝通过。
+首次执行在setUp提取源码时因CRLF失败，未执行数学case；修正regex保留源字节后通过。
+失败证据和首次未发布候选保留在owned build，旧MC工具及canonical没有改动。
+
+产物`build/steve-rigid-adapter-1.21.1/adapter.json` SHA
+`916abf94581380f347519210b1bc404a3f0f8b673cf59d34f9282dc35a970875`，报告SHA
+`b28a10722be57215b28ed6f916076ab0495be6d841aba2e31c44b96bad6b3086`；成功证据为上述
+check目录下`check-results.json`。两源码AST及独立只读审查通过；不重复已通过MC/JVM套件。
+
+并行本地无碰撞donor审计10/10通过、27来源末回读保持：蓝cube prefab只有一个明示
+MeshComponent，删除会失去唯一PAMI绘制引用，写入器也拒绝空collection；PAMI无总碰撞
+开关。固定typed HKX含hknpMeshShape1、section1、primitive6；meshinfo虽声明碰撞字段，
+实际值／可写偏移及加载语义未成立，decoder明确只读。body/head Skinned样本不能充当
+static无碰撞同型证明。报告`build/steve-collisionless-donor-20261008/report.json` SHA
+`2aad41f9432f137c4a92a134f6f4c10969c3febdb295a50eb6f76c440adfb253`，未准备或安装候选。
+下一步只审已有明确锚点的StaticMesh／MeshComponent消费meshinfo／HKX合同；若无锚点则
+该路径unavailable，不删除HKX试错或枚举随机prefab。完成这一前置后才考虑单件实机变换。
+
+透明帽层收据fc6a85…仍installed／active；旧UV退出回复已对应旧包恢复，不能提升新包的
+视觉状态。新包待手动反馈、新鲜只读采样和正常退出恢复。完整renderer、owner跟随、
+原装备禁用、MC实时动作和实际伤害／击退仍未实现，持续目标保持active。
+
+主控最终只读核对：adapter完整94项快照保持；donor的26份代码／资产来源保持，另一份
+旧current-state上下文与原提交0a2b8e8的完整blob一致（本轮随后更新该文档）。6份生产文件、
+41项当前安装、36份存档及完整MC状态保持，游戏关闭。6文档／67相对链接与两Python
+AST通过，发布证据为`runtime/steve-rigid-adapter-release-20261008.json`。
+
+## 2026-10-08 真实世界／人物 tick 的动作时序
 
 上轮仅验证protected挥击步骤，本轮补齐实际时间来源。固定MC字节码表明：
 ServerWorld.tickEntity先resetPosition、age++，再调用ServerPlayer.tick；人物物理、

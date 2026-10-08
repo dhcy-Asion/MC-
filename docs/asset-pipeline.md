@@ -1315,3 +1315,36 @@ Path→bytes快照序列化到报告或收据。新11层复用一次完整10层�
 ```powershell
 py -3.12 -X utf8 -B tools/probe_steve_head_material.py --plan build/steve-head-visible-layer-probe-overlay --output runtime/steve-head-visible-layer-material-read-new-session.json
 ```
+
+## 六刚体部件的离线坐标约定（2026-10-08）
+
+静态 Steve glTF 的 POSITION 已含绑定姿态的关节平移：
+`C * (vertex + pivot) / 16 + (0, 1.5, 0)`，其中 `C=diag(1,-1,-1)`。
+POSITION 自身没有乘 0.9375；该比例由 SteveModel 骨架根节点应用。独立刚体部件须先从
+POSITION 扣除对应关节的绑定平移，再应用当前关节变换；不能对已含 pivot 的顶点再次
+直接平移，也不能把根节点缩放重复烘焙。六个关节都是同一根的子节点，手臂不额外继承
+身体关节的旋转。外层对应部件沿用同一关节，但透明层的原生显示仍须另验。
+
+本约定的原点是导出模型的脚底，前方为 +Z。模型局部旋转来自官方 ModelPart 的
+`Rz * Ry * Rx`；原生 MakeTransform 使用度数和 `Ry * Rx * Rz`，须经四元数／矩阵转换，
+不能直接复制三个 Euler 字段。场景根位置和朝向必须显式提供；当前原生 owner API 只
+验证了位置，不能把相机朝向或父变换四元数当人物朝向。
+
+这也不是完整 MC renderer 的重放。固定 PlayerEntityRenderer 字节码另有蹲姿位置偏移
+`getScale() * -2 / 16`；LivingEntityRenderer 还应用 entity scale、身体朝向、轴翻转、
+player scale 和 `translate(0,-1.501,0)`。既有姿态采用脚底规范化的 1.5 偏移，没有执行
+这些世界空间步骤。离线刚体转换只证明声明的模型坐标约定，不自动补猜偏移，也不提升
+owner 跟随、原生显示、碰撞、动作控制或完整 MC 动作的验收状态。
+
+```powershell
+py -3.12 -B tools/build_steve_rigid_adapter.py
+# 已有canonical会保留；每次复验须指定一个尚不存在的证据目录
+py -3.12 -B tools/check_steve_rigid_adapter.py --rebuild --output build/steve-rigid-adapter-check-new
+```
+
+默认产物为`build/steve-rigid-adapter-1.21.1`，包含`adapter.json`及完整来源报告；只接受
+固定96姿态，拒绝任意新capture及覆写。独立9项检查已通过：实际编译固定原生算术函数，
+以raw Euler矩阵和raw cuboid顶点核对576关节／27,648顶点，额外覆盖12个复合／奇点
+情况及2个tile布局。位置和比例输出为float32，拒绝非有限、非正、非均匀以及缩放下溢。
+当前成功证据见`build/steve-rigid-adapter-check-20261008-final/check-results.json`；它只
+执行隔离算术程序，不调用游戏或MC服务器。原生显示、无碰撞、完整renderer和输入仍未验收。

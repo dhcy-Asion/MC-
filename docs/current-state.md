@@ -164,6 +164,18 @@ MC动作实时应用与完整系统未实现。
 `build/steve-rigid-render-contract-20261008/report.json`固定11份源码；先验证pivot／单位／
 四元数映射，再有必要实测一件无碰撞载体。不能把散置props或旧Euler直接复制当MC动作。
 
+其中离线映射现已完成：`build_steve_rigid_adapter.py`将固定96×6姿态与官方静态几何
+转换为pivot-local部件／native YXZ／单次0.9375 scale。`check_steve_rigid_adapter.py`
+9/9通过（6.056秒），实际编译固定MakeTransform执行590项，对照raw Euler独立矩阵及
+27,648顶点；矩阵max2.83e-7、顶点max1.80e-7，阈值3e-6。产物
+`build/steve-rigid-adapter-1.21.1`，成功证据
+`build/steve-rigid-adapter-check-20261008-final/check-results.json`。只证明identity root的
+feet-frame；原生单位尚未实机校准，renderer蹲姿／世界偏移、owner朝向、native播放仍false。
+无碰撞donor审计10项通过、27来源保持；同一蓝cube模板HKX实际含物理网格，prefab唯一
+MeshComponent不可只删碰撞，meshinfo字段仅声明、值／写偏移未证。报告
+`build/steve-collisionless-donor-20261008/report.json`，没有候选。下一步仅核验已锚定的
+StaticMesh／MeshComponent加载合同；缺锚点则停止该路径，不能删HKX或猜字段后安装。
+
 背部具体组件→prefab/PAC链未定位。14条raw装备记录只为观察；共享apply和表增删局部拒绝
 不等于安全全禁装／恢复。攻击者／敌人类型、owner链和伤害／击退ABI尚缺，不调用候选函数，
 不以移动NPC代替击退。固定EXE有界追踪唯一直接调用0x209a4bb→0x209bdc0，调用者
