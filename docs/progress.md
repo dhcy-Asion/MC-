@@ -13,8 +13,10 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 恢复，原资源、最新存档与 MC 状态保持。随后原生头单引用对照已检查并安装，
 用户随后确认原生头正常连接在肩膀上方，正常退出后收据
 `57b18550c3e344c19278ecd6f0b9d2c6` 已恢复。新原生头模板／共同父骨候选离线检查
-与事务通过后安装，**当前收据 `5dfe1a43fa9846d6a1f1399bd42a4e2d` 已有新运行会话，
-待 MC 头画面反馈及退出恢复**。
+与事务通过后安装并有实际运行会话；核实进程结束后收据
+`5dfe1a43fa9846d6a1f1399bd42a4e2d` 已恢复，38项原文件及退出时最新存档／MC保持。
+**当前无待恢复资源，用户补充MC头仍错位或未显示，本轮外观未通过**；
+不把原生采样记为显示通过。
 当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
@@ -1780,3 +1782,93 @@ slot5来自入口上下文+8、slot1来自+18，但同段先取数再用 -1000-c
 逐字一致，`git diff --check`通过。所有个人库存、快照、地址、原游戏记录与备份保持
 ignored。持续目标仍active；原生共享apply调用覆盖和伤害上下文构造分别由独立子代理
 进行只读定向核对，主控保留游戏安装／恢复独占，不因后台完成而宣称完整移植交付。
+
+## 2026-10-08 — 新头测试会话结束后的实际恢复
+
+后台升级与同步后，主控实际进程查询确认红沙已经结束，未自动关闭或重启游戏。
+顺序执行当前候选绑定脚本 `before-restore`、`tools/install_steve_probe.py --restore`、
+同脚本 `restored`，全部exit0；收据5dfe1a43…已restored，38项原文件哈希匹配，
+0041及active receipt消失。退出时36个最新红沙存档、完整MC schema3/revision25、
+原点和ASI保持；latestMcStatePreserved／laterSavesPreserved均true。
+mcUnchanged仍false表示安装前schema2/revision22与当前合法升级后状态不同，不能
+为了改成true而回滚用户材料。两阶段JSON独立保留在
+`runtime/steve-native-head-root-20261008-{before-restore,restored}.json`。
+
+未收到当前MC方块头的视觉结论，应用／装配验收仍未知，不用稳定读链替代显示。
+新版MC／桥接后台继续运行。已改为询问退出前观察结果，不要求用户再启动已恢复包。
+用户询问能否直接使用MC模型：继续沿用原版Steve几何／皮肤导出路线；红沙格式、
+骨骼／动画及独立装备部件仍需适配，不用重画外形代替装配问题。
+
+用户随后明确选择“方块头仍错位或没有显示”，当前头候选实机未通过；选项没有
+进一步区分两种情况，不能据此断定骨骼绑定或某个字段是唯一根因。新的离线复核
+比较原slot0骨194与候选122、原生头真实记录及MC目标坐标；正式候选需独立检查后
+才进入下轮安装，不重复安装已失败包。`SteveModelDump.java`确实调用固定官方客户端
+的classic宽臂模型构造并导出实际cuboid面／UV；`build_steve_asset.py`核对官方
+64×64宽臂Steve皮肤SHA。这条原版模型路线保持，游戏内装配失败不等于改成手绘替代。
+
+装备共享apply定向报告
+`build/steve-equipment-apply-contract-20261008/report.json` SHA256
+`a99145d59c773f02622f59ecb2aed749e57cda6600bbe0cb894851c7db0c135e`，固定EXE前后SHA、
+8函数／call pin及两个完整helper窗口核对通过，未访问实际进程。99fd90在apply前
+已经修改D0记录+80/+90/+88；五个旁路不检查结果，996cd0在之后无条件析构／清空
++208/+210队列。apply正常路径只写out DWORD0，不证明下游无错误，也没有写前拒绝
+合同。Client虚槽+160是旁路9853f0；Server/Common另指20c8160，持久化覆盖未证明。
+最小下一项限制为Client+140→20c2d90、Client+148→980500以及Common/Server+148→
+20c2dd0的完整分支／首次表写入／已有拒绝出口；不能据此安装一个返回失败hook。
+
+伤害上下文报告
+`build/steve-combat-context-contract-20261008/combat-context-contract-review.json`
+SHA256 `ca295bf1b8c0327e7c91c10db38a82cd1cc0beccca57838324e606290ce400f8`。
+唯一精确已知直接caller5F792B的C由createdObject+68→组件表+20取得；重读已有固定
+构造／binder窗口，确认ClientStatusActorComponent主vtable558D868、C+8=owner、
+C+18=status root且root[0]=C。这是自身owner与自身root，不能当不同攻击者／敌人。
+getter与DamageApply两次读C+18的跨调用一致性未知，delta为-1000-getter输出槽qword，
+没有证明当前HP或自然命中行为。5份JSON、26原始块、8份来源摘要及3脚本AST通过，
+仅固定磁盘、未访问进程。下一项仅选另一条已有caller，追来源／目标生产链是否闭合
+为两个不同owner；当前仍不可调用伤害或声称击退。没有覆盖旧报告。
+
+原版MC头部空间有界报告
+`build/steve-head-bind-space-20261008/report.json` SHA256
+`8ff7040c87a7bb57d69b6181cf4d9d3b1a84baf14e058fd16ab0f0d77ee86c6c`。按既有UV的V翻转
+与Z反射，MC head/hat实际导出面与当前目标最大误差1.24349e-5 m；122单PABC neutral
+最大位移2.90085e-7 m，194主要是毫米级平移，最大3.51725 mm。三层原始weights交叉
+核对，没有发现明确静态坐标／绑定缺陷；共享CDMW单PABC约定并不证明引擎skin语义。
+有界metadata矩阵匹配未命中，也不能证明没有其他bind编码。仅四字节恢复原palette194
+的离线PAC原型已保留，其余bytes相同；变化太小，**不建议为弱位置假设立即再安装**，
+未封装为正式包。早先两个审核脚本的顶点顺序／UV假设失败保留，最终audit-v3成功，
+没有覆写已有报告。
+
+主控另核对源码：`prepare_steve_material.py`把原18个SkinnedMeshSkin wrapper改为
+SkinnedMeshStandard四参数与render_flag4；当前原生头root生成器继续复制此Steve
+材质。因此当前候选还有未验证的shader／蒙皮合同变化，不能说只改了几何／palette。
+下一更强的单变量是核对固定原生头原字节PAMI与当前两draw覆盖，若对应成立，只换
+PAMI、保持失败PAC与另11资源，先验位置（贴图可暂用原生头）；仅是假设对照，
+尚未构建／安装，不据此宣称材质是根因。
+
+材质补充报告单独写入 `build/steve-head-bind-space-20261008/material-addendum.json`，
+SHA256 `e8fc138901bddd4675d969a39bc7f4d12e4b9f4c03f16c2b646402f7ad426496`；旧报告及
+v2均不覆盖。只读0009双提取固定
+`character/modelproperty/1_pc/1_phm/head/head/cd_phm_00_head_00_0001_macduff.pac_xml`，
+flags50、16149字节，原件SHA256
+`440a9e68a2e1ef425d9eef90cb0c50895f6888cb01c301eb7f04efa8197ba9a5`。draw名称与当前PAC
+相同；原件只有Index0/1/2三变体，每层EyeCover一个参数，主draw分别Wrinkle14／
+Wrinkle14／WrinkleAging16参数，失败包则六变体的两draw均Standard四参数。
+此差异不证明shader根因，也不证明原生3变体无效；单变量应完整保留原件，不能
+为了迎合旧六variant检查而强扩或盲改shader名。下一轮为独立原字节PAMI候选准入／
+只变一资源的十三包封装，再实际头位置与退出恢复，暂用原生贴图；尚未构建或安装。
+
+装备表边界报告 `build/steve-equipment-table-boundary-20261008/report.json` SHA256
+`03ffe34348acee6934e9d3fc939a0cf36de929a01835c9f513153697fe79267e`。五E9入口及五完整
+body固定字节/pdata/unwind、48正常分支、三个精确类型虚表和EXE前后SHA核对通过；
+仅固定磁盘EXE中.xtls重定向静态研究，未接进程。插入重复tag、删除缺tag有既有写前拒绝；
+插入复制并可能扩容，删除先处理关联索引，再清理目标／搬移末项／析构、减count
+并写0结果。6cf6f40／6cf7d30无file-backed值，额外全局WORD写／EH handler语义未知，
+没有自创错误名或解释。局部拒绝不等于全装备禁用、服务端保存或安全可调用ABI；
+下一装备门槛是固定来源物品身份／拥有关系、当前线程生命周期与持久化可逆合同，
+未扩展effects或全图。主控优先落实上述材质单变量候选，装备／攻击保持独立未完成。
+
+恢复／研究交接发布前检查：公开JSON、七份交接文档60个相对链接、六份静态报告
+固定摘要、原生头PAMI16149字节／SHA及实际恢复证据全部核对通过，`git diff --check`
+通过。本次只更新四份交接／公开摘要，不上传原件、快照或ignored研究目录；没有重跑
+已通过的MC规则检查、启动游戏、改安装或消费材料。持续目标active，下轮优先独立
+PAMI原字节对照的生成／准入／十三资源封装，正式显示与全功能验收仍未完成。

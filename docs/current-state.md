@@ -14,7 +14,9 @@
 并行已完成 MC 四格护甲存储、schema3迁移及桥接查询／存取，真实MC22组、旧背包15组、
 方块7组、装备桥接8项及旧桥接27项通过。后台已正常更新，最新36格、选中格、方块及
 revision25保持，护甲初始化为空；原生穿戴、效果、红沙装备禁用与MC攻击仍未实现。
-摘要见[equipment-validation.json](equipment-validation.json)。当前头部测试仍待画面结果及退出恢复。
+摘要见[equipment-validation.json](equipment-validation.json)。当前头部测试包已实际恢复，
+用户随后反馈MC方块头仍错位或未显示，本轮外观未通过；MC后台schema3继续运行，
+无待恢复资源。
 
 - 十一资源及十二资源头描述文件实测均仍是原角色。
 - 已实读当前初始 app 为 Macduff 00000；运行时选项表有两私有名字，不代表加载成功。
@@ -45,16 +47,19 @@ revision25保持，护甲初始化为空；原生穿戴、效果、红沙装备�
 - 原生头单引用对照已实测，用户确认正常连接在肩膀上方；收据
   `57b18550c3e344c19278ecd6f0b9d2c6` 已在实际退出后恢复，38 项原始哈希、36 个
   最新存档、完整 MC、原点与 ASI 均保持。
-- 新原生头模板／共同父骨候选 9/9、完整十三包28/28通过，已安装。**当前 active
-  receipt 为 `5dfe1a43fa9846d6a1f1399bd42a4e2d`，0041存在，待实机和退出恢复**；
-  variant `steve-kliff-native-head-root-part-table-v2`。安装前游戏已关闭；安装后文件、
-  完整 MC、原点及 ASI 核对保持。用户收到手动进入、反馈 MC 头位置并暂留运行请求。
+- 新原生头模板／共同父骨候选 9/9、完整十三包28/28通过并已实际启动采样；
+  收据 `5dfe1a43fa9846d6a1f1399bd42a4e2d` 已在核实实际进程结束后 restored，
+  variant `steve-kliff-native-head-root-part-table-v2`。**当前无active receipt／0041**；
+  38项原始文件、退出时36个最新存档、最新完整MC schema3/revision25、原点和ASI保持。
+  用户恢复后补充反馈该MC头仍错位或未显示；本轮实机未通过，不能沿用上一原生头
+  对照的“正常”结论。分组选项不能进一步区分具体错位位置与缺失，根因仍待验证。
 - 游戏启动、进入和退出仍由用户手动完成；主控独占安装、游戏诊断与恢复操作。
 - 本次恢复证据：`runtime/steve-part-table-v2-20261008-{before-restore,restored}.json`。
   闪退日志及恢复后用户对照记录：`runtime/steve-crash-20261008/`。日志在角色创建处
   中断，没有异常堆栈；指定时段 Windows 应用事件未找到匹配的崩溃记录。
 - 持续目标未完成；2026-10-08 用户已更新目标，工具重新核实为 `active`。已观察到
-  当前测试的新游戏会话，原生 ready=true 且角色位置可读；MC 头位置仍待用户画面结果。
+  当前测试曾有新游戏会话，原生 ready=true 且角色位置可读；现在实际进程已结束并恢复，
+  已收到退出前MC头未通过的反馈，不要求用户重启已恢复的包。
   此前三轮核实时没有运行中的游戏会话，历史 blocked 不再代表当前状态。
 
 ## 本轮交接
@@ -69,7 +74,7 @@ revision25保持，护甲初始化为空；原生穿戴、效果、红沙装备�
 | 原生头游戏内对照 | 主控＋用户手动进出游戏 | 用户确认连接正常；已退出恢复，文件／最新存档／MC 保持 |
 | 原生头／自建头 PAC 结构差异 | steve_position_audit | 三 LOD 原字节自重建及 48 条原生记录控制通过；Head93 不在原生 palette，旧绑定不可直接移植 |
 | 原生头共同父骨候选 | crash_asset_audit＋steve_position_audit | 生成器／独立检查器完成，最终9/9通过；明确 slot0→B_face_com122，其余191项和未知数据保持 |
-| 新头候选封装与安装 | diagnostic_review＋主控 | 完整28/28通过；已安装并核对，等待MC头位置反馈，随后退出恢复 |
+| 新头候选封装与安装 | diagnostic_review＋主控 | 完整28/28通过；实机头仍错位或未显示，已退出恢复，最新存档／schema3保持 |
 | 身体结构复核 | steve_position_audit＋主控 | 原current prefab已确认引用同一00_0001 donor；189项palette/PABC覆盖、四层边界与13加权骨核对通过，未找到新确证错位字段 |
 
 目录成员与用户实际画面分别记录；探针不因为截图而回填 native rendered 成功标记。
@@ -79,6 +84,24 @@ HP 仍未接入 HUD，不在当前外观排障中扩展无关逆向支线。
 记录均双样本稳定；物品身份／嵌套指针未解码，应用、禁用及可恢复标志均false。
 当前数据可证明观察链有效，不能当作完整原装备恢复备份。原始证据为
 `runtime/steve-native-head-root-20261008-equipment.json`。
+
+head_bind_space已完成离线复核：原版MC头/hat与当前目标空间约定核对保持，194/122
+neutral只差毫米，没有明确静态坐标缺陷；不为弱假设再安装palette194同类包。
+已实提取固定原生head PAMI：两draw名称相同，原件3变体分别使用EyeCover及
+SkinWrinkle/Aging，失败包6变体均Standard。下一更强单变量仅换原字节PAMI、保持
+失败PAC/另11资源，先验位置，暂用原生贴图；按原生完整3变体合同准入，不能强扩成6。
+尚未封装或安装，shader／头身merge／缩放根因未确认，MC几何／皮肤路线保持。
+
+装备共享apply最新静态检查已经否定把它当安全写前禁装入口：一个caller预先改表，
+多个caller忽略结果，且存在清空队列路径；正常apply仅写0结果。下一步仅固定三个
+真实表操作入口的首次写入与已有拒绝出口。该有界检查现已完成，插入重复tag、删除
+缺tag确有局部写前拒绝；删除会修改关联索引、清理／搬移记录及计数，原字节不能
+复制恢复。5完整body、48正常分支核对通过，安全调用／服务端持久化／全禁装仍未知。
+
+伤害上下文定向复核已把62B870的已知caller闭合为ClientStatusActorComponent的
+自身owner／status root链；并非两个不同攻击者／敌人，不能用于MC攻击或击退。
+下一项只追另一条已有DamageApply caller的来源／目标生产链，确认是否两个不同owner；
+不构造未验证伤害调用。完整固定窗口与报告见progress。
 
 旧十三包未取得 in-world 探针结果，不能补填成功记录；before-restore／restored 已完成。
 v2 使用独立 `build/steve-part-table-v2` 与 `build/steve-part-table-v2-probe-overlay`，
@@ -114,14 +137,15 @@ donor 相同，现有检查只证明身体 donor 保持，不能证明独立头�
 不能把 donor 替换当成修复。证据在 ignored
 `build/steve-head-pac-format-research-20261008/{structure-report,metadata-difference}.json`。
 
-**当前 MC 头包**：`build/steve-native-head-root-probe-overlay`，计划SHA256
+**已实测并恢复的 MC 头包**：`build/steve-native-head-root-probe-overlay`，计划SHA256
 `2b3bd9241cf5711cc06f479e18bd0210629260471911945338d37af4973d4ff0`。
 候选报告SHA256 `2d850067c97a7d44762eadb68154dbbb992aa2010f3851b63e3b0e8dfd6085a8`；
 快照脚本 `build/record-steve-native-head-root-20261008.py`，同名runtime前缀。
-before-install／installed已完成，后续实际进入后记录in-world，实际退出后
-before-restore → `install_steve_probe.py --restore` → restored；不得覆盖旧阶段证据。
+before-install／installed／in-world／before-restore／restored均已有阶段记录；
+in-world完整MC相等断言退出1，差异及恢复保护详见下段，不能合称全部通过。
 新包只有头PAC及其PAMI两项变化，其余11项与v2保持；head prefab恢复使用私有MC路径，
-与原生头引用对照互斥。真实头位置／动画尚未验收，身体与装备错位仍未完成。
+与原生头引用对照互斥。用户反馈MC头仍错位或未显示，真实头外观未通过；
+动画、身体与装备错位仍未完成。当前包已恢复，不再等待该包启动。
 
 身体限时复核证据：ignored `build/steve-body-deformation-research-20261008/report.json`，
 SHA256 `629841944e2da2121a8abe026eacdf8e356ea8a9aa2015996bf7b0cca56a52c7`。
@@ -130,15 +154,16 @@ SHA256 `629841944e2da2121a8abe026eacdf8e356ea8a9aa2015996bf7b0cca56a52c7`。
 metadata flags不是运行时render_flags；`0x01000082`在固定guide解码器中layout为0，
 不应简称“cloth启用”。每层96条byte38继承252／253／254，其是否参与jiggle还取决于
 运行时buffer／override；旧参考针对1.0.0.2944，未在当前2976验证，不据此直接改字段。
-暂未发现新的确证静态错误，等待实际MC头结果后再选择身体／装备显示对照。
+暂未发现新的确证静态错误；当前MC头未通过，优先上述PAMI单变量，身体／装备另验。
 
-最新只读核实：当前收据仍为5dfe1a43…／installed，41项当前文件均匹配；新会话已运行。
+该包in-world只读核实：当时收据5dfe1a43…／installed，41项文件均匹配，新会话已运行。
 `runtime/steve-native-head-root-20261008-in-world.json` 已记录 API ready 与对象快照。
 脚本的完整 MC 相等断言未通过：只有 revision 从22变25，库存、选中格及方块内容相同；
 原点和 ASI 保持，不能写成完整MC状态未变。随后受控外观双采样稳定，初始 app 可读，
-整体仍notReady（声明PAC为空），不代表 Steve 显示成功。现有头部画面请求保持，不重复
-安装或因为等待超时恢复；实測后实际退出再恢复，并保留退出前最新MC状态和存档，
-不能要求用户后续状态回退到安装前版本。记录脚本的 restored 以 before-restore 的
+整体仍notReady（声明PAC为空），不代表Steve显示成功。后台升级schema3后，核实
+实际进程结束再恢复，保留退出时最新MC／36个存档；当前无active receipt或0041。
+用户随后补充头仍错位或未显示，不重复安装失败包或要求用户回退安装前状态。
+记录脚本的restored以before-restore的
 最新MC作比较（latestMcStatePreserved），仍分别记录与安装前的差异；原阶段证据不可覆写。
 
 ## 协作规则

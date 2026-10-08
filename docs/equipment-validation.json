@@ -102,5 +102,16 @@
     "MC single-click attack and actual enemy knockback",
     "Dedicated same-ID/different-component swap and custom component-patch combinations"
   ],
-  "privacy": "Public summary only; no personal inventory, saves, process addresses, raw game records or original game binaries"
+  "privacy": "Public summary only; no personal inventory, saves, process addresses, raw game records or original game binaries",
+  "headProbeRecovery": {
+    "result": "restored",
+    "originalFilesMatched": 38,
+    "latestSaveFilesPreserved": 36,
+    "latestMcStatePreserved": true,
+    "originUnchanged": true,
+    "asiUnchanged": true,
+    "activeReceiptPresent": false,
+    "userReportedAppearance": "MC cube head remains displaced or absent",
+    "appearanceAcceptance": "failed"
+  }
 }
