@@ -132,8 +132,22 @@ build保持。官方setter可切左右主手、sneaking和CROUCHING并恢复，8
 玩家没有连接、注册或生成到世界，没有调用完整entity/player tick、客户端模型或伤害。
 首次隔离实验与提升为tracked工具后的路径验证各通过一次，证据分别为
 `runtime/mc-player-context-pjydwbq2`和`runtime/mc-player-context-1hec_dws`。
-这两套工具尚未连成真实玩家状态→客户端姿态的运行链；20Hz生命周期、前帧插值、持物／
-跳落和原生实时应用仍待完成，不能以离线输出或受保护步骤调用代替游戏动作验收。
+后续`tools/check_steve_player_tick.py --run`已执行完整官方world.tickEntity→player.playerTick，
+每个不同server tick一次。正常构造ServerPlayNetworkHandler／ClientConnection，无传输
+连接或玩家注册；独立世界九块石地板，11次真实物理暖机后采四组32帧（站／蹲×MAIN／OFF）。
+两入口各43次，实际年龄12..43，前帧位置／挥击复制、Pose切换和每段挥击回零成立，网络
+任务队列实测4项；保留正常重力末速度，不写age／velocity／onGround或私有字段。
+首次证据`runtime/mc-player-tick-4tm1bcz6`，tracked路径验证`runtime/mc-player-tick-uxn5vmag`，
+均正常退出0且源码／build保持。每帧保存真实delta0/.5/1 getter输入，供六关节模型回放。
+未注册／生成玩家，不调用handler.tick；仍不代表完整连接生命周期、客户端renderer或
+原生实时应用。随后固定首次成功capture已接通六基础关节官方模型回放：32个after帧
+×delta0/.5/1，共96次真实求值，保留actual progress／Pose与自然age；8/8独立JVM重建
+通过（16.853秒），79项来源／输出快照和旧12工具／产物保持。产物
+`build/steve-player-pose-1.21.1`，report SHA
+`77dc04a8dd90b23765485298e4430ec2513d6c94c1212fb252314e555ffdb9c7`。
+来源Player与模型ArmorStand夹具分开，仅限空手RIGHT、站／蹲、MAIN／OFF、静止六关节；
+`--source`只接受固定首次capture，并非任意新采样。renderer／原生／战斗仍false，
+持物／跳落及完整游戏动作继续另验。
 原生API没有经过当前EXE验证、绑定受控owner的姿态／控制器应用入口。固定EXE有界审计
 已排除旧coop两个落在指令内部的RVA；下一候选为精确Skinned+1C0的未命名owner-keyed对象，
 仅vtable／弱owner／原owner回链有静态依据，骨骼palette、单位、ABI与线程未知。
@@ -143,6 +157,12 @@ build保持。官方setter可切左右主手、sneaking和CROUCHING并恢复，8
 MC动作实时应用与完整系统未实现。
 `+0x110`直接callee后续审计已辨明回调wrapper及弱句柄指针vector，常量8是容量，不能当骨骼数；
 该分支未提供TRS／矩阵数组生产证据，不扩展现有只读工具的读取范围。
+原生资源路线中，固定CDMW的PAA仅为启发式旋转预览，无完整writer／no-op往返／可靠时序
+或人物播放派发。另一视觉路线可考虑六刚体对象：现有MoveMany支持三轴Rot（YXZ）及
+统一scale，但缺完整owner朝向／父绑定、无碰撞部件、六件完成回执及临时层生命周期；
+默认live重插可能闪烁。它能减少未知骨骼ABI，尚未证明人物跟随。报告
+`build/steve-rigid-render-contract-20261008/report.json`固定11份源码；先验证pivot／单位／
+四元数映射，再有必要实测一件无碰撞载体。不能把散置props或旧Euler直接复制当MC动作。
 
 背部具体组件→prefab/PAC链未定位。14条raw装备记录只为观察；共享apply和表增删局部拒绝
 不等于安全全禁装／恢复。攻击者／敌人类型、owner链和伤害／击退ABI尚缺，不调用候选函数，

@@ -30,7 +30,23 @@ progress是模型样本而不是tick时序。原始六部件字段／TRS保存�
 25项实测通过；玩家不连接客户端、不注册PlayerManager、不生成入世界，无完整tick、
 20Hz生命周期、模型渲染或伤害调用。Gradle仅把fixture与入口注入独占测试build，正常
 console stop，生产Authority／build保持。这不是生产服务的玩家实体或新HTTP动作端点；
-与前述客户端模型样本尚未连接。真实状态时序、持物和红沙受控姿态应用另验。
+后续实际tick与模型回放见下文；持物和红沙受控姿态应用另验。
+
+进一步的`check_steve_player_tick.py`使用正常构造的精确ServerPlayer、ClientConnection和
+ServerPlayNetworkHandler。人物未注册或生成、无连接传输；每个START_SERVER_TICK显式
+依次调用完整world.tickEntity（官方resetPosition／age++／ServerPlayer.tick）和playerTick
+（Player/Living更新、前帧挥击、真实物理／Pose），不手拼字段或protected步骤。
+独立地板上11次自然暖机后，站／蹲×主／副手四组共32帧已实测，每帧另保存delta0/.5/1
+的官方progress、leaning和limb getter。只证明所选两入口的时序，未证明连接／注册玩家的
+完整生命周期。编译与世界只在owned runtime，生产Authority仍无动作端点。
+
+`StevePlayerPoseDump`／`build_steve_player_pose`现将固定成功capture的32个after状态及
+三组真实delta getter接到官方PlayerEntityModel／MathHelper，共96次六基础关节求值。
+源实体为真实ServerPlayer，求值夹具明确是正常ArmorStand；限定空手右主手、静止站／蹲、
+MAIN／OFF，真实Pose只映射model.sneaking，不伪造夹具Pose。实际age与progress不归零或
+用样本序号替代，非范围状态拒绝；披风、root renderer矩阵、可见层和网络插值不包含。
+8/8独立JVM重建通过；仅playerStateCaptured和officialModelReplayedFromPlayerState为true，
+renderer／native／combat及完整动画系统仍false。工具只接受固定capture，非生产帧端点。
 
 头UV对照新增严格10报告／14资源封装：从固定九报告本地包只换一个头PAC，保留其他
 13项编码、PAMI和DDS，元数据按实际归档CRC重建；安装仍走相同所有权／关闭游戏／

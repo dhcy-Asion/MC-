@@ -1,0 +1,34 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+def ownedValue = System.getenv('CRIMSONMC_PLAYER_TICK_RUNTIME')
+def harnessValue = System.getenv('CRIMSONMC_PLAYER_TICK_HARNESS')
+if (!ownedValue || !harnessValue) throw new GradleException('Owned runtime/harness environment is required')
+def owned = new File(ownedValue).canonicalFile
+def harness = new File(harnessValue).canonicalFile
+def ownedBuild = new File(owned, 'build').canonicalFile
+gradle.beforeProject { project ->
+    project.layout.buildDirectory.set(ownedBuild)
+    project.afterEvaluate {
+        project.sourceSets.main.java.srcDir(harness)
+        def run = project.extensions.getByName('loom').runs.getByName('server')
+        run.runDir(System.getenv('CRIMSONMC_INVENTORY_TEST_DIR'))
+        run.vmArgs.removeAll { it.startsWith('-Dcrimsonmc.port=') }
+        run.vmArg('-Dcrimsonmc.port=8768')
+        run.vmArg('-Dcrimsonmc.playerTickFixtureRuntime=' + owned.absolutePath)
+        run.vmArg('-Dcrimsonmc.playerTickFixtureReport=' + new File(owned, 'player-tick-fixture.json').absolutePath)
+        run.vmArg('-Dcrimsonmc.playerTickFixtureTicket=' + System.getenv('CRIMSONMC_PLAYER_TICK_TICKET'))
+        project.tasks.named('runServer') { standardInput = System.in }
+        project.tasks.named('processResources') {
+            doLast {
+                def output = new File(destinationDir, 'fabric.mod.json').canonicalFile
+                if (!output.toPath().startsWith(ownedBuild.toPath())) throw new GradleException('Resource output escaped owned build')
+                def document = new JsonSlurper().parse(output)
+                if (!(document.entrypoints.main instanceof List)) throw new GradleException('Unexpected main entrypoints')
+                def initializer = 'local.crimsonmc.fixture.OwnedPlayerTickFixture'
+                if (!document.entrypoints.main.contains(initializer)) document.entrypoints.main.add(initializer)
+                output.setText(JsonOutput.prettyPrint(JsonOutput.toJson(document)) + '\n', 'UTF-8')
+            }
+        }
+    }
+}

@@ -1159,8 +1159,32 @@ py -3.12 -B tools/check_steve_player_context.py --run
 报告写入完成marker后runner才读取，finally通过自有进程stdin正常stop，前后核对生产
 minecraft/src与build。初始实验及tracked路径验证分别保留独立runtime目录，均正常退出。
 
-两组来源尚未连接到同一玩家状态→模型求值链；持物、跳落、完整状态时序、红沙姿态控制
-及真实伤害／击退继续单独验收。实际工具源码可上传，MC二进制、世界和输出保持ignored。
+后续完整入口采集使用`py -3.12 -B tools/check_steve_player_tick.py --run`；默认不带`--run`
+仍只preflight。独立world九块stone地板上自然落稳，按每server tick顺序调用完整
+world.tickEntity／player.playerTick；前者复制位置并推进age，后者推进实际人物物理、
+Pose和挥击。11次暖机后四组32帧（站／蹲×MAIN／OFF），年龄12..43，包含每帧真实
+delta0/.5/1插值。精确ServerPlayer与正常handler／connection不接传输、不注册／生成实体，
+网络包只进入自身队列，实测4项；不手写age／velocity／onGround。两入口各43次均完成，
+首次及tracked路径验证均正常console stop，源码／build保持。完整连接生命周期仍未覆盖。
+采集证据分别为`runtime/mc-player-tick-4tm1bcz6`与`runtime/mc-player-tick-uxn5vmag`。
+真实玩家状态→模型回放已在下列固定输入范围接通；持物、跳落、红沙姿态控制及伤害／
+击退继续单独验收。
+实际工具源码可上传，MC二进制、世界和输出保持ignored。
+
+```powershell
+py -3.12 -B tools/build_steve_player_pose.py --source runtime/mc-player-tick-4tm1bcz6
+py -3.12 -B tools/check_steve_player_pose.py --source runtime/mc-player-tick-4tm1bcz6 --rebuild
+```
+
+此回放是本机固定capture基准，`--source`只接受上列成功目录及固定两JSON／ticket／六份
+producer源码摘要，不能替换为任意fresh run。默认`build/steve-player-pose-1.21.1`已生成，
+不覆写；需新输出时使用`--output`。32个after帧×delta0/.5/1共96次官方模型求值，真实
+progress／isInSneakingPose／age及MathHelper角度映射保持。限定空手RIGHT、静止站／蹲、
+MAIN／OFF；模型夹具仍为null-World ArmorStand，不能声称执行Player renderer或披风。
+8/8检查通过（16.853秒），一次独立JVM的pose／class／完整report逐字一致；79项快照和
+旧12工具／产物保持。poses SHA `9bf389fdb3eb34dfcee9b558df55138fbcf7d037b4d5287b8ae819c718d8a3a0`，
+report SHA `77dc04a8dd90b23765485298e4430ec2513d6c94c1212fb252314e555ffdb9c7`。
+结果证明真实状态到官方六关节的离线转换；实时帧服务、原生重定向、装备和攻击仍未实现。
 
 ## 头主UV方向单变量候选（2026-10-08）
 

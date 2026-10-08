@@ -4,7 +4,80 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：官方动作样本与真实玩家上下文
+## 2026-10-08 最新：真实世界／人物 tick 的动作时序
+
+上轮仅验证protected挥击步骤，本轮补齐实际时间来源。固定MC字节码表明：
+ServerWorld.tickEntity先resetPosition、age++，再调用ServerPlayer.tick；人物物理、
+挥击前帧复制和Pose更新则在ServerPlayer.playerTick。正常游戏由世界更新和网络更新
+分别调度这两个完整入口，仅调用playerTick会漏age／位置生命周期，不能手写字段补齐。
+本轮未执行那个单入口草稿；最终实验每个Fabric START_SERVER_TICK按已证顺序各调用
+一次完整world.tickEntity与player.playerTick，保留未注册／未连接生命周期的明确限制。
+
+新增`tools/check_steve_player_tick.py`及`tools/player_tick_fixture/`。正常构造精确
+ServerPlayer、ClientConnection(SERVERBOUND)、ConnectedClientData和ServerPlayNetworkHandler，
+不覆写getter或tick，不写私有字段；connection无channel／listener，玩家不注册或生成。
+官方同步包只排入自身队列，实测4项；未建立客户端或调用handler.tick。world／编译产物
+仍全部位于自有runtime，生产Authority、minecraft/src/build及发布jar保持。
+空白测试世界通过官方setBlockState放置九块stone地板、普通位置setter放置玩家；随后
+11次真实物理暖机，在连续三次实际落地／位置稳定后开始采集。末尾自然vy=-0.0784…
+保留，不强行写velocity/onGround或要求竖向速度零。站立／蹲伏×主／副手四段各8帧，
+共32帧，两个完整入口各43次，年龄12..43；每段实际挥击回零，Pose切换、前帧位置／挥击
+复制成立。每帧before／afterWorldTickEntity／after和delta0/.5/1真实getter值／FloatBits保留。
+
+首次主控实测`runtime/mc-player-tick-4tm1bcz6`，ticket
+`109f43d3-d1e1-49d3-99eb-dee4ec87bbfc`，fixture SHA
+`035855694c825e1c4f02a1481fb7c466c562b38780d9e2f4a1255186bd2f12b2`，runner SHA
+`b8ae0a4c127f279a5d4a1eef90c5ee0f0312aa011a407975db7a741e898e2619`。
+完整输入和prepared-scope-v2保留在`build/mc-player-tick-20261008`，未执行的旧单入口
+scope也保留但已被替代。Java SHA
+`ad4a3cbf8484ae393f2c915e8aea56e72c533bba9038cef2bcd20b11a5482fd3`；提升tracked时Java
+逐字相同，runner/init只改路径且逆替换字节一致，旧ignored来源完整保留。
+
+`py -3.12 -X utf8 -B tools/check_steve_player_tick.py --run`的tracked路径验证也**通过／exit0**，
+产物`runtime/mc-player-tick-uxn5vmag`，ticket`3fea9d20-6edd-4df5-9247-b6f6ad26a126`，
+fixture SHA `27f2be1722b098016cb59b8ae2927f8103a0f25e350eee4d50fa2cf950fe0371`；同为11+32帧。
+两次均正常console stop、未强停，源码／build和来源摘要保持。生产前后另核对完整MC
+schema3/revision25、6项文件、41安装文件、36存档，记录前缀`mc-player-tick-20261008-production`。
+正常ServerWorld／Player方法已实测，不代表已连接／注册玩家的完整生命周期、客户端
+renderer、MC攻击伤害或原生应用。
+
+新增`StevePlayerPoseDump.java`、`build_steve_player_pose.py`和`check_steve_player_pose.py`，
+首次成功capture两JSON／ticket／六producer来源及固定named jar均绑定，旧12工具／产物
+保持。输入路径准入与build输出门禁分开，均拒绝reparse别名；不把runtime或工具源码误
+当输出目录。真实32帧after状态×delta0/.5/1共96次官方模型求值；progress来自真实getter，
+蹲伏来自真实Pose getter，年龄12..43不重置，使用官方MathHelper映射头身角度，六关节
+原始字段／FloatBits及TRS完整输出。源是Player，模型夹具仍ArmorStand，披风和renderer
+根变换不在此范围；静态getter合同限制空手RIGHT、静止站／蹲、MAIN／OFF及无特殊状态。
+`--source`明确仅接受固定`runtime/mc-player-tick-4tm1bcz6`，不是任意新采样或生产动作端点。
+
+`py -3.12 -B tools/check_steve_player_pose.py --source runtime/mc-player-tick-4tm1bcz6 --rebuild`
+**8/8通过，16.853秒**；一次独立真实JVM与canonical的pose、class、完整report逐字一致。
+包括真实after／FloatBits／年龄／Pose核对、来源与两入口／phase拒绝、错范围／来源变化／
+输出保护，以及改pose/class后重写自报hash仍拒绝。最终AST2/2、79项完整快照末回读、旧
+12份字节保持，独立只读审查无阻塞。证据`build/steve-player-pose-check-20261008/report.json`。
+canonical为`build/steve-player-pose-1.21.1`；pose416499字节SHA
+`9bf389fdb3eb34dfcee9b558df55138fbcf7d037b4d5287b8ae819c718d8a3a0`，helper17792字节SHA
+`2ba8d8524a78e794d52bea4750b06f12a50492019e62f566baa66241137cce0d`，report38933字节SHA
+`77dc04a8dd90b23765485298e4430ec2513d6c94c1212fb252314e555ffdb9c7`。
+仅playerStateCaptured与officialModelReplayedFromPlayerState为true，renderer、完整连接／
+20Hz生命周期、native、combat和完整动画系统仍false。
+
+原生路线有界审查：固定CDMW的PAA parser只从候选表提取rotation预览，默认30fps未证，
+无完整writer／原字节no-op往返／人物播放派发，因此未生成或安装动画文件候选。已有
+World Builder MoveMany(false)支持degree YXZ（qy*qx*qz）和统一scale，六刚体视觉路线可
+避免未知骨骼palette写入，但当前接口缺完整owner朝向／父绑定、collision-only关闭、六件
+固定帧完成回执及临时对象层；默认live重插可能闪烁，missing/hidden成员可跳过仍返回true。
+隐藏完成后才能Forget；proj0也可被保存，不能当临时层。C/HTTP入口不等价于内部三轴live
+batch。仅旧模型的996个关节做过纯数学转换方向核对，不把新96姿态或游戏显示计入该验证。
+报告`build/steve-rigid-render-contract-20261008/report.json` SHA
+`9cd69f4015cb737e1f7f1582ecd696c7eeff7c4322c96fdb8354194225dd6f5e`，11份来源保持。
+下一原生前置为pivot／单位／root映射及固定无碰撞载体的单件三轴／持续可见／清理验证，
+然后再验六件跟随；原模型隐藏、输入抑制、装备与实际伤害／击退仍需分别实现。
+
+头透明帽层收据fc6a85…仍installed／active，游戏关闭，尚待手动视觉反馈／新会话采样后
+退出恢复；不能复用旧UV结果替代本包验收。持续目标active，本轮有实测进展。
+
+## 2026-10-08 官方动作样本与真实玩家上下文
 
 透明帽层对照收据`fc6a856085ab493985d6ebf3d40a66f3`仍为installed／active；游戏关闭，
 尚无该包的视觉反馈或新会话样本，不能复用前次UV的退出回复认定新包已实测或恢复。
