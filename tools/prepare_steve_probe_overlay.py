@@ -40,6 +40,8 @@ HEAD_BASECOLOR_REPORT = ROOT / "build/steve-head-basecolor/steve-head-basecolor-
 HEAD_BASECOLOR_OUTPUT = ROOT / "build/steve-head-basecolor-probe-overlay"
 HEAD_UV_REPORT = ROOT / "build/steve-head-uv-control/steve-head-uv-control-report.json"
 HEAD_UV_OUTPUT = ROOT / "build/steve-head-uv-probe-overlay"
+HEAD_VISIBLE_LAYER_REPORT = ROOT / "build/steve-head-visible-layer/steve-head-visible-layer-report.json"
+HEAD_VISIBLE_LAYER_OUTPUT = ROOT / "build/steve-head-visible-layer-probe-overlay"
 HEAD_ROOT_RESOURCES = {
     "character/model/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac":
         ("e75f7a7989137756c4744a16c001bce8f91a6f0b6caabb84214f5d42b710d9b9", "skinnedMesh", 1),
@@ -152,9 +154,58 @@ def apply_head_uv(resources, reports, snapshot, report_path):
     snapshot.update(control_snapshot)
 
 
+def apply_head_visible_layer(resources, reports, snapshot, report_path):
+    """Only the fixed hat-index PAC replacement after the exact ten reports."""
+    import prepare_steve_head_visible_layer as layer
+    names = {"steve-assembly-report.json", "steve-appearance-report.json", "steve-head-descriptor-report.json",
+        "steve-part-table-report.json", "steve-native-head-root-report.json", "steve-head-native-material-report.json",
+        "steve-clothing-control-report.json", "steve-body-native-material-report.json", "steve-head-basecolor-report.json",
+        "steve-head-uv-control-report.json"}
+    if len(reports) != 10 or {Path(p.replace("\\", "/")).name for p in reports} != names:
+        raise ValueError("Head visible-layer control requires the exact ten predecessor reports")
+    old, material, texture = (resources.get(path) for path in (layer.PAC_PATH, layer.MATERIAL_PATH, layer.DIFFUSE_PATH))
+    if (len(resources) != 14 or old is None or material is None or texture is None
+            or old["row"].get("kind") != "skinnedMesh" or old["row"].get("archiveFlags") != 1
+            or old["row"].get("sha256") != layer.OLD_PAC_SHA256 or len(old["payload"]) != layer.PAC_SIZE
+            or native.sha256(old["payload"]) != layer.OLD_PAC_SHA256
+            or material["row"].get("kind") != "skinnedMaterial" or material["row"].get("archiveFlags") != 50
+            or material["row"].get("sha256") != layer.PRESERVED_MATERIAL_SHA256
+            or len(material["payload"]) != layer.MATERIAL_SIZE or native.sha256(material["payload"]) != layer.PRESERVED_MATERIAL_SHA256
+            or texture["row"].get("kind") != "texture" or texture["row"].get("sha256") != layer.DIFFUSE_SHA256
+            or len(texture["payload"]) != layer.DIFFUSE_SIZE or native.sha256(texture["payload"]) != layer.DIFFUSE_SHA256):
+        raise ValueError("Head visible-layer control requires the fixed prior head PAC, PAMI and DDS")
+    report_path = native.output_directory(report_path)
+    if report_path.name != layer.REPORT_NAME:
+        raise ValueError("Head visible-layer control requires its exact eleventh report")
+    candidate, payloads, control_snapshot = layer.load_candidate(report_path)
+    fixed_row = {"kind": "skinnedMesh", "virtualPath": layer.PAC_PATH, "localFile": "resources/" + layer.PAC_PATH,
+        "sha256": layer.NEW_PAC_SHA256, "payloadSize": layer.CANDIDATE_SIZE, "sourceVirtualPath": layer.PAC_PATH,
+        "templatePath": layer.PAC_PATH, "templateSha256": layer.OLD_PAC_SHA256, "templateArchiveFlags": 1, "archiveFlags": 1}
+    if (candidate["candidateResources"] != [fixed_row] or set(payloads) != {layer.PAC_PATH}
+            or layer.restore_pac(payloads[layer.PAC_PATH], old["payload"]) != old["payload"]):
+        raise ValueError("Head visible-layer control must delete only its fixed MC hat indices")
+    for path, raw in control_snapshot.items():
+        if path in snapshot and snapshot[path] != raw:
+            raise ValueError("Head visible-layer source changed between admitted reads")
+    resources[layer.PAC_PATH] = {"row": fixed_row, "localPath": report_path.parent / fixed_row["localFile"],
+        "payload": payloads[layer.PAC_PATH]}
+    reports[str(report_path.relative_to(ROOT))] = native.file_hash(report_path)
+    snapshot.update(control_snapshot)
+
+
 def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
                head_mesh_control_path=None, head_root_path=None, head_native_material_path=None,
-               clothing_path=None, body_native_material_path=None, head_basecolor_path=None, head_uv_path=None):
+               clothing_path=None, body_native_material_path=None, head_basecolor_path=None, head_uv_path=None,
+               head_visible_layer_path=None):
+    if head_visible_layer_path is not None:
+        if (head_uv_path is None or head_basecolor_path is None or body_native_material_path is None or clothing_path is None
+                or head_native_material_path is None or head_root_path is None or head_descriptor_path is None
+                or part_table_path is None):
+            raise ValueError("Head visible-layer control requires all ten head-UV baseline reports")
+        if app_path is not None or head_mesh_control_path is not None:
+            raise ValueError("Head visible-layer control excludes app and head-mesh controls")
+        if head_visible_layer_path.name != "steve-head-visible-layer-report.json":
+            raise ValueError("Head visible-layer control requires its exact eleventh report")
     if head_uv_path is not None:
         if (head_basecolor_path is None or body_native_material_path is None or clothing_path is None
                 or head_native_material_path is None or head_root_path is None or head_descriptor_path is None
@@ -384,6 +435,8 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
         apply_head_basecolor(resources, reports, snapshot, head_basecolor_path)
     if head_uv_path is not None:
         apply_head_uv(resources, reports, snapshot, head_uv_path)
+    if head_visible_layer_path is not None:
+        apply_head_visible_layer(resources, reports, snapshot, head_visible_layer_path)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)

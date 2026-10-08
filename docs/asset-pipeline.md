@@ -1227,3 +1227,36 @@ canonical报告34472字节，SHA `6d68aa3eff9428fe9f7c63838fdbed10097a4c17ef0da9
 独立重建12/12通过（10.781秒），覆盖全部12元数据字段（其中2项位置未变）、三LOD原始
 记录及索引边界、独立BC3／MC accessor、真实CDMW及保守bbox、完整逆恢复、来源／manifest
 篡改、输出保护和源变化拒绝；纯准入返回六个绝对Path快照。
+
+## 透明帽层十一报告整包（2026-10-08）
+
+`prepare_steve_head_visible_layer_overlay.py`从固定十报告b27484…本地包组合，仅把头PAC从
+c0df…替换为7c222d…；其他13项完整资源行、编码payload、flags和orig_size保持。
+metadata-before和PATHC保持，PAMT与PAPGT按新归档实际CRC重建。顶层使用独立
+`headVisibleLayerComposition`，旧UV变换通过固定基线来源保留，不沿用为当前变更断言。
+
+```powershell
+py -3.12 -X utf8 -B tools/prepare_steve_head_visible_layer_overlay.py
+py -3.12 -X utf8 -B tools/check_steve_head_visible_layer_overlay.py --rebuild
+# 主控完成全套检查并重新核对进程／原文件基线后才能安装
+py -3.12 -X utf8 -B tools/install_steve_probe.py --install --plan build/steve-head-visible-layer-probe-overlay
+```
+
+默认输出`build/steve-head-visible-layer-probe-overlay`，14资源／严格11报告，PAZ770576字节。
+计划17784字节，SHA `e86048837217e7cd85ac957d12db2b05b3315449234e8639668ebf627665add1`；variant为
+`steve-kliff-original-head-body-material-empty-armor-head-basecolor-head-uv-visible-layer-part-table-v2`。
+生成器无game-root参数，不读取实际游戏元数据；旧模式准入、安装时源34索引／原metadata／
+进程关闭／active互斥、备份与恢复门禁保持。完整检查及实机状态见[current-state.md](current-state.md)。
+
+安装器每次准入现在返回独立`readSnapshot`，包括本次manifest／六文件及全部候选和基线来源。
+同一路径不同字节立即拒绝，metadata二读须一致，返回前完整回读；不跨调用缓存，也不把
+Path→bytes快照序列化到报告或收据。新11层复用一次完整10层准入的快照，避免为了收集来源
+再重复全部解析；旧9／10封装算法和固定报告没有改变。
+
+头PAMI读取客户端分别固定9／10／11计划SHA和variant，69/69隔离检查通过（134.101秒）；
+每一对计划／variant／收据串用都拒绝，依然仅steve_head_pami／16KiB／flags50，ASI不变。
+新包实采必须显式指定：
+
+```powershell
+py -3.12 -X utf8 -B tools/probe_steve_head_material.py --plan build/steve-head-visible-layer-probe-overlay --output runtime/steve-head-visible-layer-material-read-new-session.json
+```

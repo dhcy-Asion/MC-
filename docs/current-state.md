@@ -64,12 +64,13 @@ receipt／0041、无待恢复包**。用户手动启动、进入、退出，自�
 - 候选10/10、完整本地封装／隔离事务31/31通过；固定源计划及六文件本地组合，不读取
   实际游戏元数据。标准安装仍核对active、游戏关闭、原始元数据与34个源索引。
 
-## 当前现场：头UV实测未解决五官，已恢复
+## 上次实测：头UV未解决五官，已恢复
 
 - 新包：`build/steve-head-uv-probe-overlay`，14资源／严格10报告；计划SHA
   `b27484b952059015920635a23cf489a2881d23ba86e554b0b80f7157a03e7c10`。
 - 收据：`f4541cd031434b238e22b637efe64de2`，kind=steve-mesh-parameters，**restored**。
-  已核实游戏退出并恢复，无active receipt／0041、无待恢复包。用户手动启动／退出偏好继续适用。
+  该次已核实游戏退出并恢复，恢复时无active receipt／0041。用户手动启动／退出偏好继续适用；
+  新对照包当前状态见下一节。
 - 相对上一头baseColor包只翻三LOD共144个主UV V字段，头PAC从182fc…变为c0df7…；
   头PAMI／DDS及另外13项完整行和编码保持，几何位置、骨骼权重不变。UV候选不是已验证修复。
 - 完整隔离事务／真实本地重建32/32通过，552.366秒；九个旧canonical计划纯准入通过。
@@ -82,6 +83,34 @@ receipt／0041、无待恢复包**。用户手动启动、进入、退出，自�
   handler已释放；前后同实例、完整MC与41文件保持。报告为同名前缀`-material-read.json`，
   人工结果为`-visual-result.json`。成功只证明文件可解析，renderer选材质／DDS采样仍未证。
   用户正常退出后已核实进程结束，恢复时保持退出最新存档，旧会话PID／地址不得复用。
+
+## 当前现场：透明帽层完整对照包
+
+固定十报告UV包已本地组合为严格11报告／14资源，新计划为
+`build/steve-head-visible-layer-probe-overlay`，manifest17784字节，PAZ770576字节，SHA
+`e86048837217e7cd85ac957d12db2b05b3315449234e8639668ebf627665add1`；variant为
+`steve-kliff-original-head-body-material-empty-armor-head-basecolor-head-uv-visible-layer-part-table-v2`。
+仅头PAC由c0df7…替换为7c222d…；另外13项完整资源行、编码、flags及orig_size保持，
+PAMI／DDS与内头顶点／UV／骨骼保持。独立`headVisibleLayerComposition`固定基线来源；
+原metadata-before及PATHC不变，PAMT／PAPGT按实际归档CRC重建。
+
+三计划材质客户端`check_steve_head_material_probe.py`已69/69通过（134.101秒），每版
+分别绑定完整SHA／variant／收据，跨计划拒绝；固定别名及16KiB范围保持，无需更新ASI。
+标准`load_plan`返回单次完整`readSnapshot`供新封装复用，不跨调用缓存，不序列化到
+收据或manifest；来源冲突与最终回读保持。完整安装／恢复隔离及真实重建检查34/34通过
+（808.297秒），class cleanup与生产前后快照通过，子代理已停止所有生产读取。
+旧2～10报告共11个分支纯准入通过，CLI相对／绝对路径归一化2项针对检查通过，四份
+最终源码摘要在`build/steve-head-visible-layer-overlay-check-20261008/report.json`。
+主控随后实际安装，收据`fc6a856085ab493985d6ebf3d40a66f3`，kind=steve-mesh-parameters，
+**installed／active，0041存在，临时包尚待实测后恢复**。标准安装命令exit0；
+`record-steve-head-visible-layer-20261008.py`的before-install／installed两阶段均exit0，
+安装前38原件匹配，安装后41文件匹配，最新36存档、完整MC schema3/revision25／选择格1、
+原点和ASI保持，安装时游戏关闭。已请求用户手动启动、进入同一存档反馈五官／位置，
+并保持运行；当前没有该包的人工视觉结果或新live样本，遮挡假设未验证。
+收到反馈后先新鲜核对PID／创建时间／包／MC，执行in-world recorder、绑定新计划的
+`probe_steve_head_material.py`以及已有23项检查的`probe_owner_skinned_object.py`只读诊断。
+随后请求正常退出，核实进程结束，before-restore→标准restore→restored，保持退出最新
+存档及MC。主控独占实际会话，不复用旧PID，不为只读诊断另开一次启动。
 
 ## 独立工作与剩余前置
 
@@ -121,16 +150,14 @@ report SHA `56790fa5efb6a2b38ed5938f217d4ddc25b11d5b87c18a6640721fd15ae3a3af`。
 SHA `7c222d1cb2d475d7e487c8cad87967afc63d27a1fa14b99d35c62a24f762d9ca`。
 `check_steve_head_visible_layer.py --rebuild` 12/12通过（10.781秒），独立MC／BC3／三LOD
 CDMW解析、保守bbox、完整字段／索引逆恢复、纯准入和来源／报告篡改拒绝覆盖。没有安装。
-下一步从固定十报告b27484…本地计划组成严格11报告／14资源整包，仅替换一个头PAC，验证
-其他13项编码／flags／orig_size保持；为新包明确记录composition，不沿用旧headUvComposition
-作为当前变更断言。完成安装恢复检查、绑定新完整计划的PAMI读取后，才准备下一实机测试。
-用户目前无需启动游戏。
+对应严格11报告／14资源整包已生成；当前安装检查进度、计划及现场见上方“当前现场”。
+完整五官、渲染器材质选择与透明遮挡仍须实际验证，单PAC的离线通过不提升这些状态。
 
 主控独占游戏安装、采样、恢复、后台和Git；最多三个子代理按独立范围执行。完成相关检查、
 文档和普通GitHub推送后交付。游戏资源／存档／runtime／build保持忽略。
 
-新固定头PAMI读取诊断已实现：仅一个steve_head_pami别名，16KiB／flags50、分别固定九／十报告计划／
-active收据／实际41文件／同EXE实例／完整MC门禁。双计划客户端46/46、原生23/23及旧客户端27/27
+新固定头PAMI读取诊断已实现：仅一个steve_head_pami别名，16KiB／flags50、分别固定九／十／十一报告计划／
+active收据／实际41文件／同EXE实例／完整MC门禁。三计划客户端69/69、原生23/23及旧客户端27/27
 检查通过；固定上游重放45份源码经CRLF规范化一致，ASI构建并已更新实际安装及发布artifact，
 SHA `9d5cdc8eebbad47010f4d6e15e3afe74d630ace00332cd7032ac216c3494efe7`。原ASI备份保留，
 38原文件、最新存档／MC／原点保持。新诊断已在十报告UV会话实采成功，只证明路径可读取，renderer

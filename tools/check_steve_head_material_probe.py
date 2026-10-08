@@ -125,6 +125,7 @@ class FakeHTTP:
 
 class HeadMaterialChecks(unittest.TestCase):
     plan = probe.composition.DEFAULT_OUTPUT
+    plan_digests = (probe.PLAN_SHA256, probe.UV_PLAN_SHA256, probe.VISIBLE_LAYER_PLAN_SHA256)
 
     @classmethod
     def setUpClass(cls):
@@ -396,32 +397,39 @@ class HeadMaterialChecks(unittest.TestCase):
         with self.assertRaises(probe.ProbeError):
             probe.read_receipt(self.assets, self.folder)
 
-    def test_22_two_pinned_plans_cannot_cross_receipts_or_variants(self):
-        other_sha = (probe.UV_PLAN_SHA256 if self.assets["planSha256"] == probe.PLAN_SHA256
-                     else probe.PLAN_SHA256)
-        other_variant, _ = probe.plan_contract(other_sha)
-        for mutation in ({"planSha256": other_sha}, {"probeVariant": other_variant},
-                         {"planSha256": other_sha, "probeVariant": other_variant}):
-            with self.subTest(fields=mutation):
-                self.receipt_path.write_bytes(encoded({**self.receipt, **mutation}))
-                with self.assertRaises(probe.ProbeError):
-                    probe.read_receipt(self.assets, self.folder)
-        with self.assertRaises(probe.ProbeError):
-            probe.verify_assets({**self.assets, "probeVariant": other_variant})
+    def other_plan_contracts(self):
+        return [(digest, probe.plan_contract(digest)[0]) for digest in self.plan_digests
+                if digest != self.assets["planSha256"]]
+
+    def test_22_pinned_plans_cannot_cross_receipts_or_variants(self):
+        for other_sha, other_variant in self.other_plan_contracts():
+            for mutation in ({"planSha256": other_sha}, {"probeVariant": other_variant},
+                             {"planSha256": other_sha, "probeVariant": other_variant}):
+                with self.subTest(fields=mutation):
+                    self.receipt_path.write_bytes(encoded({**self.receipt, **mutation}))
+                    with self.assertRaises(probe.ProbeError):
+                        probe.read_receipt(self.assets, self.folder)
+            with self.assertRaises(probe.ProbeError):
+                probe.verify_assets({**self.assets, "probeVariant": other_variant})
         with self.assertRaises(probe.ProbeError):
             probe.plan_contract("0" * 64)
 
     def test_23_swapped_plan_manifest_blocks_post(self):
-        other_sha = (probe.UV_PLAN_SHA256 if self.assets["planSha256"] == probe.PLAN_SHA256
-                     else probe.PLAN_SHA256)
-        other_variant, _ = probe.plan_contract(other_sha)
-        assets = {**self.assets, "planSha256": other_sha, "probeVariant": other_variant}
-        self.assertFalse(self.run_probe(assets=assets)["success"])
-        self.assertEqual(self.fake.posts, 0)
+        for other_sha, other_variant in self.other_plan_contracts():
+            with self.subTest(plan=other_sha):
+                self.output = self.folder / "runtime" / ("wrong-plan-" + other_sha + ".json")
+                self.fake.evidence = self.output
+                assets = {**self.assets, "planSha256": other_sha, "probeVariant": other_variant}
+                self.assertFalse(self.run_probe(assets=assets)["success"])
+                self.assertEqual(self.fake.posts, 0)
 
 
 class HeadUvMaterialChecks(HeadMaterialChecks):
     plan = probe.ROOT / "build/steve-head-uv-probe-overlay"
+
+
+class HeadVisibleLayerMaterialChecks(HeadMaterialChecks):
+    plan = probe.ROOT / "build/steve-head-visible-layer-probe-overlay"
 
 
 if __name__ == "__main__":

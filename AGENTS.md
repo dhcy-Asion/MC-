@@ -62,7 +62,9 @@ the earlier copy under Desktop/Git.
    用户确认五官仍不正确、头位置正常。相对九报告只改144个主V字段，其他13项保持；
    双计划材质读取客户端46/46通过，首次引擎PAMI读取16134字节／flags50及摘要匹配，
    不证明renderer选择。五阶段exit0，38原文件、退出最新36存档／MC保持，无active／0041；
-   后续检查渲染材质和通道，不重复相同UV对照，详见current-state。
+   后续检查渲染材质和通道，不重复相同UV对照。下一透明帽层候选12/12通过，严格11报告／
+   14资源完整本地包已生成，e86048…；只换头PAC，内头／UV／材质和其余13项保持。
+   三计划材质客户端69/69通过，完整事务检查及当前安装状态详见current-state。
    已有active、关闭游戏、原始元数据与索引门禁均不得绕过。
    人工服装和身体姿势反馈不能替代完整人物、头比例、MC皮肤、动态装备禁止或MC动作验收。
 3. 完成后运行相关检查，在进度文件写明日期、命令、结果、证据及未验证项，再标记完成。
@@ -122,10 +124,11 @@ the earlier copy under Desktop/Git.
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |
 | Steve 离线资产 | `python tools/build_steve_asset.py`；`python tools/check_steve_asset.py`；产物留 ignored build，不安装为原生角色 |
 | MC离线动作姿态基准 | `py -3.12 -B tools/check_steve_pose.py --rebuild`；固定官方client／21类／46外部依赖与Java工具，真实PlayerEntityModel求值站立／转头／行走，各40tick＋endpoint；明确ArmorStandEntity夹具，非Player、无World／tick，nativeApplied=false；未知动作和原生控制另验 |
-| 固定Steve头材质读取诊断 | `py -3.12 -B tools/check_steve_head_material_probe.py`、原生变化时`check_native_resources.py`；仅steve_head_pami固定别名／16KiB／flags50，分别固定九／十报告计划SHA和variant、active收据、实际41文件、EXE实例与MC状态门禁；客户端46/46通过，读取匹配不证明renderer选择或MC皮肤；实采仅主控 |
+| 固定Steve头材质读取诊断 | `py -3.12 -B tools/check_steve_head_material_probe.py`、原生变化时`check_native_resources.py`；仅steve_head_pami固定别名／16KiB／flags50，分别固定九／十／十一报告计划SHA和variant、active收据、实际41文件、EXE实例与MC状态门禁；客户端69/69通过，读取匹配不证明renderer选择或MC皮肤；实采仅主控 |
 | Steve头主UV方向单变量候选 | `py -3.12 -B tools/check_steve_head_uv_control.py --rebuild`；固定当前头PAC／PAMI／DDS／报告，只翻三LOD共144个主UV V half字段，逐字逆恢复，独立MC accessor／BC3区域核对；shader反V与实机皮肤另验 |
 | Steve头UV十报告封装 | `py -3.12 -B tools/check_steve_head_uv_overlay.py --rebuild`；固定九报告本地计划，仅头PAC改变，其他13项编码／flags／orig_size保持；原始metadata／PATHC保持，PAMT及PAPGT按实际CRC重建，严格10报告完整准入；实际安装／恢复与皮肤结果见current-state |
-| Steve固定透明帽层候选 | `py -3.12 -B tools/check_steve_head_visible_layer.py --rebuild`；固定UV PAC／PAMI／DDS／报告，每LOD只删36个hat索引及必要计数／位置更新，48records／base索引保持，216字节精确逆恢复；真实MC／BC3／CDMW与重建12/12通过，未接11报告整包／实机 |
+| Steve固定透明帽层候选 | `py -3.12 -B tools/check_steve_head_visible_layer.py --rebuild`；固定UV PAC／PAMI／DDS／报告，每LOD只删36个hat索引及必要计数／位置更新，48records／base索引保持，216字节精确逆恢复；真实MC／BC3／CDMW与重建12/12通过，实机遮挡和五官另验 |
+| Steve透明帽层十一报告封装 | `py -3.12 -B tools/check_steve_head_visible_layer_overlay.py --rebuild`；固定十报告本地包，仅换头PAC，其他13项编码保持，独立headVisibleLayerComposition；单次完整readSnapshot含manifest／六文件／候选及composition来源，冲突拒绝／最终回读，不跨调用缓存或写入JSON；安装恢复结果见current-state |
 | Steve 分段蒙皮候选 | `py -3.12 -B tools/check_steve_segmented.py --rebuild`；真实 palette、四 LOD 表面／UV、原始 byte 权重、inverse bind 与合成弯曲；仍使用旧模板 PABC，不代表当前角色描述符、装备或实机动画验收 |
 | Steve 头身分件／私有 prefab | `py -3.12 -B tools/check_steve_parts.py --rebuild` 和 `check_steve_parts_prefab.py --rebuild`；四 LOD 完整记录并集、逐模型材质依赖、原生部件名与严格 footer／路径往返；旧分件 rig 与当前 descriptor 未共同验收，不能直接安装为完整人物 |
 | Steve 当前 neutral 补偿 | `py -3.12 -B tools/check_steve_current_rig.py --rebuild`；固定当前 PABC／descriptor、实际 byte 权重及量化后中立回放，UV／skin／拓扑保持；独立 combined 候选，不代表原生 shader／动画或私有分件已应用 |

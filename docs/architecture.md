@@ -24,8 +24,21 @@ MC 来源比对，再验证在红沙中的实时控制。旧中立补偿、原�
 
 头UV对照新增严格10报告／14资源封装：从固定九报告本地包只换一个头PAC，保留其他
 13项编码、PAMI和DDS，元数据按实际归档CRC重建；安装仍走相同所有权／关闭游戏／
-源索引／恢复事务。头材质只读客户端分别绑定两版完整计划SHA与variant，同一个固定
+源索引／恢复事务。头材质只读客户端分别绑定九／十／十一报告完整计划SHA与variant，同一个固定
 别名读取16134字节PAMI，拒绝跨计划收据。文件可读不证明渲染器实际选材质或五官正确。
+
+透明帽层对照由独立`prepare_steve_head_visible_layer_overlay.py`从固定十报告本地计划
+组合为严格11报告／14资源，基线manifest为b27484…，当前manifest为e86048…。只替换
+头PAC为7c222d…／96505字节，保留另外13项资源行、编码载荷、flags与orig_size，原
+metadata-before和PATHC不变，PAMT／PAPGT按实际内容重算。使用独立
+`headVisibleLayerComposition`并保留基线来源，不把继承的`headUvComposition`作为本次
+变更断言。完整计划与材质客户端分别准入；游戏内接受格式、遮挡和正确五官仍须实测。
+
+`install_steve_probe.load_plan`额外返回本次调用的`readSnapshot`，为独立的绝对Path→bytes
+字典，包含当前manifest、六份包／元数据文件、候选来源及递归composition来源。
+所有合并检查同路径字节冲突，返回前统一回读；只供本次组合调用复用，不跨调用缓存，
+也不写入manifest、收据或JSON。新十一报告生成器复用一次十报告准入返回的完整快照，
+避免为了再次获取来源而重复整层校验；旧九／十报告生成器接口与标准安装事务保持。
 
 固定EXE的下一只读候选收敛为受控Scene→精确Skinned→`+0x1C0`未命名owner-keyed对象。
 磁盘构造／查找证据显示候选vtable RVA `0x5B4D168`、`+0x30`弱owner、`+0x38`原owner；
@@ -43,7 +56,7 @@ MC 来源比对，再验证在红沙中的实时控制。旧中立补偿、原�
 指针容器的requested capacity，按8字节指针搬移并维护引用计数，不将逻辑count设为8。
 不能把该分支解释为骨骼数、线程ID或pose数组；也不能据此排除整个对象与动画间接相关。
 
-原生资源只读诊断新增固定steve_head_pami别名；独立客户端绑定已准入的完整九报告计划、
+原生资源只读诊断新增固定steve_head_pami别名；独立客户端分别绑定已准入的完整九／十／十一报告计划、
 active收据、实际41文件及同EXE实例／完整MC，16KiB／flags50、队列／TTL／handler门禁保持。
 成功只表示固定文件可解析且字节匹配，不能证明renderer选择材质或DDS采样。
 

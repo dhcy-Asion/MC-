@@ -27,6 +27,7 @@ RESOURCE = "steve_head_pami"
 VIRTUAL_PATH = "character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml"
 PLAN_SHA256 = "29b813224b362f8d2e751a8ae31968846a55d96410f290ffd10deb00322078e5"
 UV_PLAN_SHA256 = "b27484b952059015920635a23cf489a2881d23ba86e554b0b80f7157a03e7c10"
+VISIBLE_LAYER_PLAN_SHA256 = "e86048837217e7cd85ac957d12db2b05b3315449234e8639668ebf627665add1"
 PAYLOAD_SHA256 = "cc86b387583430d7e2d8ef136db965dd39d3e5754501626b7c82fa606b2abf3f"
 PAYLOAD_SIZE = 16134
 VARIANT = composition.VARIANT
@@ -45,6 +46,9 @@ def plan_contract(digest: str):
     if digest == UV_PLAN_SHA256:
         import prepare_steve_head_uv_overlay as uv_composition
         return uv_composition.VARIANT, uv_composition.COMPOSITION_REPORT_NAMES
+    if digest == VISIBLE_LAYER_PLAN_SHA256:
+        import prepare_steve_head_visible_layer_overlay as visible_composition
+        return visible_composition.VARIANT, visible_composition.COMPOSITION_REPORT_NAMES
     raise ProbeError("Expected a pinned complete Steve head material probe plan")
 
 

@@ -4,7 +4,52 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：头UV对照安装与动作入口排查
+## 2026-10-08 最新：透明帽层整包与三计划材质诊断
+
+上次UV实测五官仍不正确、位置正常，已退出恢复。新的透明帽层对照采用已通过12项
+检查的固定单PAC候选，从固定b27484…十报告本地计划组合，只有头PAC从c0df7…变为
+7c222d…／96505字节；其余13项完整资源行、编码payload、flags与orig_size保持。
+新包`build/steve-head-visible-layer-probe-overlay`为14资源／严格11报告，manifest17784
+字节，PAZ770576字节，计划SHA
+`e86048837217e7cd85ac957d12db2b05b3315449234e8639668ebf627665add1`。
+原metadata-before与PATHC保持，PAMT／PAPGT从实际新字节重算，使用独立
+`headVisibleLayerComposition`；旧十报告composition只作来源，不作为当前变化断言。
+生成不读取实际游戏元数据、收据或进程，也不单独安装PAC。
+
+标准安装器新增严格11报告集合；`load_plan`返回独立的单次`readSnapshot`，包含manifest、
+六份包文件和所有候选／composition来源，合并拒绝同路径不同字节，返回前末尾回读。
+新生成器复用一次十报告准入结果，避免新增一层重复展开；不跨顶层调用缓存，也不把
+Path→bytes字典序列化到manifest／收据，旧九／十报告生成器未改。
+只读性能审计一次十报告准入14.792秒、4次load_plan、7次candidates、80次快照回读，
+98项完整来源覆盖；新十一层调用数仅静态预测，不能当作实测性能结果。
+
+`py -3.12 -X utf8 -B tools/check_steve_head_material_probe.py` **69/69通过，134.101秒，exit0**。
+三版各23项，包括跨完整计划SHA、variant与收据拒绝，以及错误计划在HTTP提交前失败。
+固定`steve_head_pami`别名、16KiB、flags50和同EXE实例／完整MC门禁保持，无需改ASI。
+证据`runtime/steve-head-material-three-plan-check-20261008.json`固定两份客户端源码摘要。
+
+`py -3.12 -X utf8 -B tools/check_steve_head_visible_layer_overlay.py --rebuild`
+**34/34通过，808.297秒，exit0**；真实固定本地重建逐字一致，安装／恢复／失败回滚、
+中断恢复、后来存档保留、唯一头PAC变化、其余13项完整编码保持、报告／包尾填充篡改、
+完整来源快照／冲突及末尾来源／manifest／PAZ／metadata变化拒绝均覆盖。
+class cleanup及生产目录前后快照通过，子代理已停止所有生产读取后才允许实际安装。
+独立只读审查产品未发现阻塞；检查器相对`--plan`需统一绝对路径的CLI问题单独修正，
+不放宽产品准入，默认完整suite结果保持。相对／绝对参数实际main的两项针对检查通过
+（mock suite，无生产读取）；四份相关源码AST通过。旧2～10报告共11个已审查分支一次
+本地纯准入均通过（37.384秒），包括三种5报告分支。证据
+`build/steve-head-visible-layer-overlay-check-20261008/report.json`固定四份最终源码摘要，
+新canonical及六文件仍匹配，旧九／十报告生成器未改。主控
+`record-steve-head-visible-layer-20261008.py before-install`已exit0，游戏关闭、无active／0041、
+38原件匹配，最新36存档、完整MC schema3/revision25／选择格1、原点和ASI已记录。
+完整套件结束且子代理停止生产读取后，主控运行
+`py -3.12 -X utf8 -B tools/install_steve_probe.py --install --plan build/steve-head-visible-layer-probe-overlay`
+exit0，收据`fc6a856085ab493985d6ebf3d40a66f3`为installed／active，0041已安装。
+同名recorder的installed阶段exit0：41文件匹配，36存档、完整MC／原点／ASI保持，
+安装时游戏关闭。已请求用户手动启动进入、反馈五官及位置并保持运行；新视觉、in-world
+采样及正常退出恢复尚待完成，当前临时包尚未恢复。透明外帽可能遮挡内头属于待验证
+假设，不把封装或客户端通过记为正确五官、完整Steve、MC动作或原装备禁用完成。
+
+## 2026-10-08 头UV对照安装与动作入口排查
 
 上一头baseColor包已恢复。本轮严格10报告／14资源UV封装完成，固定九报告本地包为基线，
 仅头PAC翻144个主V字段；其他13资源完整编码、PAMI、DDS与几何／骨骼保持，原metadata和
