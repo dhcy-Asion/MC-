@@ -16,10 +16,13 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 与事务通过后安装并有实际运行会话；核实进程结束后收据
 `5dfe1a43fa9846d6a1f1399bd42a4e2d` 已恢复，38项原文件及退出时最新存档／MC保持。
 该次恢复后用户补充MC头仍错位或未显示，外观未通过，不把原生采样记为显示通过。
-随后已准备并安装只改原字节头PAMI的十三资源对照；当前收据
-`5249d2f2339844f3a5b27b77d1353a66` 为 installed，有待实测／退出恢复的0041。
-安装前核实实际游戏关闭，文件、最新存档／完整schema3 MC／原点／ASI保持；
-当前等待用户手动进入同一存档并反馈方块头位置，不能宣称新对照已修复外观。
+随后只改原字节头PAMI的十三资源对照实际通过人工头位置反馈，用户确认方块头正常
+连接在肩膀上方；衣服与MC身体仍重叠。实际退出后收据
+`5249d2f2339844f3a5b27b77d1353a66` 已 restored，无active receipt／0041，退出时
+最新存档／完整schema3 MC／原点／ASI保持。用户要求优先去除原服装模块；仅清空固定
+00000 app默认Armor引用的可逆对照已完成并通过完整检查、实际安装；当前收据
+`2feb0ddf41b3488fba9eb226cf8fb672` 为installed，有active receipt／0041，等待手动进入反馈。
+完整人物仍未完成。
 当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
@@ -1943,3 +1946,81 @@ call209C573，完整pdata窗口209BDC0..209CB2C，3436字节，窗口SHA
 候选／计划／安装阶段JSON及两个报告固定摘要核对通过，`git diff --check`通过。
 本轮没有修改MC规则、重建ASI／JAR或消费材料；源码／文档正常同步，游戏原件及
 runtime／backups／build保持忽略。持续目标active，等待当前单变量实机结果并继续完成。
+
+## 2026-10-08 原字节头材质的人工位置结果与退出恢复
+
+用户反馈“方块头正常连接在肩膀上方”，随后又明确“原本服装和mc的建模一直在重叠”。
+新会话实例 `69188:134359096823476439` 中API ready=true，41项安装文件、完整MC、
+原点及ASI保持；新记录器in-world exit0。人工结果单独保存
+`runtime/steve-head-native-material-20261008-visual-result.json`，绑定收据／variant／
+计划SHA及in-world证据摘要；未把用户报告回填为原生资源解码成功。
+
+这次仅PAMI不同，PAC、palette与其他12资源相同，可缩小到材质资源合同影响位置；
+没有证明单个shader字段是根因。原生贴图为本次诊断选择，最终MC皮肤、表情／动画、
+头身全装配、红沙装备禁用与攻击仍未验。用户正常退出后核实实际进程消失，
+before-restore／Steve专用restore／restored均exit0。收据
+`5249d2f2339844f3a5b27b77d1353a66` 为restored，无active receipt／0041；38项原文件、
+退出时36个最新存档、最新完整MC schema3/revision25、原点及ASI保持。五阶段都有
+独立证据，不覆写安装时或退出时存档。
+
+用户新优先级为去除原服装模块，先制作固定Macduff00000初始app默认Armor组清空
+对照；不是删除存档装备或已经实现全原装备禁用。MC皮肤单变量后续保留：
+`build/steve-head-basecolor-design-20261008/report.json` SHA256
+`da15c1921b510d5505c7336403479de133c8b05e1de855bdc4ef7900e5651346`。原生PAMI三主draw
+baseColor路径的byte span为[1406,1455)、[6516,6565)、[11631,11680)，目标已在13包内的
+`character/texture/crimsonmc_steve_1_21_1.dds`。固定DDS为真实官方64×64 PNG经现有
+nearest放大／DXT5 mip编码的产物，离线逐字重建对应；PATHC已有注册。只内存路径
+替换／逆替换与独立XML结构检查通过，预测PAMI16134字节SHA
+`cc86b387583430d7e2d8ef136db965dd39d3e5754501626b7c82fa606b2abf3f`，尚未写候选或安装。
+不将皮肤同时并入本次衣服实验，以便单独判断重叠是否消除。
+
+## 2026-10-08 用户优先的默认服装模块去重对照
+
+新增 `tools/prepare_steve_clothing_control.py`、`tools/check_steve_clothing_control.py`，
+固定当前初始app Macduff00000，仅删除Armor内12条Prefab（8普通、4 Preview）。原件
+1117字节SHA `945e25586db2d50a83b4dd5227ab89a8e5db8c7937abd404470e52ae5b9edffe`；
+删除连续范围[499,1093)的594字节，保留一个空Armor及外部全部字节。Body／Head／Hair、
+Customization、scale、BOM与剩余CRLF保持，原位置反插12行逐字恢复。候选523字节SHA
+`2b172fc5e2287b9cb7afde9c1e03a0842f99d1ed15cd3518ee269f9a42cb17d2`；app flags48保持。
+此处去除的是静态默认服装引用，动态装备可能另行加载，不能据此宣称全部原装备禁用。
+
+纯loader只读取包内原件／候选／规范报告，按固定原件重构所有字段并逐字比对，返回
+绝对Path快照；不加载CDMW或读取游戏。source reader沿用固定00000 app的EXE／索引／
+flags／精确路径门禁及双读取。candidateResources为空，仅一个targetReplacements，
+通用新增资源入口仍拒绝原app路径。报告
+`build/steve-clothing-control/steve-clothing-control-report.json` SHA256
+`cca720b41ed2bdb8722e12d363e3e35e0788c57dc8b0ca9c8e1678456a86ac72`。
+
+封装新增clothing_path／clothing_report／`--clothing-report`，必须带完整原字节头材质
+六报告，与旧单app／原生头引用模式互斥。严格七报告、14资源；已通过头位置的13资源
+row／localPath／payload保持，仅新增固定00000 app覆盖，Body／Head的原app名称未变。
+新输出 `build/steve-clothing-control-probe-overlay`，variant为
+`steve-kliff-original-material-empty-armor-part-table-v2`；Steve专用收据／共享锁／
+备份恢复事务沿用，恢复保留退出时最新存档，不对原装备表做删除或写回。
+
+- `py -3.12 -X utf8 -B tools/check_steve_clothing_control.py --rebuild` **10/10通过**，
+  22.523秒；独立硬编码范围与反插、全部外部XML／BOM／CRLF、三项纯快照、来源及
+  报告／路径／flags／重复JSON键／重算hash篡改／source race／输出保护和真实重建覆盖。
+- 新包14项逐项解码、PAMT无编辑往返、边界／校验和构建核对通过，PAZ769440字节。
+  计划SHA256 `6703890ac16748566f54b5dfd81ff95ca68ead3d2ba41e2b59602704cc0dc319`。
+  完整 `py -3.12 -X utf8 -B tools/check_steve_probe.py --clothing --rebuild`
+  **28/28通过，99.012秒**：实际新输出重建、逐项解包、13项row／payload保持、
+  隔离安装／恢复／故障／后续存档保护和非法组合／重算hash篡改拒绝覆盖。
+- 独立只读QA确认三处接入、严格报告／flags／快照、生成器仅Armor及检查继承无阻塞；
+  QA没有重跑整套、安装、访问游戏内存或提交Git。
+
+完整事务通过后重新核实实际游戏关闭、无active receipt／0041及38项原文件匹配，
+实际安装新包。收据 `2feb0ddf41b3488fba9eb226cf8fb672` 为installed，kind为
+`steve-mesh-parameters`；新记录器 `build/record-steve-clothing-control-20261008.py`
+绑定新variant／计划SHA与前一已restored收据，证据前缀同名runtime路径。
+before-install／installed均exit0：41文件匹配、36存档、完整MC schema3/revision25、
+原点和ASI保持。当前有临时包／active receipt／0041，已请求用户手动进入观察原服装
+是否消失及MC身体／四肢是否错位，正常进入后暂时保持运行。实机结果尚未得到，
+之后须用户正常退出并核实实际进程结束再恢复，保持退出时最新状态。
+MC皮肤暂缓，以便单独判断服装重叠；人物全装配与原装备禁用仍未完成。
+
+发布前八份相关Python源码与两份ignored记录器共10份AST、七文档69个相对链接／围栏、
+七份候选／计划／阶段／人工结果JSON核对通过，`git diff --check`通过。七种已支持安全
+计划纯准入通过，历史v1 app包仍被旧组件合同拒绝。代码与文档正常同步GitHub；
+本轮未修改ASI／JAR、MC规则或消费材料，原件／build／runtime／备份保持忽略。
+持续目标active，当前等待衣服单变量实机反馈及随后退出恢复，没有标记完整项目完成。

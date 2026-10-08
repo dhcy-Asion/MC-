@@ -100,6 +100,7 @@ the earlier copy under Desktop/Git.
 | Steve 原生头网格对照 | `py -3.12 -B tools/check_steve_head_mesh_control.py --rebuild`，封装后 `check_steve_probe.py --native-head --rebuild`；仅替换已注册私有 CD_Head 的一个 PAC 引用，其余十二资源保持，与 app 对照互斥；用于区分私有网格资源链和装配，不是人物修复 |
 | Steve 原生头共同父骨候选 | `py -3.12 -B tools/check_steve_native_head_root.py --rebuild`，封装后 `check_steve_probe.py --native-head-root --rebuild`；固定原生三 LOD 布局、仅 palette slot0→B_face_com122、完整 UV／权重／中立回放；仅覆盖私有头 PAC／材质，其他十一项保持，动画和实际位置须另验 |
 | Steve 原生头原字节材质对照 | `py -3.12 -B tools/check_steve_head_native_material.py --rebuild`；封装后 `check_steve_probe.py --head-native-material --rebuild`；严格六报告，保持失败共同父骨 PAC 及其余十二资源，仅换固定原生头 PAMI 的三变体／两draw完整字节；暂用原生纹理验证位置，不等于最终MC皮肤或装配修复 |
+| Steve 默认服装渲染对照 | `py -3.12 -B tools/check_steve_clothing_control.py --rebuild`；封装后 `check_steve_probe.py --clothing --rebuild`；严格七报告、14资源，在已通过头位置的13资源上仅增加固定00000 app的空Armor；保留Body/Head/Hair等外部XML及12行逆恢复，不等于全部动态装备禁止 |
 | Steve 初始 app 引用 | `py -3.12 -B tools/check_steve_app.py --rebuild`；00000／00002 必须显式二选一，每报告仅改一份 app 的 Nude/Head Name；不得猜受控实例实际 app，不同时改两份 app |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |

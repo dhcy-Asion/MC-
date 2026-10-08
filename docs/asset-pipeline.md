@@ -585,7 +585,7 @@ py -3.12 -B tools/install_steve_probe.py --restore
 故障／真实重建检查 **21/21** 通过，包括不同 kind 拒绝交叉恢复。Windows 本地路径
 先规范分隔符再检查 build 边界，游戏虚拟路径仍严格要求 POSIX；目录越界反例通过。
 实机结果另记 [progress.md](progress.md)，隔离故障检查不代替原生显示／恢复验收。
-当前没有已验收的 Steve 游戏内显示、装备覆盖或实际外观恢复；临时共享资源包也
+该十一资源首测没有通过 Steve 游戏内显示、装备覆盖或实际外观恢复；临时共享资源包也
 不满足启用 mod 后跨重载自动持续 Steve 的完整目标。一次真实安装／启动后，受控
 选项表已读到两私有 basename，但接管再次被物理 Escape 停止。用户随后明确反馈
 仍是原角色，因此外观切换未通过。退出后已恢复原始文件，最新存档和 MC 状态保持，
@@ -748,8 +748,8 @@ py -3.12 -B tools/install_steve_probe.py --restore
 此对照以固定 head-root 十三资源包为基线，只替换私有头 PAMI；三 LOD PAC 仍保留
 真实 MC 头／帽的 48 点、24 面、公共父骨绑定及 UV。它暂用原生头材质和原生纹理
 检查位置，最终 MC 皮肤、头身位置、动画、身体装配、原装备禁用及持续完整 Steve
-仍未完成。本对照已实际安装，等待用户手动进入后的反馈；显示／位置尚未验收，
-不能据离线通过或安装文件匹配声称显示修复。
+仍未完成。本对照已实际安装并收到用户方块头位置正常的反馈，随后实际退出恢复；
+位置结果来自人工观察，原服装仍与MC重叠，不等于完整Steve或某个shader字段已验收。
 
 ```powershell
 py -3.12 -B tools/prepare_steve_head_native_material.py
@@ -810,6 +810,90 @@ snapshot 使用绝对 `Path` key，直接兼容 `orientation.verify_snapshot`。
 `kind=steve-mesh-parameters` 的所有权／备份／收据和共享锁，恢复不覆盖安装后的最新
 存档。2026-10-08 已实际安装，收据为 `5249d2f2339844f3a5b27b77d1353a66`；
 before-install／installed 两阶段均 exit 0，41 项文件匹配，36 个最新存档、完整 schema3
-MC 状态、原点和 ASI 保持。等待用户手动进入后的反馈，显示／位置尚未验收；
-实际检查及恢复状态见
+MC 状态、原点和 ASI 保持。随后用户确认方块头正常连接在肩膀上方；实际退出后已恢复，
+38项原文件、退出时36个最新存档、完整MC、原点及ASI保持，无active receipt／0041。
+完整人物／动画／最终皮肤仍未完成；实际检查及恢复状态见
 [progress.md](progress.md) 与 [current-state.md](current-state.md)。
+
+## 默认服装空 Armor 的单变量对照
+
+原字节头 PAMI 实测后，用户确认方块头正常连接在肩膀上方，同时反馈原服装与 MC
+建模持续重叠。用户要求先去除原服装模块，再处理 MC 头皮肤。新对照以该已通过头
+位置的十三资源为基线，只新增一份固定 00000 app 的默认 Armor 清空替换；不同时
+修改皮肤、PAC／palette、骨架、身体、发须或 customization。
+
+```powershell
+py -3.12 -B tools/prepare_steve_clothing_control.py
+py -3.12 -B tools/check_steve_clothing_control.py --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table-v2/steve-part-table-report.json --head-root-report build/steve-native-head-root/steve-native-head-root-report.json --head-native-material-report build/steve-head-native-material/steve-head-native-material-report.json --clothing-report build/steve-clothing-control/steve-clothing-control-report.json
+py -3.12 -B tools/check_steve_probe.py --clothing --rebuild
+```
+
+独立候选默认输出 `build/steve-clothing-control/steve-clothing-control-report.json`，variant
+为 `steve-clothing-empty-default-armor-only-v1`；已有输出拒绝覆盖，另选新 `--output`。
+来源固定为 0009 中
+`character/appearance/1_pc/1_phm/cd_phm_macduff/cd_phm_macduff_00000.app_xml`，
+原件 1117 字节、flags 48、SHA256
+`945e25586db2d50a83b4dd5227ab89a8e5db8c7937abd404470e52ae5b9edffe`。
+生成入口在读取前后核对固定 EXE／索引 SHA、精确路径、真实 flags 与原件身份，
+不读取进程，不安装或改变游戏文件／存档／MC 状态。
+
+唯一变换是删除原始字节区间 `[499,1093)` 的 594 字节：Armor 内 12 行 Prefab，
+其中 8 行普通、4 行 `Preview=true`。`<Armor>`／`</Armor>` 保留为空；候选 523 字节、
+SHA256 `2b172fc5e2287b9cb7afde9c1e03a0842f99d1ed15cd3518ee269f9a42cb17d2`，
+flags 48。Nude／Head 的原名称、CharacterScale `1.02571`、HeadScale `0.92`、
+Hair／Beard、Customization、BOM 与外部 XML／剩余 CRLF 全部逐字保持。候选不改
+Nude／Head Name 为私有 basename；既有 meshparam 选择继续由十三资源基线提供。
+插回固定 12 行即恢复完整原件，不通过 XML 重新序列化生成。
+
+报告空 `candidateResources`、单项 `targetReplacements`，kind 为
+`appearanceDefinition`、`templateArchiveFlags=archiveFlags=48`。包内只有原 app 模板、
+候选及固定报告；纯 `load_candidate` 返回 `(report, {fixedAppPath: bytes}, snapshot)`，
+snapshot 使用绝对 `Path` key。准入重构整份报告及精确删除结果，不加载 CDMW 或
+读取游戏，不信报告中的成功标记；未知字段、路径越界、输出覆盖、模板或候选篡改
+（包括同时重写内外哈希）、过大报告和失效快照均拒绝。
+
+封装接口为 `clothing_path`／overlay 的 `clothing_report`，CLI 为 `--clothing-report`；
+必须具备 head-native-material、head-root、head descriptor、PAPPT v2 全部控制来源。
+十四资源的候选报告集合必须恰好是以下七项：
+
+- `steve-assembly-report.json`
+- `steve-appearance-report.json`
+- `steve-head-descriptor-report.json`
+- `steve-part-table-report.json`
+- `steve-native-head-root-report.json`
+- `steve-head-native-material-report.json`
+- `steve-clothing-control-report.json`
+
+原十三项的 payload／资源行逐字保持，包括已通过位置反馈的头 PAC 和原生 PAMI；
+只增加这份固定 app 旧路径。纹理注册与原十三资源基线保持，不增加新的 DDS。
+缺报告、未知／重复报告、混入此前两 Name 的 app 对照或原生 head-mesh 对照拒绝；
+00002 不在此次候选内，通用新资产入口仍拒绝原 basename。默认封装输出为
+`build/steve-clothing-control-probe-overlay`，安装 variant 为
+`steve-kliff-original-material-empty-armor-part-table-v2`，沿用
+`kind=steve-mesh-parameters` 的所有权／备份／共享锁／收据，不能与其他临时包并存。
+
+2026-10-08 独立生成器检查（含真实固定重建）**10/10** 通过，报告 SHA256 为
+`cca720b41ed2bdb8722e12d363e3e35e0788c57dc8b0ca9c8e1678456a86ac72`。
+十四资源封装已构建，PAZ 769440 字节，计划报告 SHA256 为
+`6703890ac16748566f54b5dfd81ff95ca68ead3d2ba41e2b59602704cc0dc319`；
+完整隔离事务／重建检查 **28/28** 通过。专用安装／恢复入口为：
+
+```powershell
+py -3.12 -B tools/install_steve_probe.py --install --plan build/steve-clothing-control-probe-overlay
+# 测试后正常退出游戏，再恢复；保留安装后的最新存档
+py -3.12 -B tools/install_steve_probe.py --restore
+```
+
+随后主控重新核实上轮游戏已退出、无 active receipt、38 项原文件保持，完成
+before-install 基线记录后实际安装。收据 `2feb0ddf41b3488fba9eb226cf8fb672` 当前为
+installed，存在 active receipt／0041；before-install／installed 两阶段均 exit 0，
+41 项文件匹配，36 个存档、完整 MC schema3/revision25、原点及 ASI 保持。已交用户
+手动进入反馈原服装与 MC 位置；本轮显示尚未验收，当前尚未恢复。
+
+该 app 是共享初始外观资源，其全部消费者可能受影响；空 Armor 的引擎加载和默认
+服装实际抑制必须单独实测。动态穿戴部件可能由其他选择层再次应用，静态删除 12 行
+不等于禁止全部红沙装备，也不删除装备库存／存档。发须、完整身体去重、动画和
+跨重载持续 Steve 均未验收。MC 头贴图后续只计划替换三个主 draw 的 baseColor
+路径，当前没有生成／封装皮肤候选；不与本轮服装变换混合。实际测试／收据及恢复
+状态以 [current-state.md](current-state.md) 与 [progress.md](progress.md) 为准。

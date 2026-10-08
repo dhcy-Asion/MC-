@@ -1,4 +1,4 @@
-"""Rehearse the exact Steve assembly plus two Kliff mesh-reference changes.
+"""Rehearse fixed Steve probes with separate head and default-clothing controls.
 
 Only ignored build is written. Original archives remain untouched. Existing
 paths are validated by the fixed meshparam, part-table and single-app loaders;
@@ -32,6 +32,8 @@ HEAD_ROOT_REPORT = ROOT / "build/steve-native-head-root/steve-native-head-root-r
 NATIVE_HEAD_ROOT_OUTPUT = ROOT / "build/steve-native-head-root-probe-overlay"
 HEAD_NATIVE_MATERIAL_REPORT = ROOT / "build/steve-head-native-material/steve-head-native-material-report.json"
 HEAD_NATIVE_MATERIAL_OUTPUT = ROOT / "build/steve-head-native-material-probe-overlay"
+CLOTHING_REPORT = ROOT / "build/steve-clothing-control/steve-clothing-control-report.json"
+CLOTHING_OUTPUT = ROOT / "build/steve-clothing-control-probe-overlay"
 HEAD_ROOT_RESOURCES = {
     "character/model/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac":
         ("e75f7a7989137756c4744a16c001bce8f91a6f0b6caabb84214f5d42b710d9b9", "skinnedMesh", 1),
@@ -74,7 +76,13 @@ def replacement_paths(resources):
 
 
 def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
-               head_mesh_control_path=None, head_root_path=None, head_native_material_path=None):
+               head_mesh_control_path=None, head_root_path=None, head_native_material_path=None,
+               clothing_path=None):
+    if clothing_path is not None:
+        if head_native_material_path is None or head_root_path is None or head_descriptor_path is None or part_table_path is None:
+            raise ValueError("Clothing control requires the complete original-head-material v2 controls")
+        if app_path is not None or head_mesh_control_path is not None:
+            raise ValueError("Clothing control excludes app and head-mesh controls")
     if head_native_material_path is not None:
         if head_root_path is None or head_descriptor_path is None or part_table_path is None:
             raise ValueError("Native-head material control requires head-root, descriptor and v2 part table")
@@ -224,6 +232,26 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
                            "payload": material_payloads[path]}
         reports[str(head_native_material_path.relative_to(ROOT))] = native.file_hash(head_native_material_path)
         snapshot.update(material_snapshot)
+    if clothing_path is not None:
+        import prepare_steve_clothing_control as clothing
+        if len(resources) != 13 or len(reports) != 6:
+            raise ValueError("Clothing control requires exactly the reviewed thirteen-resource baseline")
+        clothing_path = native.output_directory(clothing_path)
+        candidate, clothing_payloads, clothing_snapshot = clothing.load_candidate(clothing_path)
+        rows = candidate["targetReplacements"]
+        if len(rows) != 1 or set(clothing_payloads) != {clothing.TARGET_PATH}:
+            raise ValueError("Clothing control must replace exactly the fixed Macduff 00000 app")
+        row = rows[0]
+        path = clothing.TARGET_PATH
+        if (path in resources or row.get("virtualPath") != path or row.get("templatePath") != path
+                or row.get("kind") != "appearanceDefinition" or row.get("archiveFlags") != 48
+                or row.get("templateArchiveFlags") != 48 or row.get("templateSha256") != clothing.TARGET_SHA256
+                or native.sha256(clothing_payloads[path]) != row.get("sha256")):
+            raise ValueError("Clothing control differs from its fixed appearance source")
+        resources[path] = {"row": row, "localPath": clothing_path.parent / row["localFile"],
+                           "payload": clothing_payloads[path]}
+        reports[str(clothing_path.relative_to(ROOT))] = native.file_hash(clothing_path)
+        snapshot.update(clothing_snapshot)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)
@@ -245,7 +273,7 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
 
 def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_descriptor_path=None,
             app_path=None, part_table_path=None, head_mesh_control_path=None, head_root_path=None,
-            head_native_material_path=None):
+            head_native_material_path=None, clothing_path=None):
     assembly_path, appearance_path = native.output_directory(assembly_path), native.output_directory(appearance_path)
     protected = [assembly_path.parent, appearance_path.parent, source, deps, game]
     private_reports = [assembly_path]
@@ -268,13 +296,16 @@ def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_
     if head_native_material_path is not None:
         head_native_material_path = native.output_directory(head_native_material_path)
         protected.append(head_native_material_path.parent)
+    if clothing_path is not None:
+        clothing_path = native.output_directory(clothing_path)
+        protected.append(clothing_path.parent)
     output = orientation.preflight(output, protected)
     expected, _, snapshot = candidates(assembly_path, appearance_path, head_descriptor_path, app_path, part_table_path,
-                                       head_mesh_control_path, head_root_path, head_native_material_path)
+                                       head_mesh_control_path, head_root_path, head_native_material_path, clothing_path)
     result = overlay.prepare(game, private_reports, output, source, deps, replacement_report=appearance_path,
                              initial_appearance_report=app_path, part_table_report=part_table_path,
                              head_mesh_control_report=head_mesh_control_path, head_root_report=head_root_path,
-                             head_native_material_report=head_native_material_path)
+                             head_native_material_report=head_native_material_path, clothing_report=clothing_path)
     orientation.verify_snapshot(snapshot)
     if result["replacementPaths"] != replacement_paths(expected) or len(result["resources"]) != len(expected):
         raise ValueError("Prepared Steve package differs from its reviewed resource set")
@@ -298,10 +329,14 @@ def main():
                         help="Replace only the private head PAC/material with the native head-root candidate; requires descriptor and v2 table, excludes app/head-mesh controls")
     parser.add_argument("--head-native-material-report", type=Path,
                         help="Replace only the failed head-root PAMI with fixed original head material; requires --head-root-report and its descriptor/table controls")
+    parser.add_argument("--clothing-report", type=Path,
+                        help="Clear only the fixed initial app Armor prefabs; requires the complete original-head-material controls")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cdmw-source", type=Path, default=ROOT / "build/cdmw-fixed-source")
     parser.add_argument("--deps", type=Path, default=ROOT / "build/cdmw-deps")
     args = parser.parse_args()
+    if args.clothing_report and not args.head_native_material_report:
+        parser.error("--clothing-report requires --head-native-material-report and all of its controls")
     if args.head_native_material_report:
         if not args.head_root_report or not args.head_descriptor_report or not args.part_table_report:
             parser.error("--head-native-material-report requires --head-root-report, --head-descriptor-report and --part-table-report")
@@ -322,7 +357,8 @@ def main():
         if not args.head_descriptor_report or not args.part_table_report:
             parser.error("--head-mesh-control-report requires --head-descriptor-report and --part-table-report")
     game = args.game_root or Path(json.loads((ROOT / "runtime/installation.json").read_text(encoding="utf-8-sig"))["gameRoot"])
-    output = args.output or (HEAD_NATIVE_MATERIAL_OUTPUT if args.head_native_material_report else
+    output = args.output or (CLOTHING_OUTPUT if args.clothing_report else
+                            HEAD_NATIVE_MATERIAL_OUTPUT if args.head_native_material_report else
                             NATIVE_HEAD_ROOT_OUTPUT if args.head_root_report else
                             NATIVE_HEAD_OUTPUT if args.head_mesh_control_report else
                             app_output(args.app_report) if args.app_report else
@@ -331,7 +367,8 @@ def main():
     result = prepare(game, args.assembly_report, args.appearance_report, output, args.cdmw_source, args.deps,
                      head_descriptor_path=args.head_descriptor_report, app_path=args.app_report,
                      part_table_path=args.part_table_report, head_mesh_control_path=args.head_mesh_control_report,
-                     head_root_path=args.head_root_report, head_native_material_path=args.head_native_material_report)
+                     head_root_path=args.head_root_report, head_native_material_path=args.head_native_material_report,
+                     clothing_path=args.clothing_report)
     print(json.dumps({key: result[key] for key in ("directoryName", "replacementPaths", "packageAudit", "integration")}, indent=2))
 
 

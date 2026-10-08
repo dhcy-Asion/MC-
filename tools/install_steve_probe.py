@@ -41,7 +41,7 @@ def load_plan(plan):
     if not isinstance(name, str) or not name.isascii() or not name.isdigit() or len(name) != 4 or not 36 <= int(name) <= 9999:
         raise ValueError("Unsafe Steve overlay directory")
     candidate_reports = report.get("candidateReports")
-    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5, 6):
+    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5, 6, 7):
         raise ValueError("Steve probe requires the exact reviewed candidate report set")
     required = {"steve-assembly-report.json", "steve-appearance-report.json"}
     with_head = required | {"steve-head-descriptor-report.json"}
@@ -49,7 +49,8 @@ def load_plan(plan):
     with_native_head = with_table | {"steve-head-mesh-control-report.json"}
     with_head_root = with_table | {"steve-native-head-root-report.json"}
     with_native_material = with_head_root | {"steve-head-native-material-report.json"}
-    allowed = with_native_head | with_native_material | {"steve-app-report.json"}
+    with_clothing = with_native_material | {"steve-clothing-control-report.json"}
+    allowed = with_native_head | with_clothing | {"steve-app-report.json"}
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
@@ -57,7 +58,7 @@ def load_plan(plan):
             raise ValueError("Unrecognized or ambiguous Steve candidate report name")
         by_name[file.name] = file
     if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"},
-                           with_native_head, with_head_root, with_native_material):
+                           with_native_head, with_head_root, with_native_material, with_clothing):
         raise ValueError("Unrecognized Steve candidate report names")
     for path, digest in candidate_reports.items():
         if native.file_hash(build_path(path)) != digest:
@@ -70,8 +71,9 @@ def load_plan(plan):
     head_mesh_control = by_name.get("steve-head-mesh-control-report.json")
     head_root = by_name.get("steve-native-head-root-report.json")
     head_native_material = by_name.get("steve-head-native-material-report.json")
+    clothing = by_name.get("steve-clothing-control-report.json")
     expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table, head_mesh_control,
-                                                head_root, head_native_material)
+                                                head_root, head_native_material, clothing)
     if report.get("replacementPaths") != steve.replacement_paths(expected):
         raise ValueError("Steve probe exact replacement targets differ")
     if inputs != candidate_reports:
@@ -120,6 +122,8 @@ def load_plan(plan):
         variant = "steve-kliff-native-head-root-part-table-v2"
     if head_native_material:
         variant = "steve-kliff-native-head-root-original-material-part-table-v2"
+    if clothing:
+        variant = "steve-kliff-original-material-empty-armor-part-table-v2"
     if app:
         path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
         number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")

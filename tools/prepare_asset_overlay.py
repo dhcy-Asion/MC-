@@ -208,7 +208,15 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
             *, replacement_report: Path | None = None, initial_appearance_report: Path | None = None,
             part_table_report: Path | None = None, head_mesh_control_report: Path | None = None,
             head_root_report: Path | None = None,
-            head_native_material_report: Path | None = None) -> dict:
+            head_native_material_report: Path | None = None,
+            clothing_report: Path | None = None) -> dict:
+    if clothing_report is not None:
+        if head_native_material_report is None or head_root_report is None or part_table_report is None or replacement_report is None:
+            raise ValueError("Clothing control requires the complete original-head-material v2 controls")
+        if initial_appearance_report is not None or head_mesh_control_report is not None:
+            raise ValueError("Clothing control excludes app and head-mesh controls")
+        if clothing_report.name != "steve-clothing-control-report.json":
+            raise ValueError("Clothing control requires its exact seventh report")
     if head_native_material_report is not None:
         if initial_appearance_report is not None or head_mesh_control_report is not None:
             raise ValueError("Native-head material control cannot be combined with app or head-mesh controls")
@@ -387,6 +395,28 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
         payloads[path] = material_payloads[path]
         inputs[str(head_native_material_report.relative_to(ROOT))] = native.file_hash(head_native_material_report)
         replacement_snapshot.update(material_snapshot)
+    if clothing_report is not None:
+        import prepare_steve_clothing_control as clothing
+        if len(resources) != 13 or len(inputs) != 6:
+            raise ValueError("Clothing control requires exactly the reviewed thirteen-resource baseline")
+        clothing_report = native.output_directory(clothing_report)
+        candidate, clothing_payloads, clothing_snapshot = clothing.load_candidate(clothing_report)
+        rows = candidate["targetReplacements"]
+        if len(rows) != 1 or set(clothing_payloads) != {clothing.TARGET_PATH}:
+            raise ValueError("Clothing control must replace exactly the fixed Macduff 00000 app")
+        row = rows[0]
+        path = virtual_path(row["virtualPath"])
+        if (path != clothing.TARGET_PATH or path != row["templatePath"] or path in payloads
+                or row["kind"] != "appearanceDefinition" or row.get("archiveFlags") != 48
+                or row.get("templateArchiveFlags") != 48 or row["templateSha256"] != clothing.TARGET_SHA256
+                or native.sha256(clothing_payloads[path]) != row["sha256"]):
+            raise ValueError("Clothing control differs from its fixed appearance source")
+        local = native.output_directory(clothing_report.parent / row["localFile"])
+        resources.append(dict(row, localFile=str(local.relative_to(ROOT))))
+        payloads[path] = clothing_payloads[path]
+        replacement_paths.add(path)
+        replacement_snapshot.update(clothing_snapshot)
+        inputs[str(clothing_report.relative_to(ROOT))] = native.file_hash(clothing_report)
     if part_table_report is not None:
         from prepare_steve_probe_overlay import audit_part_components
         audit_part_components(payloads)
@@ -475,6 +505,10 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                 and (int(template.flags) != 50 or resource.get("templateArchiveFlags") != 50
                      or resource.get("archiveFlags") != 50)):
             raise ValueError("Native-head material control must preserve the fixed PAMI archive flags")
+        if (clothing_report is not None and path == clothing.TARGET_PATH
+                and (int(template.flags) != 48 or resource.get("templateArchiveFlags") != 48
+                     or resource.get("archiveFlags") != 48)):
+            raise ValueError("Clothing control must preserve the fixed app archive flags")
         if PurePosixPath(path).suffix.casefold() != PurePosixPath(template_path).suffix.casefold():
             raise ValueError("Candidate and template resource types differ")
         if resource["kind"] == "texture":
@@ -576,6 +610,7 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                 "Temporary shadow of exactly replacementPaths: the fixed Kliff mesh parameters, "
                 "the global part-prefab table with two private body/head registrations"
                 + (", and one explicitly selected shared Macduff appearance" if initial_appearance_report is not None else "")
+                + (", and only the fixed Macduff 00000 default Armor list" if clothing_report is not None else "")
                 + "; all consumers may observe these resources, not an actor-local override")
     files[report_file] = json.dumps(report, ensure_ascii=False, indent=2).encode()
     publish(output, files)
