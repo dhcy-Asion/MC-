@@ -4,7 +4,59 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：透明帽层整包与三计划材质诊断
+## 2026-10-08 最新：官方动作样本与真实玩家上下文
+
+透明帽层对照收据`fc6a856085ab493985d6ebf3d40a66f3`仍为installed／active；游戏关闭，
+尚无该包的视觉反馈或新会话样本，不能复用前次UV的退出回复认定新包已实测或恢复。
+手动启动／进入／退出的用户偏好继续适用。等待期间只推进独立MC动作前置和有界静态审计。
+
+新增`SteveActionPoseDump.java`、`build_steve_action_pose.py`和`check_steve_action_pose.py`，
+固定官方MC1.21.1 client、29类、46外部JAR、Java工具及mapping SHA1
+`2244b6f072256667bcd9a73df124d6c58de77992`，完整来源须与保留的旧基准匹配。
+正常构造ArmorStand调用真实animateModel／setAngles／swingHand，各43次；preferredArm86次。
+model_crouch一帧，右主手MAIN／OFF各21个float32(index/20)样本，共43帧；OFF实际为左副手，
+不是左主手Player。原始六部件字段／FloatBits及TRS保留官方左右不对称结果。
+model.sneaking与实体isInSneakingPose分别记录：null-World夹具仍是STANDING；实际尝试
+setPose(CROUCHING)因World为空失败，失败夹具不复用。指定progress不是tick周期，未执行
+renderer或完整实体tick。姿态来源前进不提升nativeApplied／animationSystemComplete。
+
+`py -3.12 -B tools/check_steve_action_pose.py --rebuild` **9/9通过，15.454秒**；两次独立
+真实JVM重建逐字一致，最终AST2/2、60项source-aware快照、旧六项工具／canonical保持。
+产物`build/steve-action-pose-1.21.1`，poses SHA
+`6c289d5f803f3ceb5a2721cff93077a1a055b612bc2eed55c45ee0f582631c98`，report SHA
+`d6cb722878db506cba84506392c15f0f7262eda1365f3f6f4ab1bc4406866523`。
+完整检查证据在`build/steve-action-pose-research-20261008/validation-final.json`；产物保持ignored。
+
+另外新增`tools/check_steve_player_context.py`及`tools/player_context_fixture/`：复用
+IsolatedServer的独占进程、8768/25580端口和关闭机制，Gradle编译产物及入口注入仅写独立
+runtime/build；不改Authority、minecraft/build.gradle或发布jar。默认只preflight，显式
+`py -3.12 -X utf8 -B tools/check_steve_player_context.py --run`已实际运行 **25项通过／exit0**。
+固定named jar SHA `834ee1a9988ed037f0e548b80dc3b59434b40af298257fbc7a72bb2256dffebb`，
+实际ServerPlayer class codeSource匹配。SERVER_STARTED线程内用真实ServerWorld和正常
+构造器创建子类，只暴露protected tickHandSwing；官方setter切换LEFT／RIGHT、sneaking、
+CROUCHING及isInSneakingPose并恢复。未连接、注册或生成玩家，玩家数保持0。
+无状态效果时调用LivingEntity.swingHand(MAIN_HAND,false)，随后八次官方protected步骤，
+包括调用前进度为`[0,0,0.16666667,0.33333334,0.5,0.6666667,0.8333333,0,0]`。
+没有完整entity/player tick、前帧复制／20Hz生命周期、客户端模型、伤害或原生调用。
+
+首次ignored实验`runtime/mc-player-context-pjydwbq2`已25项通过并正常console stop；提升
+tracked工具仅改路径后在`runtime/mc-player-context-1hec_dws`重复验证一次，ticket
+`c626dbb2-950c-4bb6-96b9-9719b3853294`。两次均正常退出0、未强停，生产minecraft/src、
+build及输入摘要保持。主控另核对完整生产MC schema3/revision25及active收据、原点、
+Authority、build.gradle、发布jar／ASI六项；前后证据前缀`mc-player-context-20261008-production`。
+
+原生战斗候选继续限定一次直接调用来源：全可执行raw区精确E8/E9搜索唯一命中
+0x209a4bb→0x209bdc0，pdata函数0x209a220～0x209a678内调用可达；A由R9经R15转发，
+B由栈入参经RSI转发，仍未得到双方具体类型、构造与owner回链。后置非空／不相等检查
+不能作为调用前敌我身份。结果unavailable，未调用／写入／扩展遍历；该分支停止。
+证据`build/steve-combat-producer-20261008/combat-producer-review.json` SHA
+`8f3f392187c936e1a29c2280d648ffffd55ed9b39aa9790e367daa48e91e898e`。
+
+下一项动作前置是把真实玩家状态／官方时间推进与客户端模型输入连接并检验完整生命周期；
+红沙侧还须新会话受控owner只读采样及已验证的姿态应用合同。持物、跳落、装备禁用、
+真实单击伤害／击退和完整Steve均未完成，持续目标仍active，本轮有代码及实测进展。
+
+## 2026-10-08 透明帽层整包与三计划材质诊断
 
 上次UV实测五官仍不正确、位置正常，已退出恢复。新的透明帽层对照采用已通过12项
 检查的固定单PAC候选，从固定b27484…十报告本地计划组合，只有头PAC从c0df7…变为

@@ -20,7 +20,17 @@ MC 来源比对，再验证在红沙中的实时控制。旧中立补偿、原�
 新增StevePoseDump／build_steve_pose真实调用固定PlayerEntityModel，提供站立／转头／行走
 三组各41帧、六部件原始字段／TRS和固定来源；明确ArmorStandEntity离线夹具，非Player、
 无World／tick。独立JVM重建9/9通过，nativeApplied和animationSystemComplete仍为false；
-完整玩家状态、挥击／蹲伏／持物和红沙受控姿态应用另验。
+新增SteveActionPoseDump／build_steve_action_pose提供蹲伏模型输入1帧、固定右主手MAIN／OFF
+各21帧，共43次真实模型求值；29类／46依赖与旧基准固定，9/9独立重建通过。实体实际仍
+为STANDING的ArmorStand，模型sneaking字段与真实CROUCHING分开；OFF是左副手，指定
+progress是模型样本而不是tick时序。原始六部件字段／TRS保存官方左右不对称行为。
+
+`tools/check_steve_player_context.py --run`另在独立ServerWorld中正常构造ServerPlayer子类，
+验证官方左右主手、sneaking／CROUCHING和恢复，以及八次protected tickHandSwing推进。
+25项实测通过；玩家不连接客户端、不注册PlayerManager、不生成入世界，无完整tick、
+20Hz生命周期、模型渲染或伤害调用。Gradle仅把fixture与入口注入独占测试build，正常
+console stop，生产Authority／build保持。这不是生产服务的玩家实体或新HTTP动作端点；
+与前述客户端模型样本尚未连接。真实状态时序、持物和红沙受控姿态应用另验。
 
 头UV对照新增严格10报告／14资源封装：从固定九报告本地包只换一个头PAC，保留其他
 13项编码、PAMI和DDS，元数据按实际归档CRC重建；安装仍走相同所有权／关闭游戏／
@@ -64,6 +74,9 @@ active收据、实际41文件及同EXE实例／完整MC，16KiB／flags50、队�
 击退或穿戴端点。GroundHit只有位置／法线／比例，没有敌人身份；World Builder的
 NPC TransformSync编辑移动也不是战斗击退。现有窗口输入路由和线程排队可复用，
 但没有验证一次点击到原生敌人的完整攻击合同。
+固定EXE中0x209bdc0的唯一直接生产调用位于0x209a4bb，调用者0x209a220仍仅转发上游
+A/B。构造、具体类型和双方owner回链未闭合，有界审计结果unavailable；不把后置非空／
+不相等判断当作调用前的敌人身份或可安全攻击证据。
 
 MC权威使用36格SimpleInventory，新增独立四格人体护甲存储，没有真实玩家实体或攻击端点。
 护甲转移使用固定MC的Equipment／EquipmentSlot规则及完整ItemStack组件；仍没有

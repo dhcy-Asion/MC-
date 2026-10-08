@@ -124,6 +124,8 @@ the earlier copy under Desktop/Git.
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |
 | Steve 离线资产 | `python tools/build_steve_asset.py`；`python tools/check_steve_asset.py`；产物留 ignored build，不安装为原生角色 |
 | MC离线动作姿态基准 | `py -3.12 -B tools/check_steve_pose.py --rebuild`；固定官方client／21类／46外部依赖与Java工具，真实PlayerEntityModel求值站立／转头／行走，各40tick＋endpoint；明确ArmorStandEntity夹具，非Player、无World／tick，nativeApplied=false；未知动作和原生控制另验 |
+| MC蹲伏／挥击模型输入样本 | `py -3.12 -B tools/check_steve_action_pose.py --rebuild`；固定29类／46依赖及旧基准，43个官方模型求值样本，9/9通过；model.sneaking与实体CROUCHING分开，固定右主手的OFF是左副手，指定progress不是tick周期；旧三组基准保持 |
+| MC真实世界玩家上下文 | `py -3.12 -B tools/check_steve_player_context.py`只做preflight；显式`--run`使用独立8768/25580世界，与inventory／equipment／block-state检查串行；25项实测，正常构造未连接／未注册／未生成的ServerPlayer，官方状态setter与protected挥击步骤，无完整tick／客户端／原生应用；主控运行并核对生产MC不变 |
 | 固定Steve头材质读取诊断 | `py -3.12 -B tools/check_steve_head_material_probe.py`、原生变化时`check_native_resources.py`；仅steve_head_pami固定别名／16KiB／flags50，分别固定九／十／十一报告计划SHA和variant、active收据、实际41文件、EXE实例与MC状态门禁；客户端69/69通过，读取匹配不证明renderer选择或MC皮肤；实采仅主控 |
 | Steve头主UV方向单变量候选 | `py -3.12 -B tools/check_steve_head_uv_control.py --rebuild`；固定当前头PAC／PAMI／DDS／报告，只翻三LOD共144个主UV V half字段，逐字逆恢复，独立MC accessor／BC3区域核对；shader反V与实机皮肤另验 |
 | Steve头UV十报告封装 | `py -3.12 -B tools/check_steve_head_uv_overlay.py --rebuild`；固定九报告本地计划，仅头PAC改变，其他13项编码／flags／orig_size保持；原始metadata／PATHC保持，PAMT及PAPGT按实际CRC重建，严格10报告完整准入；实际安装／恢复与皮肤结果见current-state |

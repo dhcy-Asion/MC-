@@ -1128,8 +1128,39 @@ py -3.12 -B tools/check_steve_pose.py --rebuild
 ZYX旋转与独立rendererRootScale。步态覆盖40tick＋endpoint，age同时驱动手臂idle bob，
 不声称全身所有部件在endpoint闭环。9/9真实重建通过，两独立JVM逐字一致。
 poses SHA为 `0302fd9021bc0bd31eb5b51478cb6512f8fcb7b053ed32458ed0fe6c6d8b0855`。
-来源报告与产物保持ignored，仓库只发布自己的调用／检查工具。挥击、蹲伏、跳落、持物等
-完整状态及原生受控骨骼重定向／动作入口未覆盖，nativeApplied／animationSystemComplete=false。
+来源报告与产物保持ignored，仓库只发布自己的调用／检查工具。此三组基准不覆盖挥击、
+蹲伏、跳落或持物；新增部分前置见下节，nativeApplied／animationSystemComplete=false。
+
+## 蹲伏／挥击模型样本与真实玩家状态前置（2026-10-08）
+
+新增工具保持上述六项旧来源／产物原字节。固定29个MC类、46个外部依赖、Java工具及
+官方mapping；所有依赖SHA256与旧基准对应记录一致，不以当前读取摘要替代固定来源。
+
+```powershell
+py -3.12 -B tools/build_steve_action_pose.py
+py -3.12 -B tools/check_steve_action_pose.py --rebuild
+py -3.12 -B tools/check_steve_player_context.py
+py -3.12 -B tools/check_steve_player_context.py --run
+```
+
+动作输出默认`build/steve-action-pose-1.21.1`，已生成，构建拒绝覆写；`--output`可指定
+新ignored目录。真实官方模型求值43次：model_crouch一帧，固定右主手MAIN／OFF各21个
+指定progress点。9/9独立JVM重建通过；六部件原始字段／FloatBits及TRS保留，OFF是左副手，
+不是左主手实体；左右结果不强制镜像。model.sneaking只是模型输入，实际ArmorStand仍
+为STANDING／isInSneakingPose=false，null-World不支持本次真实CROUCHING切换，失败夹具
+不复用。progress为float32(index/20)，不宣称时长、完整tick或真实玩家时间序列。
+
+玩家上下文默认命令只preflight；`--run`在独立8768/25580世界编译并正常构造ServerPlayer，
+与inventory／equipment／block-state检查串行。固定本地named MC jar须已存在；工具不下载。
+`tools/player_context_fixture/`仅注入owned runtime/build，不更改生产Authority或build.gradle。
+实际25项通过：左右主手、sneaking／CROUCHING、状态恢复、八次官方protected tickHandSwing
+进度推进回零，class codeSource为固定named jar。没有注册PlayerManager、生成实体或连接
+客户端，没有完整tick／20Hz生命周期／前帧复制；不能据此宣称客户端动画或攻击已实现。
+报告写入完成marker后runner才读取，finally通过自有进程stdin正常stop，前后核对生产
+minecraft/src与build。初始实验及tracked路径验证分别保留独立runtime目录，均正常退出。
+
+两组来源尚未连接到同一玩家状态→模型求值链；持物、跳落、完整状态时序、红沙姿态控制
+及真实伤害／击退继续单独验收。实际工具源码可上传，MC二进制、世界和输出保持ignored。
 
 ## 头主UV方向单变量候选（2026-10-08）
 

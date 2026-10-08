@@ -120,8 +120,20 @@ PlayerEntityRenderer三个类摘要已匹配，含setAngles／animateModel／ani
 动作。官方算法离线站立／转头／行走基准现已完成，9/9隔离重建检查通过；真实模型方法
 各调用123次，三组各40tick＋endpoint、六部件TRS与原始字段完整保存。夹具为正常构造的
 ArmorStandEntity，非Player，无World／tick；8个状态getter逐帧前后核对。固定client、21类、
-46外部JAR；产物 `build/steve-pose-1.21.1`，独立JVM逐字一致。尚未覆盖蹲伏／挥击／持物等。
-不能以离线输出代替实机。
+46外部JAR；产物 `build/steve-pose-1.21.1`，独立JVM逐字一致，原六份工具／产物保持。
+新增 `build/steve-action-pose-1.21.1`：官方模型蹲伏输入1帧、固定右主手MAIN／OFF各21个
+progress样本，共43帧，29类及46依赖固定；独立重建9/9通过（15.454秒）。实体仍是
+null-World ArmorStand／STANDING；model.sneaking不冒充真实CROUCHING，OFF为左副手，
+指定progress不代表tick周期。六部件原始字段／TRS保留官方左右不对称结果。
+
+真实世界前置也已实测：`tools/check_steve_player_context.py --run`在独立ServerWorld正常
+构造ServerPlayer子类，仅暴露官方protected tickHandSwing；25项通过，正常退出，生产源码／
+build保持。官方setter可切左右主手、sneaking和CROUCHING并恢复，8次挥击步骤进度回零。
+玩家没有连接、注册或生成到世界，没有调用完整entity/player tick、客户端模型或伤害。
+首次隔离实验与提升为tracked工具后的路径验证各通过一次，证据分别为
+`runtime/mc-player-context-pjydwbq2`和`runtime/mc-player-context-1hec_dws`。
+这两套工具尚未连成真实玩家状态→客户端姿态的运行链；20Hz生命周期、前帧插值、持物／
+跳落和原生实时应用仍待完成，不能以离线输出或受保护步骤调用代替游戏动作验收。
 原生API没有经过当前EXE验证、绑定受控owner的姿态／控制器应用入口。固定EXE有界审计
 已排除旧coop两个落在指令内部的RVA；下一候选为精确Skinned+1C0的未命名owner-keyed对象，
 仅vtable／弱owner／原owner回链有静态依据，骨骼palette、单位、ABI与线程未知。
@@ -134,7 +146,10 @@ MC动作实时应用与完整系统未实现。
 
 背部具体组件→prefab/PAC链未定位。14条raw装备记录只为观察；共享apply和表增删局部拒绝
 不等于安全全禁装／恢复。攻击者／敌人类型、owner链和伤害／击退ABI尚缺，不调用候选函数，
-不以移动NPC代替击退。头UV方向候选已离线完成，11/11重建检查通过；只翻三LOD共144个
+不以移动NPC代替击退。固定EXE有界追踪唯一直接调用0x209a4bb→0x209bdc0，调用者
+0x209a220仍转发上游A/B参数；未闭合两者具体类型、构造及owner回链，结果unavailable。
+该路径已停止，不从参数外形猜测敌我身份或扩大原生调用。
+头UV方向候选已离线完成，11/11重建检查通过；只翻三LOD共144个
 V half字段，逐字逆恢复，其余PAC／PAMI／DDS保持。旧脸域若直接按DDS行序采样为透明，
 翻V后落在有眼鼻嘴的非透明区域，但shader是否再反V仍未证明。产物
 `build/steve-head-uv-control`，PAC SHA `c0df7b6e6fbe90038b8e277839ef59b26aa4cbba560f30770d82eec9acf50b55`，
