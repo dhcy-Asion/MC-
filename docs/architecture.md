@@ -65,7 +65,8 @@ flowchart LR
 | `tools/prepare_steve_head_native_material.py`、`check_steve_head_native_material.py` | 单 PAMI 位置对照：在固定 head-root PAC／PAMI 基线上，只把私有头材质换为原生头 16149 字节原件 | 保留真实 MC 头几何及原生 3 变体×2 draw 完整合同；用户已确认头位置正常并退出恢复，最终 MC 皮肤、身体和动画仍未验收 |
 | `tools/prepare_steve_clothing_control.py`、`check_steve_clothing_control.py` | 固定 Macduff 00000 app 仅删除 Armor 内 12 行默认／预览 Prefab，保留空 Armor 和外部 XML；纯 loader 重构报告及单旧路径替换 | 1117→523 字节、flags 48、逐字可逆；用户已确认原服装消失并退出恢复，左手缺失、背部重叠和头比例仍未解决；动态装备禁止另验 |
 | `tools/prepare_steve_body_native_material.py`、`check_steve_body_native_material.py` | 在完整空 Armor 十四资源上，仅把私有身体 PAMI 换为固定原生 50017 字节原件；纯 loader 重构整报告与单资源 | 原生 6 变体×3 draw 的 Skin shader／参数／纹理逐字保持；其余 13 项（含当前身体补偿 PAC）保持，暂用原生纹理，左手／身体／动画实机未验 |
-| `tools/prepare_steve_head_basecolor.py`、`check_steve_head_basecolor.py` | 独立离线候选，仅替换原生头PAMI三个主draw的baseColor贴图路径为已有Steve DDS | 固定四来源、单PAMI、16149→16134字节及逐字逆恢复；EyeCover、shader、参数及其他纹理保持；未接封装／安装／实机皮肤验收 |
+| `tools/prepare_steve_head_basecolor.py`、`check_steve_head_basecolor.py` | 独立离线候选，仅替换原生头PAMI三个主draw的baseColor贴图路径为已有Steve DDS | 固定四来源、单PAMI、16149→16134字节及逐字逆恢复；EyeCover、shader、参数及其他纹理保持；接独立九报告封装，尚未安装／实机皮肤验收 |
+| `tools/prepare_steve_head_basecolor_overlay.py`、`check_steve_head_basecolor_overlay.py` | 从固定身体十四资源／八报告计划本地组合单头PAMI变化；九报告准入与完整composition冻结，独立隔离事务检查 | 保留其他13项编码／flags／orig_size／资源行和原安装基线；固定CDMW离线打包，不读实际游戏元数据，不走通用game-based prepare；包14项／9报告已构建，完整31/31通过，头包未安装 |
 | `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
@@ -82,7 +83,7 @@ flowchart LR
 | `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 去声明 Y 轴对照已显示纹理并通过碰撞/清理；三轴完整验收、原生光照/采样仍未完成；单位立方碰撞不适用于特殊形状 |
 | `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 默认 CLI/loader 只接收 crimsonmc 新 basename；程序内部 replacement_report 仅接受固定 Kliff meshparam；只写 ignored build |
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 默认 CLI 临时安装/恢复 21 项原木 overlay；共享关闭游戏、索引、备份、所有权和并发事务 | 默认 kind=oak-log；拒绝 Steve 收据与外部修改；恢复不覆盖后来存档，不接通正式 MC 模型映射 |
-| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 默认十一资源；十二加头描述文件，十三加注册表，十四加显式初始 app；十三另支持 head-root／原生头 PAMI，十四另支持空 Armor 及其上的原生身体 PAMI；分别输出，使用共享事务 | kind=steve-mesh-parameters，按完整计划区分 probeVariant，同一 owner／锁／active receipt；必须用本入口恢复，完整检查及实测状态见进度 |
+| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 默认十一资源；十二加头描述文件，十三加注册表，十四加显式初始 app；十三另支持 head-root／原生头 PAMI，十四另支持空 Armor 及其上的原生身体 PAMI；纯candidates及安装器另接独立九报告头baseColor模式 | kind=steve-mesh-parameters，按完整计划区分 probeVariant，同一 owner／锁／active receipt；通用game-based prepare／CLI保留旧接口，九报告走独立本地compose及checker；完整检查及实测见进度 |
 | `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木；`--side-view` 优先现有侧方候选以减少遮挡 | 默认取点不变、不移动角色／相机；画面须另验，只清理自有 UID／变换，不消费 MC 材料 |
 | `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
 | `tools/prepare_native_block_control.py`、`check_native_block_control.py` | 在独立 build 目录准备三种单资源对照：原蓝 prefab、原蓝 PAMI、仅去除原木 Y PAMI 的 XML 声明 | 每种对照的其余 20 项资源逐字保持；身份贯穿资源报告、安装收据与实体日志，不能视为原木显示验收 |
@@ -524,8 +525,53 @@ canonical重构，pureloader只返回一个头PAMI及6项绝对Path快照；DDS�
 256×256 DXT5九mip完整字节范围已核对，不重复打包或声称BC3无损。
 生成不读取游戏／CDMW／网络，保护来源目录和已有头／衣服／身体对照包，拒绝覆盖。
 10/10隔离检查及真实重建通过；当前十四资源包中的DDS唯一entry／flags0、decoded字节
-与PATHC直接注册由独立只读QA另行核实。候选尚未接封装／安装；后续入口仍需保持
-其余13项与当前PAC、依赖唯一注册，游戏内MC皮肤／alpha／光照尚未验收。
+与PATHC直接注册由独立只读QA另行核实。游戏内MC皮肤／alpha／光照尚未验收。
+
+独立 `prepare_steve_head_basecolor_overlay.py` 从 ignored build 中固定身体计划本地封装；
+不读取实际游戏元数据，不经过 `prepare_steve_probe_overlay.prepare` 或通用 overlay 的
+game-based prepare，二者 CLI 保持旧接口。入口默认输出
+`build/steve-head-basecolor-probe-overlay`，可选 `--baseline`、`--head-basecolor-report`、
+`--output`、`--cdmw-source`、`--deps`，没有 `--game-root`。该完整封装调用受固定提交／
+源码门禁保护的 `native.load_cdmw` 与离线归档函数，不能把单PAMI生成器的无CDMW
+边界扩展到整个包。
+
+基线必须是 SHA256
+`fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341` 的身体
+overlay-report，恰8份已准入候选报告、14项资源及全部6份实际包／元数据文件。
+34份 `sourceIndexes` 与5个 absent optional目录（0036～0040）、原3项 replacementPaths
+保持；这些源索引哈希仍对应原安装基线。`candidates(..., head_basecolor_path=...)`
+要求完整身体／空Armor／原生头材质／head-root／头描述／v2注册表控制，排除app和
+head-mesh，缺依赖或错误第9报告名在读取前拒绝。公开 `apply_head_basecolor` 只允许
+在14资源／8报告上把头PAMI `440a…`→`cc86…`，先核对旧载荷、PAC `182fc7…` 和
+DDS `653aa5…`，新行精确10字段／16134字节／flags50并可逆；既有assembly DDS行没有
+`archiveFlags`，flags0须在完整基线行和真实PAMT entry核对，不能为准入补造旧字段。
+
+封装保留另13项已编码载荷、flags、orig_size和完整资源行，DDS唯一flags0并保留注册。
+原 metadata-before 的PAPGT／PATHC与PATHC-after逐字保持；PAPGT-after从原before和
+实际新PAMT校验值重算，再审挂载／注册／逐项解包。新包不会把当前active身体包的
+installed metadata作为before，也不写实际0041。完整九报告manifest重新重构，不能
+只复制旧审计标志；来源／全部6文件快照在staging及发布前后回读，输出限制在独立
+build目录，拒绝覆盖、链接／路径逃逸和与源目录／现有身体包交叠；默认正式输出的
+子目录或祖先也拒绝，防止嵌套写入既有计划目录。
+
+`install_steve_probe.load_plan` 仅新增上述8报告加 `steve-head-basecolor-report.json`
+的严格9报告集合；未知／歧义／混合组合在源hash读取前拒绝，逐项包／flags／注册审计
+后调用 `validate_composition` 冻结完整基线并合并其绝对Path快照，最后统一复验。
+variant为 `steve-kliff-original-head-body-material-empty-armor-head-basecolor-part-table-v2`。
+原active receipt拒绝、关闭游戏、vanilla metadata-before精确匹配、真实 `audit_sources`
+全集索引核对、共享锁／所有权／恢复及最新存档保持门禁全部保留。
+
+独立 `check_steve_head_basecolor_overlay.py --rebuild` 继承身体对照的隔离故障事务，
+仅新类对当前production metadata／active receipt／已安装文件作前后不变核对；
+原34份PAMT只读复制到fake fixture，实际执行产品 `audit_sources`，不能mock此门禁。
+test21改走本地compose，原默认全套检查不变。主控已实际构建默认包，exit0，14资源／
+9报告、PAZ770800字节，计划SHA256
+`29b813224b362f8d2e751a8ae31968846a55d96410f290ffd10deb00322078e5`，
+包／挂载／注册三项审计通过；新9报告标准loader与旧8报告模式准入均通过。
+主控执行 `py -3.12 -X utf8 -B tools/check_steve_head_basecolor_overlay.py --rebuild`
+重跑exit0，完整31/31通过，219.466秒，production快照和cleanup均无异常；未安装，
+没有头部MC皮肤实机结果。当前实际身体收据 `069425…` 仍installed、游戏未运行、
+人工反馈尚无，必须保持该包，之后由主控完成实测与正常退出恢复。
 
 独立 `probe_owner_components.py` 复用已核对的受控角色／controller／SceneObjectClient
 回链及固定代码门禁，但不改变旧appearance探针。只读owner+210的完整16字节目录、

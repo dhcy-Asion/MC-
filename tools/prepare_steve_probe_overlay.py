@@ -36,6 +36,8 @@ CLOTHING_REPORT = ROOT / "build/steve-clothing-control/steve-clothing-control-re
 CLOTHING_OUTPUT = ROOT / "build/steve-clothing-control-probe-overlay"
 BODY_NATIVE_MATERIAL_REPORT = ROOT / "build/steve-body-native-material/steve-body-native-material-report.json"
 BODY_NATIVE_MATERIAL_OUTPUT = ROOT / "build/steve-body-native-material-probe-overlay"
+HEAD_BASECOLOR_REPORT = ROOT / "build/steve-head-basecolor/steve-head-basecolor-report.json"
+HEAD_BASECOLOR_OUTPUT = ROOT / "build/steve-head-basecolor-probe-overlay"
 HEAD_ROOT_RESOURCES = {
     "character/model/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac":
         ("e75f7a7989137756c4744a16c001bce8f91a6f0b6caabb84214f5d42b710d9b9", "skinnedMesh", 1),
@@ -77,9 +79,50 @@ def replacement_paths(resources):
                   if item["row"]["kind"] in ("appearanceMeshParams", "appearanceDefinition", "partPrefabTable"))
 
 
+def apply_head_basecolor(resources, reports, snapshot, report_path):
+    """One final PAMI override on the admitted eight-report body baseline."""
+    import prepare_steve_head_basecolor as color
+    path = color.MATERIAL_PATH
+    old, pac, texture = (resources.get(name) for name in (path, color.PAC_PATH, color.DIFFUSE_PATH))
+    if (len(resources) != 14 or len(reports) != 8 or old is None or pac is None or texture is None
+            or old["row"].get("kind") != "skinnedMaterial" or old["row"].get("archiveFlags") != 50
+            or old["row"].get("sha256") != color.NATIVE_MATERIAL_SHA256
+            or len(old["payload"]) != 16149 or native.sha256(old["payload"]) != color.NATIVE_MATERIAL_SHA256
+            or pac["row"].get("kind") != "skinnedMesh" or pac["row"].get("archiveFlags") != 1
+            or pac["row"].get("sha256") != color.PRESERVED_PAC_SHA256
+            or native.sha256(pac["payload"]) != color.PRESERVED_PAC_SHA256
+            or texture["row"].get("kind") != "texture" or texture["row"].get("sha256") != color.DIFFUSE_SHA256
+            or len(texture["payload"]) != 87536 or native.sha256(texture["payload"]) != color.DIFFUSE_SHA256):
+        raise ValueError("Head base-color control requires the fixed prior head PAMI, PAC and DDS")
+    # The existing assembly DDS row has no archiveFlags. Its actual flag 0 is
+    # checked against the fixed full baseline and PAMT by the composition gate.
+    report_path = native.output_directory(report_path)
+    candidate, payloads, control_snapshot = color.load_candidate(report_path)
+    fixed_row = {"kind": "skinnedMaterial", "virtualPath": path, "localFile": "resources/" + path,
+                 "sha256": color.NEW_MATERIAL_SHA256, "payloadSize": 16134,
+                 "sourceVirtualPath": color.NATIVE_MATERIAL_PATH, "templatePath": color.NATIVE_MATERIAL_PATH,
+                 "templateSha256": color.NATIVE_MATERIAL_SHA256, "templateArchiveFlags": 50, "archiveFlags": 50}
+    if (candidate["candidateResources"] != [fixed_row] or set(payloads) != {path}
+            or len(payloads[path]) != 16134 or native.sha256(payloads[path]) != color.NEW_MATERIAL_SHA256
+            or color.restore_material(payloads[path]) != old["payload"]):
+        raise ValueError("Head base-color control must override only its three fixed texture paths")
+    resources[path] = {"row": fixed_row, "localPath": report_path.parent / fixed_row["localFile"],
+                       "payload": payloads[path]}
+    reports[str(report_path.relative_to(ROOT))] = native.file_hash(report_path)
+    snapshot.update(control_snapshot)
+
+
 def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
                head_mesh_control_path=None, head_root_path=None, head_native_material_path=None,
-               clothing_path=None, body_native_material_path=None):
+               clothing_path=None, body_native_material_path=None, head_basecolor_path=None):
+    if head_basecolor_path is not None:
+        if (body_native_material_path is None or clothing_path is None or head_native_material_path is None
+                or head_root_path is None or head_descriptor_path is None or part_table_path is None):
+            raise ValueError("Head base-color control requires all eight body-baseline reports")
+        if app_path is not None or head_mesh_control_path is not None:
+            raise ValueError("Head base-color control excludes app and head-mesh controls")
+        if head_basecolor_path.name != "steve-head-basecolor-report.json":
+            raise ValueError("Head base-color control requires its exact ninth report")
     if body_native_material_path is not None:
         if clothing_path is None or head_native_material_path is None or head_root_path is None or head_descriptor_path is None or part_table_path is None:
             raise ValueError("Body material control requires the complete empty-Armor v2 controls")
@@ -288,6 +331,8 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
                            "payload": body_payloads[path]}
         reports[str(body_native_material_path.relative_to(ROOT))] = native.file_hash(body_native_material_path)
         snapshot.update(body_snapshot)
+    if head_basecolor_path is not None:
+        apply_head_basecolor(resources, reports, snapshot, head_basecolor_path)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)

@@ -41,7 +41,7 @@ def load_plan(plan):
     if not isinstance(name, str) or not name.isascii() or not name.isdigit() or len(name) != 4 or not 36 <= int(name) <= 9999:
         raise ValueError("Unsafe Steve overlay directory")
     candidate_reports = report.get("candidateReports")
-    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5, 6, 7, 8):
+    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5, 6, 7, 8, 9):
         raise ValueError("Steve probe requires the exact reviewed candidate report set")
     required = {"steve-assembly-report.json", "steve-appearance-report.json"}
     with_head = required | {"steve-head-descriptor-report.json"}
@@ -51,7 +51,8 @@ def load_plan(plan):
     with_native_material = with_head_root | {"steve-head-native-material-report.json"}
     with_clothing = with_native_material | {"steve-clothing-control-report.json"}
     with_body_material = with_clothing | {"steve-body-native-material-report.json"}
-    allowed = with_native_head | with_body_material | {"steve-app-report.json"}
+    with_head_basecolor = with_body_material | {"steve-head-basecolor-report.json"}
+    allowed = with_native_head | with_head_basecolor | {"steve-app-report.json"}
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
@@ -59,7 +60,8 @@ def load_plan(plan):
             raise ValueError("Unrecognized or ambiguous Steve candidate report name")
         by_name[file.name] = file
     if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"},
-                           with_native_head, with_head_root, with_native_material, with_clothing, with_body_material):
+                           with_native_head, with_head_root, with_native_material, with_clothing, with_body_material,
+                           with_head_basecolor):
         raise ValueError("Unrecognized Steve candidate report names")
     for path, digest in candidate_reports.items():
         if native.file_hash(build_path(path)) != digest:
@@ -74,8 +76,9 @@ def load_plan(plan):
     head_native_material = by_name.get("steve-head-native-material-report.json")
     clothing = by_name.get("steve-clothing-control-report.json")
     body_native_material = by_name.get("steve-body-native-material-report.json")
+    head_basecolor = by_name.get("steve-head-basecolor-report.json")
     expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table, head_mesh_control,
-                                                head_root, head_native_material, clothing, body_native_material)
+                                                head_root, head_native_material, clothing, body_native_material, head_basecolor)
     if report.get("replacementPaths") != steve.replacement_paths(expected):
         raise ValueError("Steve probe exact replacement targets differ")
     if inputs != candidate_reports:
@@ -114,6 +117,9 @@ def load_plan(plan):
     overlay.audit_mounts(before["meta/0.papgt"], after["meta/0.papgt"], name, (package / "0.pamt").read_bytes())
     textures = {path: data for path, data in payloads.items() if expected[path]["row"]["kind"] == "texture"}
     overlay.audit_registry(before["meta/0.pathc"], after["meta/0.pathc"], textures)
+    if head_basecolor is not None:
+        import prepare_steve_head_basecolor_overlay as control
+        snapshot.update(control.validate_composition(report, package, before, after, payloads))
     steve.orientation.verify_snapshot(snapshot)
     variant = "steve-kliff-head-descriptor-v1" if head_descriptor else "steve-kliff-meshparams-v1"
     if part_table:
@@ -128,6 +134,8 @@ def load_plan(plan):
         variant = "steve-kliff-original-material-empty-armor-part-table-v2"
     if body_native_material:
         variant = "steve-kliff-original-head-body-material-empty-armor-part-table-v2"
+    if head_basecolor:
+        variant = "steve-kliff-original-head-body-material-empty-armor-head-basecolor-part-table-v2"
     if app:
         path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
         number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")

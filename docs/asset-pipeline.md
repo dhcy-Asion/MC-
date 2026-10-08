@@ -1013,7 +1013,64 @@ candidate resource，也不将BC3说成无损；此工具不重编码PNG或读�
 2026-10-08独立检查含真实纯重建10/10通过；报告36429字节SHA
 `56d0ee077c290395c6efcc013c1c48524fe0db1af5c3bea6137d01a944c9f466`，37项原输入快照保持。
 独立只读QA核对当前身体14资源包中同DDS唯一flags0、decoded字节一致和PATHC直接注册。
-这些归档事实不证明新头PAMI已被引擎读取或最终MC皮肤正确。该候选未接封装／安装；
-后续新准入只允许该PAMI替换，另13资源与当前头PAC保持，依赖仍须唯一flags0并有
-直接注册。现有安装器没有该报告入口，不能直接安装此候选或把它混入身体8报告计划。
-先完成身体单变量的手动实测／只读采样／正常退出恢复，再确定下一对照。
+这些归档事实不证明新头PAMI已被引擎读取或最终MC皮肤正确。新候选接入独立九报告
+本地封装；当前身体单变量包继续保持，先完成人工反馈／只读采样／正常退出恢复，
+不在待反馈期间撤换或重新安装。
+
+### 固定身体计划的本地九报告封装
+
+独立 `prepare_steve_head_basecolor_overlay.py` 与 `check_steve_head_basecolor_overlay.py`
+负责本地组合及隔离事务；默认输出 `build/steve-head-basecolor-probe-overlay`。
+默认正式包已构建，完整隔离检查31/31通过；独立构建与检查入口为：
+
+```powershell
+py -3.12 -B tools/prepare_steve_head_basecolor_overlay.py
+py -3.12 -X utf8 -B tools/check_steve_head_basecolor_overlay.py --rebuild
+```
+
+封装可用 `--baseline`、`--head-basecolor-report`、`--output`、`--cdmw-source`、`--deps`
+显式指定，已有输出必须拒绝覆盖；没有 `--game-root`。它只读取ignored中的固定
+身体计划、全部6份包／元数据文件、canonical八报告和头baseColor候选，不读取实际
+游戏metadata，也不调用通用game-based prepare；`prepare_steve_probe_overlay.py`
+的构建CLI保持旧接口。完整封装仍使用固定CDMW源门禁及离线打包函数；单PAMI生成器
+不读CDMW，不能据此声称整个归档封装无CDMW。
+
+身体基线 overlay-report SHA256必须是
+`fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341`，恰8报告／14资源，
+各实际文件哈希和来源快照一致。原34项 `sourceIndexes`、5个未安装可选目录
+0036～0040和3项 `replacementPaths`逐项保持。原8项控制全集加
+`steve-head-basecolor-report.json`构成唯一允许的9报告模式，不接受部分控制或与app／
+head-mesh混用；缺依赖、错误名称和未知／歧义报告组合必须在来源读取前拒绝。
+
+在完整身体基线上最后调用 `apply_head_basecolor`：旧头PAMI `440a…`／16149／flags50、
+头PAC `182fc7…`／flags1及DDS `653aa5…`／87536实际载荷固定，只有新头PAMI
+`cc86b3…`／16134字节／flags50进入精确10字段行，并可逐字逆恢复。
+既有assembly DDS行不含 `archiveFlags`；完整baseline row和真实PAMT entry必须验证
+DDS恰一次、flags0、载荷不变及既有PATHC直接注册，不能重复加DDS或继承模板flags1。
+其他13项编码载荷、flags、orig_size和完整资源行全部保持。
+
+原metadata-before两文件及PATHC-after保持原字节。只有头PAMI重新压缩／加密产生
+新PAZ／PAMT后，PAPGT-after从原before和实际新PAMTCRC重算；不能复制旧PAPGT-after，
+也不能把当前已安装身体包的metadata-after用作新安装before。完整新包重新解包、
+审挂载和注册并重构manifest，不只沿用旧审计bool。发布前后复验所有来源与6文件
+快照；独立build输出拒绝覆盖、交叠、链接和路径逃逸，不写当前实际0041或收据。
+默认正式输出的子目录或祖先也拒绝，不能在既有计划目录内嵌套生成或用祖先覆盖它。
+
+`install_steve_probe.py` 已接严格9报告入口，正常资源／flags／挂载／注册审计后再
+执行 `validate_composition`，冻结固定身体基线和整包变化范围并合并快照。variant为
+`steve-kliff-original-head-body-material-empty-armor-head-basecolor-part-table-v2`。
+既有active拒绝、关闭游戏、原始vanilla元数据精确匹配、真实原索引全集／hash检查、
+共享锁、所有权、存档备份和可逆恢复全部保留；不会为当前active状态放宽安装门禁。
+
+独立checker仅其新类对当前production metadata／active receipt／installed文件作
+前后不变核对，从原34份PAMT实际只读复制fake fixture并执行产品 `audit_sources`，
+不mock真实来源门禁；test21走本地compose，原默认全套不变。
+主控实际构建exit0：默认包14资源／9报告、PAZ770800字节，计划SHA256
+`29b813224b362f8d2e751a8ae31968846a55d96410f290ffd10deb00322078e5`；
+包／挂载／注册三项审计通过，新9报告标准loader与旧8报告模式准入均通过。
+主控按上述完整checker命令重跑exit0，31/31通过，219.466秒，production快照和
+cleanup均无异常。
+新头贴图包未安装，MC皮肤／alpha／光照及保持肩膀连接均须实机另验。当前身体收据
+`069425c3a6a0430fa9c576e3afe8f20b` 仍installed，游戏未运行，人工反馈尚无；
+这一离线工作不撤换该包。最新终态见 [current-state.md](current-state.md) 与
+[progress.md](progress.md)。

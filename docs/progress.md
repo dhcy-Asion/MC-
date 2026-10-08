@@ -2138,3 +2138,59 @@ unknown／duplicates／类型／路径、pure noCDMW、source race、来源／ov
 git diff --check通过；现有安装入口混入该第9报告在hash／游戏访问前拒绝，未改准入边界。
 新资源留ignored build，不上传游戏／DDS／存档。代码与文档按授权正常同步GitHub；
 当前body测试与手动反馈保持，持续目标active。
+
+## 2026-10-08 头部MC主颜色贴图的完整本地封装与九报告准入
+
+本轮先核实实际游戏未运行，身体单变量收据 `069425c3a6a0430fa9c576e3afe8f20b`
+仍installed／active0041，手动身体反馈尚未到达。保持当前实验，未撤换资源、启动游戏
+或消费MC材料；只利用已准入的本地身体计划封装下一项头皮肤对照。
+
+新增 `prepare_steve_head_basecolor_overlay.py`、`check_steve_head_basecolor_overlay.py`，
+`prepare_steve_probe_overlay.candidates` 新增末尾头baseColor控制，安装纯加载器仅增加
+完整身体8报告加头baseColor的严格9报告集合；旧构建CLI及所有实际安装／恢复门禁保持。
+固定body plan SHA `fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341`
+和六份原包／元数据文件，原34索引、0036～0040缺席集合及3替换路径保持。本地封装
+使用固定CDMW归档函数，不读取实际游戏元数据，也不把已安装metadata-after当作新before。
+
+只把头PAMI从440a9e…ba9a5／16149改为cc86b3…bf3f／16134、flags50，完整逆恢复；
+另外13项完整资源行、原编码载荷、flags与orig_size不变，当前头PAC182fc…77660保持，
+Steve DDS653aa5…b1a唯一flags0与PATHC直接注册保持。原before两文件、PATHC-after保持，
+PAPGT-after用实际新PAMT校验重算；重新解包／挂载／注册审计与完整PAMT、PAZ及manifest
+规范字节重构共同限制变更。输入与六文件快照发布前后回读；修补非默认输出写入既有
+canonical包子目录／祖先的保护遗漏，不放宽已有输出、链接或输入交叠拒绝。
+
+`py -3.12 -B tools/prepare_steve_head_basecolor_overlay.py` 实际exit0，默认计划
+`build/steve-head-basecolor-probe-overlay`，14资源／严格9报告，PAZ770800字节；
+plan SHA `29b813224b362f8d2e751a8ae31968846a55d96410f290ffd10deb00322078e5`。
+包内三项审计标志均true；标准 `install_steve_probe.load_plan` 实际纯准入通过，variant
+`steve-kliff-original-head-body-material-empty-armor-head-basecolor-part-table-v2`。
+旧11、12、v2注册、原生头、共同父骨、原生头材质、空Armor、身体材质8种计划也仍可准入。
+
+独立checker仅读取实际原34PAMT并复制到owned fake fixture，保留产品 `audit_sources`
+完整核对；实际当前metadata、active receipt、已安装文件和索引作前后不变验收。
+仅新类修改test21为本地重建及teardown为当前实况冻结，旧suite不变；Windows源索引
+反斜杠访问与目录／资源路径区别已修正。首轮完整检查31项、219.089秒：30通过，test16
+因继承测试以compact JSON恢复后正向加载触发新canonical字节门禁而报错。修正新checker
+的报告写回格式，产品完整规范字节门禁保持；最终重跑结果在下文记录。
+
+首轮已通过正常安装／恢复、存档保留、失败回滚、进程／来源／所有权／并发／中断恢复、
+仅头变化与其余13项原编码保持、真实本地重建、依赖及错误9报告早拒。新增反例实际通过：
+9组输出交叠早拒；PAZ增加16字节零尾并同步PAMT记录、PAPGT和三个文件哈希后，普通
+审计仍通过而完整writer重构拒绝；来源快照冲突及规范manifest中的索引摘要、审计bool、
+未知字段篡改被拒绝。新头皮肤包没有实际安装，所有安装／显示／prefab／碰撞标志false；
+当前身体人工反馈、owner组件只读实采与随后正常退出恢复仍待完成。持续目标active，
+完整Steve、背部装备去除、全部红沙装备禁用和MC单击攻击／实际击退均未完成。
+
+最终 `py -3.12 -X utf8 -B tools/check_steve_head_basecolor_overlay.py --rebuild`
+**31/31通过，219.466秒，exit0**。修复仅新检查器，test16／23保留原反例并使用规范
+manifest写回，27／29同样统一写回格式；产品规则与旧suite未放宽。完整重跑含正向
+原报告恢复准入、真实全包重建、全部事务及上述篡改拒绝，production快照与owned fixture
+清理均通过。实际头皮肤未安装，当前身体包及待人工反馈流程保持。
+
+发布只读核对实际exit0，证据
+`runtime/steve-head-basecolor-composition-release-20261008.json`：游戏未运行，body active
+receipt不变、41安装文件全部匹配、36存档、完整MC schema3/revision25、原点和ASI保持；
+新head plan字节／六文件哈希匹配且未安装。4份相关Python AST、7文档74相对链接／围栏、
+4份候选／计划／收据／发布证据JSON及git diff --check通过；所有游戏资产、runtime、
+owned测试目录、存档及记录器保持忽略。代码和文档按授权正常同步GitHub；没有改变
+MC规则／JAR／ASI或消耗材料，不把包构建与事务检查当作人物显示完成。

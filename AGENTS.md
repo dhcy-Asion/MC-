@@ -44,6 +44,10 @@ the earlier copy under Desktop/Git.
    PAMI合同，沿用空Armor和其余资源，不同时猜测缩头、改皮肤或写装备存档。
    身体原PAMI独立10项、完整包隔离事务28项检查通过，现已实际安装，当前有active
    receipt／0041，等待用户手动进入反馈，之后仍须退出恢复；尚无身体实机结果。
+   下一项头部MC主颜色贴图仅做独立离线准备：候选保留原生头材质合同，只改三个
+   主draw路径；封装从固定身体14资源／8报告计划本地组合为严格9报告，另外13项
+   保持，不读取实际游戏元数据，不撤换当前身体包。包已构建，完整隔离检查31/31通过；尚未安装，
+   MC头皮肤实机未验。已有active、关闭游戏、原始元数据与索引门禁均不得绕过。
    人工服装反馈不能替代完整人物、动态装备禁止或动画验收。
 3. 完成后运行相关检查，在进度文件写明日期、命令、结果、证据及未验证项，再标记完成。
    只读探针运行成功不等于第四角色创建成功；构建成功不等于游戏内行为验证成功。
@@ -109,7 +113,8 @@ the earlier copy under Desktop/Git.
 | Steve 原生头原字节材质对照 | `py -3.12 -B tools/check_steve_head_native_material.py --rebuild`；封装后 `check_steve_probe.py --head-native-material --rebuild`；严格六报告，保持失败共同父骨 PAC 及其余十二资源，仅换固定原生头 PAMI 的三变体／两draw完整字节；暂用原生纹理验证位置，不等于最终MC皮肤或装配修复 |
 | Steve 默认服装渲染对照 | `py -3.12 -B tools/check_steve_clothing_control.py --rebuild`；封装后 `check_steve_probe.py --clothing --rebuild`；严格七报告、14资源，在已通过头位置的13资源上仅增加固定00000 app的空Armor；保留Body/Head/Hair等外部XML及12行逆恢复，不等于全部动态装备禁止 |
 | Steve 原生身体原字节材质对照 | `py -3.12 -B tools/check_steve_body_native_material.py --rebuild`；封装后 `check_steve_probe.py --body-native-material --rebuild`；严格八报告、14资源，须完整空Armor控制，只换身体PAMI为50017字节原件；其余13项（含当前补偿PAC）保持，暂用原生纹理，左手／身体／动画另验 |
-| Steve 头部MC主颜色贴图候选 | `py -3.12 -B tools/check_steve_head_basecolor.py --rebuild`；离线只换原生头PAMI三处baseColor路径，保留其余原字节并逐字逆恢复；固定已有头PAC／DDS／原生头报告，不新增纹理，不等于封装、安装或实机MC皮肤验收 |
+| Steve 头部MC主颜色贴图候选 | `py -3.12 -B tools/check_steve_head_basecolor.py --rebuild`；离线只换原生头PAMI三处baseColor路径，保留其余原字节并逐字逆恢复；固定已有头PAC／DDS／原生头报告，不新增纹理，独立10项通过，实机MC皮肤另验 |
+| Steve 头部MC主颜色贴图九报告封装 | `py -3.12 -B tools/prepare_steve_head_basecolor_overlay.py`；`py -3.12 -X utf8 -B tools/check_steve_head_basecolor_overlay.py --rebuild`；固定身体14项／8报告本地计划与六文件，仅改头PAMI为第9报告，其他13编码／flags／orig_size／资源行保持；固定CDMW源用于离线打包，不读取实际游戏元数据；包14项／9报告已构建，完整31/31通过，不替换当前active身体包 |
 | Steve 初始 app 引用 | `py -3.12 -B tools/check_steve_app.py --rebuild`；00000／00002 必须显式二选一，每报告仅改一份 app 的 Nude/Head Name；不得猜受控实例实际 app，不同时改两份 app |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |
