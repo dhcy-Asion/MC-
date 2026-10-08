@@ -1,8 +1,9 @@
 # MC 与红沙原生资产：可复建的离线管线
 
-2026-10-07。离线准备工具已生成并检查真实资产，输出留在忽略上传的 `build/`。
+更新：2026-10-08。离线准备工具已生成并检查真实资产，输出留在忽略上传的 `build/`。
 后面的临时探针另有可恢复安装与实机步骤，当前验证结果见进度文件。正式桥接仍使用
-蓝色方块代理，受控角色仍是原角色；候选资产不等于全部 MC 内容或 Steve 模式已接通。
+蓝色方块代理，受控身份沿用原角色；临时外观对照已有MC块体人工观测，持续完整Steve
+尚未完成。候选资产不等于全部 MC 内容或 Steve 模式已接通。
 
 ## Steve 的原版几何
 
@@ -15,6 +16,18 @@ python tools/check_steve_asset.py
 `build/steve-1.21.1/steve.gltf`、顶点二进制、64×64 皮肤及来源清单。
 六个刚性关节、外层、UV、绕序、逆绑定矩阵和原版渲染比例经过 13 项检查。
 官方资源缺失时可使用 `--download` 获取固定依赖，不能随意更换客户端版本。
+
+### MC 动作的来源和运行时边界
+
+2026-10-08 用户进一步要求整个动作系统使用 MC 的实际状态、时序与刚性四肢运动。
+现有几何导出只执行模型构造，输出静态中立姿态；六个关节、固定皮肤、红沙neutral
+补偿或合成旋转均不证明 MC 动作实现。后续姿态工具须以固定 MC 的实际模型方法和
+状态为来源，保存可复核的输入／输出，再单独验收待机、移动、蹲伏、挥击与物品使用
+的时序和状态转换。不能继续套用红沙人物动画、重命名动作或手写近似曲线冒充原版结果。
+
+离线姿态准备与原生播放／控制接口分别记录。当前没有已验证的受控角色姿态应用合同，
+准备离线姿态工具不代表原生运行时已接通。MC 单击挥击的显示、一次输入对应的动作、
+实际伤害／击退和装备效果分别验收；整体要求见 [steve-character.md](steve-character.md)。
 
 ## 方块模型与纹理
 
@@ -889,7 +902,7 @@ py -3.12 -B tools/install_steve_probe.py --restore
 before-install 基线记录后实际安装。用户实测原话为“原服装消失，左手没有了。后背
 背着的装备依旧存在并和身体重叠。头部过大”。默认服装抑制人工通过，完整人物
 未通过。用户退出后核实会话结束并恢复；收据 `2feb0ddf41b3488fba9eb226cf8fb672`
-为 restored，该服装会话恢复时无 active receipt／0041；当前已安装下方身体材质对照。
+为 restored，该服装会话恢复时无 active receipt／0041；随后进入下方身体材质对照。
 五阶段均 exit 0，41 项安装文件／38 项
 恢复原文件匹配，退出时 36 个最新存档、完整 MC schema3/revision25、原点及 ASI
 保持；只读 appearance 双采样仍因原 PAC 声明空为稳定 notReady，不能当作完整模型
@@ -899,7 +912,7 @@ before-install 基线记录后实际安装。用户实测原话为“原服装�
 不证明全部装备选择链已被抑制；动态穿戴部件可能由其他选择层再次应用，静态删除 12 行
 不等于禁止全部红沙装备，也不删除装备库存／存档。发须、完整身体去重、动画和
 跨重载持续 Steve 均未验收。MC 头贴图后续只计划替换三个主 draw 的 baseColor
-路径，当前没有生成／封装皮肤候选；不与本轮服装变换混合。实际测试／收据及恢复
+路径，候选已在后文独立生成／封装；不与本轮服装变换混合。实际测试／收据及恢复
 状态以 [current-state.md](current-state.md) 与 [progress.md](progress.md) 为准。
 
 ## 保留身体补偿 PAC 的原生身体 PAMI 单变量对照
@@ -933,7 +946,8 @@ variant 为 `steve-body-native-material-only-v1`；已有输出拒绝覆盖，�
 `cd_phm_00_nude_0001_hand`、`cd_phm_00_nude_0001`，各 wrapper 均使用
 `SkinnedMeshSkin`。候选逐字复制完整原件；保留所有参数及其顺序、wrapper、纹理、
 damage／wrinkle 引用、BOM 与换行，不重序列化或删去没有几何的 wrapper。
-实际 PAC 的 draw／蒙皮语义、左手可见性与身体显示仍需实机验证。
+实际 PAC 的 draw／蒙皮语义不能由原件复制证明；本次左手和观测姿势身体显示的人工
+结果见下方记录，完整MC动作仍须另验。
 
 生成入口读取前后固定 EXE／0009 索引，提取并核验精确 PAMI 的 SHA／长度／flags。
 同一原索引内有界确认 22 个真实纹理条目（flags 1）和 1 个 wrinkle 条目（flags 50），
@@ -973,11 +987,23 @@ py -3.12 -B tools/install_steve_probe.py --restore
 ```
 
 主控核实游戏实际关闭、无 active receipt、38 项原件保持后，已实际安装此身体材质包。
-收据 `069425c3a6a0430fa9c576e3afe8f20b` 为 installed，variant 为上述身体原件对照，
-当前有 active receipt／0041；before-install／installed 两阶段均 exit 0，41 项安装文件、
-36 个存档、完整 MC schema3/revision25、原点及 ASI 保持。等待用户手动进入反馈，
-尚无本轮实机结果，之后仍须退出恢复。左手、身体、动画、动态装备禁止、头比例与
-最终 MC 皮肤均未验收。
+收据 `069425c3a6a0430fa9c576e3afe8f20b` 现为 restored，variant 为上述身体原件对照；
+before-install／installed 两阶段均 exit 0，41 项安装文件、36 个存档、完整 MC
+schema3/revision25、原点及 ASI 保持。用户已手动进入并反馈“左手出现、身体和四肢
+没有错位，没有无关，同时身上还背着装备”；随后确认“是，头部没有五官”。本次人工
+通过仅限左手可见和观测姿势下身体／四肢对齐，头部没有脸部图案，背部原装备仍可见。
+头比例、最终MC皮肤、MC动作、背部装备移除与全部原装备禁止未验收。
+
+主控in-world记录41项安装文件匹配、完整MC／原点／ASI保持；视觉结果报告绑定本次
+收据、计划SHA和同一会话，并保存原话及澄清。只读owner目录完整20项、primary RTTI
+仅6项观测、14项未解析，双采样稳定；同会话render-input-paths双采样稳定但notReady。
+这些读取不识别背部资源或证明逐成员owner回链，不构成删除装备或写存档的依据。
+原始证据为ignored `runtime/steve-body-native-material-20261008-visual-result.json`、
+`...-owner-components.json`、`...-render-input-paths.json`，公开交接保存摘要而不上传原始进程数据。
+整体PAMI合同变化不能进一步归因于单个shader字段。用户正常退出后主控核实进程结束，
+before-restore／restored均exit0，38项原文件、退出时最新36个存档、完整MC／原点／ASI
+保持，恢复时无active／0041。随后安装下一头贴图包，最新终态以
+[current-state.md](current-state.md) 与 [progress.md](progress.md) 为准，不复用旧会话地址。
 
 当前状态以 [current-state.md](current-state.md) 与 [progress.md](progress.md) 为准；
 生成器成功与历史头位置反馈不能替代这次身体材质的实机验收。
@@ -985,7 +1011,7 @@ py -3.12 -B tools/install_steve_probe.py --restore
 
 ## 保留原生头材质合同的MC主颜色贴图候选
 
-身体材质对照尚待人工反馈时，离线完成下一项独立候选；不覆盖当前安装包。
+身体材质对照等待人工反馈期间，离线完成下一项独立候选；没有覆盖当时安装包。
 
 ```powershell
 py -3.12 -B tools/prepare_steve_head_basecolor.py
@@ -1014,8 +1040,8 @@ candidate resource，也不将BC3说成无损；此工具不重编码PNG或读�
 `56d0ee077c290395c6efcc013c1c48524fe0db1af5c3bea6137d01a944c9f466`，37项原输入快照保持。
 独立只读QA核对当前身体14资源包中同DDS唯一flags0、decoded字节一致和PATHC直接注册。
 这些归档事实不证明新头PAMI已被引擎读取或最终MC皮肤正确。新候选接入独立九报告
-本地封装；当前身体单变量包继续保持，先完成人工反馈／只读采样／正常退出恢复，
-不在待反馈期间撤换或重新安装。
+本地封装；身体单变量对照现已完成人工反馈／只读采样与正常退出恢复，头包随后才
+实际安装，没有在待反馈期间撤换或重新安装。
 
 ### 固定身体计划的本地九报告封装
 
@@ -1070,7 +1096,75 @@ DDS恰一次、flags0、载荷不变及既有PATHC直接注册，不能重复加
 包／挂载／注册三项审计通过，新9报告标准loader与旧8报告模式准入均通过。
 主控按上述完整checker命令重跑exit0，31/31通过，219.466秒，production快照和
 cleanup均无异常。
-新头贴图包未安装，MC皮肤／alpha／光照及保持肩膀连接均须实机另验。当前身体收据
-`069425c3a6a0430fa9c576e3afe8f20b` 仍installed，游戏未运行，人工反馈尚无；
-这一离线工作不撤换该包。最新终态见 [current-state.md](current-state.md) 与
+身体材质对照已正常退出恢复后，主控实际安装该九报告头贴图包，收据
+`bbdda1c5304f4cfe884a1e8ca1fdeed6` 现为restored，variant为上述head-basecolor模式。
+before-install／installed均exit0，41项安装文件、36个存档、完整MC schema3/revision25、
+原点／ASI保持。用户手动进入反馈“头部没出现正确的史蒂夫五官、
+头的位置仍正常”：本次位置人工通过，正确MC头皮肤未通过，头比例、alpha及光照仍未验收。
+in-world recorder exit0，41项安装文件、完整MC／原点／ASI保持，本次原生身份与会话
+记录一致；render-input双采样稳定但notReady，PAC/PAB声明不完整，不能证明新PAMI／
+DDS实际读取或渲染采样。独立视觉记录绑定本次收据、计划和会话，保存于ignored
+`runtime/steve-head-basecolor-20261008-visual-result.json`；不能从这次失败推定某个shader
+或贴图为唯一根因。用户正常退出后主控核实进程结束，before-restore／restored均exit0，
+38项原文件、退出时最新36个存档、完整MC／原点／ASI保持，当前无active receipt／0041。
+该会话已结束，不能复用PID／地址。最新终态见 [current-state.md](current-state.md) 与
 [progress.md](progress.md)。
+
+## 固定MC算法的离线姿态基准（2026-10-08）
+
+`tools/StevePoseDump.java` 实际调用固定MC 1.21.1 PlayerEntityModel 的animateModel／setAngles，
+不是仿写三角公式。正常构造ArmorStandEntity为显式离线输入夹具，非Player、World=null、
+不tick，不使用Unsafe或覆盖getter；逐帧前后核对8个真实状态字段。仅支持未骑乘、
+未蹲伏、未攻击、空手、未游泳／飞行的standing／look／walk三种有界输入。
+
+```powershell
+py -3.12 -B tools/build_steve_pose.py
+py -3.12 -B tools/check_steve_pose.py --rebuild
+```
+
+默认 `build/steve-pose-1.21.1` 已构建，拒绝覆写；重建检查使用独立build目录。固定官方client
+及21显式算法类、46外部JAR、Java工具；复制已校验依赖到独占stage后编译／运行。各41帧，
+六个root子部件的原始9字段／FloatBits及TRS完整输出，注明度／弧度、像素／米、坐标基、
+ZYX旋转与独立rendererRootScale。步态覆盖40tick＋endpoint，age同时驱动手臂idle bob，
+不声称全身所有部件在endpoint闭环。9/9真实重建通过，两独立JVM逐字一致。
+poses SHA为 `0302fd9021bc0bd31eb5b51478cb6512f8fcb7b053ed32458ed0fe6c6d8b0855`。
+来源报告与产物保持ignored，仓库只发布自己的调用／检查工具。挥击、蹲伏、跳落、持物等
+完整状态及原生受控骨骼重定向／动作入口未覆盖，nativeApplied／animationSystemComplete=false。
+
+## 头主UV方向单变量候选（2026-10-08）
+
+`prepare_steve_head_uv_control.py` 只从已准入head-baseColor候选读当前PAC／PAMI／DDS／报告，
+无游戏／CDMW读写。PAR有界解析固定三LOD各48条40字节记录，主UV为+8／+10；cloth-guide
+sentinel等字段保持。唯一变更是LOD起点90529／92593／94657下各48个half V→1−V，共144
+个两字节span、实际144字节改变；逐字逆恢复源PAC182fc…，全部其他字节／材质／纹理保持。
+
+```powershell
+py -3.12 -B tools/prepare_steve_head_uv_control.py
+py -3.12 -B tools/check_steve_head_uv_control.py --rebuild
+```
+
+默认ignored目录 `build/steve-head-uv-control` 已生成，pureloader四来源／6包内文件摘要固定。
+PAC96721字节、flags1、新SHA `c0df7b6e6fbe90038b8e277839ef59b26aa4cbba560f30770d82eec9acf50b55`。
+独立重建11/11通过；独立MC accessor／PAR／half映射、BC3脸部特征区域、逆恢复、非V／
+改hash篡改和输出保护覆盖。直接DDS行序采样旧脸区域全透明，翻V后的区域有眼鼻嘴；
+CDMW本身也翻V，该约定不能排除shader内部再反V。integration全false，主UV选择、
+shader／alpha／normalframe、最终MC五官未验。只有一个PAC候选，未接14资源／严格10报告
+封装，不可单独安装；整包其他13项保持仍须封装检查证明。
+
+## 固定头PAMI文件读取诊断（2026-10-08）
+
+新增 `tools/probe_steve_head_material.py` 与独立checker；在已准入九报告包实际安装、游戏
+运行且固定EXE／实例成立时，读取唯一别名steve_head_pami，物理路径含两层head/head。
+完整固定plan／14资源/PAMI及active收据／marker／41实际安装与原索引文件必须匹配。
+保留16KiB双native尺寸、flags50、队列／TTL／handler释放，POST持久化且不重发，完整MC
+状态前后核对；不提供任意路径、DDS／PAC读取或外观刷新。
+
+```powershell
+py -3.12 -B tools/check_steve_head_material_probe.py
+# 仅主控在新的真实安装／运行会话中执行，证据必须用新路径
+py -3.12 -B tools/probe_steve_head_material.py --output runtime/steve-head-material-read-new-session.json
+```
+
+隔离客户端21/21、原生23/23、旧客户端27/27通过，ASI已构建并更新实际安装及发布artifact。
+此诊断尚未实采；fileResolvableReadMatched只能证明引擎文件解析读取字节匹配，不能证明
+renderer实际选择该PAMI或采样DDS，MC皮肤和原生shader语义仍须实测。

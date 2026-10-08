@@ -31,6 +31,8 @@ std::string ResourcePath(const std::string& resource) {
     if (resource == "oak_atlas") return "object/texture/crimsonmc_oak_log_atlas.dds";
     if (resource == "oak_atlas_n") return "object/texture/crimsonmc_oak_log_atlas_n.dds";
     if (resource == "oak_atlas_sp") return "object/texture/crimsonmc_oak_log_atlas_sp.dds";
+    if (resource == "steve_head_pami")
+        return "character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml";
     return "";
 }
 // One literal string field. No duplicate keys, escapes, arrays, path or query

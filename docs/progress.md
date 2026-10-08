@@ -23,8 +23,10 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 00000 app默认Armor引用的可逆对照已完成并通过完整检查、实际安装；当前收据
 `2feb0ddf41b3488fba9eb226cf8fb672` 已实际退出恢复，无active receipt／0041。
 用户确认原服装消失，但左手缺失、背部装备仍重叠、头部过大，完整人物仍未通过。
-身体原字节材质单变量14资源／8报告包已构建、28/28完整检查通过并安装，当前收据
-`069425c3a6a0430fa9c576e3afe8f20b`，有active receipt／0041，等待手动进入反馈及退出恢复。
+身体原字节材质单变量14资源／8报告包已实测：用户确认左手出现，身体／四肢在观测姿势
+下无错位，头没有五官、背部装备仍在。收据 `069425c3a6a0430fa9c576e3afe8f20b` 已退出恢复，
+最新存档／完整MC保持。随后只换头主颜色贴图的九报告包已实际安装并实测，用户反馈
+头位置仍正常、正确Steve五官未出现；本轮恢复状态和下一项见下方新记录。
 当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
@@ -35,9 +37,10 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 
 ## 当前里程碑
 
-**当前优先 M4a：完整持续 Steve、仅 MC 装备与原装备禁用，进行中；新增 M5a MC 攻击。**
+**当前优先 M4a：完整持续 Steve、MC动作系统、仅MC装备与原装备禁用，进行中；M5a MC攻击未实现。**
 2026-10-08 用户更新持续目标：mod 启用后人物完整变成 Steve，不能使用红沙任何装备，
 只能使用 MC 装备；点击控制栏物品加入 MC 背包；攻击完全变为 MC 模式，单击击退敌人。
+用户进一步要求角色动作系统也用MC；原红沙动作、重命名或合成姿态不能代替该验收。
 该要求覆盖 2026-10-06 的两套装备及红沙战斗约定；禁用／卸载恢复、全方块、第三人称
 装备变化、原 UI 与真实状态 HUD、分发要求保持。生命值来源未改为独立 MC 生存生命。
 最新完整验收在 [steve-character.md](steve-character.md)；独立第四身份不再是本轮门槛。
@@ -135,7 +138,7 @@ M4a 与 M6a 保持进行中，完整移植目标仍为 active。
 | M2 原生角色接口验证 | 实际受控身份、F1 名单、原生请求和创建生命周期 | 区分角色 ID／Actor UID／佣兵 No；确认 F1 实际路径；确认新增身份需要的名单、创建、状态及保存接口和调用约定 | 进行中，未完成 |
 | M3 独立第四角色 | 创建与注册、F1 选择、控制、生命周期 | 原版三人保留，第四独立身份可切入／切出；重载、死亡、骑乘及任务强制回切不串状态；有游戏内证据 | 未开始，依赖 M2 |
 | M4 Steve 模型和装备（旧独立身份方案） | 原独立第四角色及装备隔离设计 | 旧方案只保留研究，当前按 M4a 的 MC 装备及原装备禁用验收 | 旧方案未开始，不作为当前门槛 |
-| M4a 持续史蒂夫模式（最新优先） | 复用当前角色控制，启用完整持续 Steve、仅 MC 装备、禁用恢复及方块 | 身体／动画／MC 装备正确，无原部件混叠；所有红沙装备使用入口被禁用；重载保持，停用恢复 | 进行中；九格常驻/刷新/断线实测通过，F8 点击待验收；方块头位置和默认服装消失已人工通过，左手／背部重叠／头比例未通过；装备限制未实现 |
+| M4a 持续史蒂夫模式（最新优先） | 复用控制身份，启用完整持续Steve、MC动作系统、仅MC装备、禁用恢复及方块 | 身体／皮肤／MC动作／装备正确，无原部件混叠；全部红沙装备入口禁用；MC状态与阶段时序对应，重载保持、停用恢复 | 进行中；九格常驻/刷新/断线通过，F8点击待验收；头位置、默认服装消失、最新姿势左手／身体四肢对齐人工通过；MC五官未通过，背装备、头比例及全动作／装备限制未完成 |
 | M5 真实心形血量 | 将真实 HP／最大 HP 显示为心形 | 与真实受伤、治疗、最大 HP 变化一致，切人物不串读数；不显示虚构饥饿／经验 | 未实现，须验证读取链和行为事件 |
 | M5a MC 攻击／击退（2026-10-08 新要求） | 原攻击抑制、MC 单击输入、实际敌人命中／伤害／击退、MC 装备规则 | 一次点击一次攻击，菜单不攻击；实际目标、遮挡／距离／间隔与击退方向正确；MC 装备效果及耐久一致，停用恢复 | 未实现；当前无原生目标／伤害／击退调用合同 |
 | M6a 独立背包 | 全物品目录、整组领取、36 格选择、消耗与现有方块放置 | 原版64/16/1、满背包与未知物品回滚、只扣所选格、耗尽不跨格替补、保存迁移、面板实测 | 保留进行中，本轮优先 M4a／HUD |
@@ -144,6 +147,122 @@ M4a 与 M6a 保持进行中，完整移植目标仍为 active。
 
 M2 的研究可能证明某个原生路线不可用。此时记录确切失败证据、未解决接口和替代方案；
 不能越过门槛把换装或 NPC 生成当作 M3 完成。用户后续可以调整阶段顺序，需记录。
+
+## 2026-10-08 身体显示实测、头部皮肤对照与MC动作要求
+
+用户确认身体原材质包中“左手出现、身体和四肢没有错位，没有无关，同时身上还背着装备”，
+随后澄清“没有无关”指“头部没有五官”。人工左手／对齐结果只覆盖观测姿势，MC皮肤、
+头比例、动作／重载及背部装备移除没有通过。相对衣服包仅换完整身体PAMI，PAC／骨骼／
+scale／shrink与其余13资源保持；不能将结果归因于单一shader字段。
+
+身体会话只读证据：
+
+- `build/record-steve-body-native-material-20261008.py in-world` exit0，41安装文件及
+  完整MC schema3／revision25、原点／ASI保持。
+- `tools/probe_owner_components.py --pid <当次PID> --output runtime/steve-body-native-material-20261008-owner-components.json`
+  exit0／observed，完整20成员、双采样稳定；6槽标准primary RTTI，14槽未解析。控制器
+  恰一次；不解释匿名槽，不证明背部组件→prefab/PAC身份或owner回链。
+- `tools/probe_appearance_controller.py --pid <当次PID> --render-input-paths --output runtime/steve-body-native-material-20261008-render-input-paths.json`
+  exit1／notReady，双采样稳定但PAC/PAB声明输入不完整；Scene／选择／初始app可观察，
+  实际descriptor与资源身份未准入。未写内存或执行原生刷新。
+- 人工反馈和澄清保存在 `runtime/steve-body-native-material-20261008-visual-result.json`，
+  绑定收据／计划／会话及上述三份证据SHA。用户正常退出后核实进程结束，before-restore／
+  restored各exit0；收据 `069425c3a6a0430fa9c576e3afe8f20b` restored，38原文件、退出时36
+  个最新存档、完整MC／原点／ASI保持，没有用旧存档覆盖新存档。
+
+身体恢复后已安装MC头主颜色对照，plan SHA
+`29b813224b362f8d2e751a8ae31968846a55d96410f290ffd10deb00322078e5`，14资源／严格9报告。
+新收据 `bbdda1c5304f4cfe884a1e8ca1fdeed6`，保留原生头完整材质合同，仅改三个main baseColor
+路径为已有固定Steve DDS，另外13项保持。标准安装及before-install／installed各exit0，
+41安装文件、36存档、完整MC／原点／ASI保持；没有绕过active／游戏关闭／原元数据门禁。
+
+用户手动进入后反馈“头部没出现正确的史蒂夫五官、头的位置仍正常”。in-world recorder
+exit0；本会话render-input探针仍双采样稳定而notReady／exit1。人工头位置通过、MC脸部
+未通过，记录在 `runtime/steve-head-basecolor-20261008-visual-result.json`；安装文件匹配不
+证明renderer实际选择PAMI或DDS采样。当前资源读取API只有blue／oak固定别名，没有Steve
+头入口，该次会话未取得头材质／纹理引擎读回；随后实现的新诊断见下文。用户正常退出并核实实际进程结束后，
+before-restore／restored各exit0，新收据已restored，38原文件、退出时36最新存档、完整
+MC／原点／ASI保持，无active receipt／0041。下一项先离线核对UV与材质通道，不盲目重装同包。
+
+用户最新持续目标同时增加MC动作系统。实际固定官方client SHA及PlayerEntityModel／
+BipedEntityModel／PlayerEntityRenderer三类哈希已核对；setAngles／animateModel／animateArms、
+蹲伏及持物逻辑在客户端中，不需要等待一个不存在的独立FBX动画文件。现有导出只构造
+静态模型，glTF animations为空；红沙多骨蒙皮与合成弯曲不能算MC刚体动作。下一独立有界
+实现为官方算法离线站立／转头／完整行走周期基准，明确输入和fixture，不声称实时应用。
+当前固定EXE缺受控owner姿态／动作控制器的已验证入口，旧coop全局evaluator未验证；
+不直接调用或写姿态。挥击动作、实际敌人伤害和击退分别验收。目标实际active，旧三轮
+等待条件已由本次人工／只读证据解除，受阻审计从零开始。
+
+### 本轮交付：固定MC姿态基准与头材质读取诊断
+
+新增 `tools/StevePoseDump.java`、`build_steve_pose.py`、`check_steve_pose.py`，正常构造离线
+ArmorStandEntity（非Player、World=null、不tick、无Unsafe／getter override），逐帧前后
+核对8个真实状态getter，真实调用官方PlayerEntityModel的animateModel与setAngles各123次。
+standing／look／walk各40tick＋endpoint，输出六个root子部件的9原始字段及FloatBits、TRS，
+明确像素／米／角度／弧度／坐标基／旋转次序。行走覆盖完整步态相位，age仍驱动官方
+手臂摆动，不虚构整个身体在endpoint完全闭环。没有运行MC client main或访问实际世界。
+
+固定官方client SHA `499f6897d1837516680f3114072d8106e11c9adcd933fe5cf051b551089b0c99`、
+21显式算法类摘要及46外部classpath JAR的metadata SHA1／实际SHA256；运行前复制已核对
+依赖到独占stage。`py -3.12 -X utf8 -B tools/check_steve_pose.py --rebuild` **9/9通过，15.130s**，
+两次独立JVM的姿态、helper class和完整manifest逐字一致；来源／状态输入／完整周期、
+raw bits／独立TRS、改hash篡改及输出保护覆盖。默认构建exit0，产物335632字节，
+poses SHA `0302fd9021bc0bd31eb5b51478cb6512f8fcb7b053ed32458ed0fe6c6d8b0855`，
+report SHA `5f1a72721094c10b2b9834528eab03f0c8ff832825db948489e0ab335ecba89b`。
+未覆盖挥击、蹲伏、跳落、游泳、骑乘、飞行、持物／使用或live Player；没有原生重定向
+与控制器替换。nativeApplied／animationSystemComplete等5项保持false。
+
+新 `tools/probe_steve_head_material.py`／`check_steve_head_material_probe.py` 复用已验证的
+resource-probe队列与读取ABI，只增加fixed `steve_head_pami` 别名，精确head/head路径。
+维持16KiB双native尺寸、flags50、TTL、handler释放；不开放任意路径／DDS／PAC。客户端
+完整纯准入固定九报告／14资源计划、PAMI16134字节／cc86…，active收据、marker、实际41
+文件及源索引，绑定固定EXE和native实例、完整MC。POST之前持久化唯一意图，未知受理／
+超时不重发；成功只设fileResolvableReadMatched，不设renderer材质选择／皮肤成功。
+
+- `py -3.12 -X utf8 -B tools/check_steve_head_material_probe.py` **21/21通过，33.855s**；
+  真候选和隔离HTTP／进程，覆盖计划／包／PAMI／收据／安装文件／源索引与papk-paver篡改、
+  wrongticket／path／flags／handler／双size、POST不重发、MC／实例／收据变化、NoRedirect。
+- `py -3.12 -X utf8 -B tools/check_native_resources.py` **23/23通过**；准备后的源码精确匹配
+  tracked补丁，旧GameReadFile／Range与固定上游逐字保持；仅新增一个alias。
+  初次检查正确拒绝尚未更新的vendor副本，按tracked源码准备后整套通过。
+- 旧 `check_native_resource_probe.py` **27/27通过，19.324s**，既有blue／oak客户端范围保持。
+- `build/verify-head-read-native-source-20261008.py` exit0，固定上游+tracked patch+8源码重放，
+  45份根源码经CRLF规范化一致，6份仅换行差异。`tools/build_worldbuilder.py` exit0，
+  ASI12766720字节／SHA `9d5cdc8eebbad47010f4d6e15e3afe74d630ace00332cd7032ac216c3494efe7`。
+  artifacts已更新，游戏关闭且无active包时执行update_red_side成功，旧ASI备份已保留。
+  两阶段ASI记录核实38原文件、最新36存档／完整MC／原点保持；新读取诊断尚未实采。
+
+### 本轮离线头UV方向单变量候选
+
+实读当前头PAC三LOD各48点（头24／帽24），主UV为record+8／+10；+12:16为cloth-guide
+sentinel，不能擅称UV2。当前脸V为0.75～0.875，DDS独立BC3解码确认眼鼻嘴在原行序
+V=0.125～0.25，base面alpha255、帽层透明。CDMW glTF导入同样翻V，OBJ导入导出成对翻，
+这只证明工具约定，不能证明游戏shader方向。实际编译shader的UV通道／反V、alpha、
+wrinkle／aging混合仍未知，不将该差异断言为根因。
+
+新增 `tools/prepare_steve_head_uv_control.py`、`check_steve_head_uv_control.py`，固定当前
+PAC182fc…／PAMIcc86…／DDS653aa…／baseColor报告56d0…四来源，仅三LOD共144个half V→1−V，
+允许288字节span内实际144字节改变；inverse逐字恢复96721字节源PAC，U／几何／权重／
+palette／LOD／draw／guide／帽层与材质／纹理全部保持。新PAC SHA
+`c0df7b6e6fbe90038b8e277839ef59b26aa4cbba560f30770d82eec9acf50b55`，report55260字节／SHA
+`56790fa5efb6a2b38ed5938f217d4ddc25b11d5b87c18a6640721fd15ae3a3af`。
+
+prepare exit0；`py -3.12 -X utf8 -B tools/check_steve_head_uv_control.py --rebuild` **11/11通过，4.599s**。
+独立PAR／官方MC glTF accessor／half字面映射及逆恢复、独立BC3眼鼻嘴区域、非V和改hash
+篡改、完整manifest／来源race／输出保护覆盖。直接DDS采样旧脸区域[32,192,64,224)1024
+texel全RGBA0，新脸区域[32,32,64,64)全alpha255／19色；若shader内部反V，两种映射相反。
+normalframe／shader主UV与alpha实际语义未验；integration全部false。仅1PACflags1候选，
+尚未封装、安装或证明整包其余13项。下一步严格10报告组合并保留标准门禁，不能直接
+把孤立PAC复制进游戏。当前游戏关闭，无待恢复包。
+
+### 本轮最终交接核对
+
+`build/verify-body-head-actions-release-20261008.py` exit0：8文档84相对链接／围栏、7份Python
+AST、18份本机证据JSON通过；MC姿态／UV候选／完整头计划三个纯加载器再次准入。原始38
+文件、最新36存档／完整MC／原点保持，ASI实际安装／build／artifact三者一致，旧ASI备份
+核对通过。当前游戏已关闭、无active收据／0041；持续目标实际active。`git diff --check`
+通过。发布证据为 `runtime/body-head-actions-release-20261008.json`，游戏资源及证据保持ignored。
+新代码／文档正常提交推送；全Steve、MC原生动作、原装备禁用及真实攻击／击退均未完成。
 
 ## M1 交付与检查记录
 

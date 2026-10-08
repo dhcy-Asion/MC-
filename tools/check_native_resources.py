@@ -75,6 +75,10 @@ int main() {
     }
     for(const char* s:{"oak_atlas","oak_atlas_n","oak_atlas_sp"}) assert(paths.insert(ResourcePath(s)).second);
     assert(paths.size()==27 && ResourcePath("/object/x.prefab").empty() && ResourcePath("oak_y_../prefab").empty()); Pass("27 fixed physical paths");
+    assert(ResourcePath("steve_head_pami")=="character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml");
+    assert(paths.insert(ResourcePath("steve_head_pami")).second && paths.size()==28);
+    for(const char* s:{"steve_head_pac","steve_head_dds","steve_body_pami","steve_head_pami/../dds","STEVE_HEAD_PAMI"}) assert(ResourcePath(s).empty());
+    Pass("single fixed Steve head material alias; PAC/DDS/arbitrary paths rejected");
     std::string resource;
     assert(ParseBody(" { \"resource\" : \"oak_y_prefab\" } \n",resource) && resource=="oak_y_prefab");
     for(const char* s:{"{}","{\"resource\":1}","{\"resource\":true}","{\"resource\":null}","{\"resource\":[]}","{\"path\":\"x\"}","{\"resource\":\"x\",\"path\":\"x\"}","{\"resource\":\"x\",\"resource\":\"y\"}","{\"resource\":\"oak_y_prefab\"} trailing","{\"resource\":\"oak\\u005fy_prefab\"}","{\"resource\":\"\"}"}) assert(!ParseBody(s,resource));
