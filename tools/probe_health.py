@@ -47,6 +47,13 @@ WINDOWS = (
     (0x25c6c00, 377, "4616e8c2283b2392fc6cd8fb8050d7b6e0b94bc3325b02044cc5d2d1106d4e12"),
 )
 COUNTER_WINDOW = (0xc7eff02, bytes.fromhex("48ff4748488947380fb78424880000006689475048895f08"))
+# Optional current-gate evidence: the outer Hp accessor branches away from the
+# entry when ClientStatus+273 is nonzero; helper metadata mode !=2 reads +08.
+# No accessor is invoked and no resulting current value is projected here.
+CURRENT_GATE_WINDOWS = (
+    (0x17ad670, 403, "a0fab75464dc5e91448aea4275056d305f3ddd2214469c18362b6d8b675815c6"),
+    (0x17b4040, 56, "4e6c0970edc36e2f5c5f005304fd96fb2e6e1249da115360469a56ea2682fac8"),
+)
 # (vtable, complete object locator, type descriptor, class hierarchy, exact name)
 TYPES = {
     "status": (0x558d868, 0x5db8d00, 0x6aad288, 0x5db8c30, ".?AVClientStatusActorComponent@pa@@"),
@@ -66,11 +73,11 @@ def image_address(base, length, rva, size):
     return base+rva
 
 
-def validate_code(reader, base, length):
+def validate_code(reader, base, length, *, current_gate=False):
     appearance.pointer(base, "module base")
     if type(length) is not int or not 0 < length <= core.MAX_IMAGE_SIZE or base+length >= 2**47:
         raise ProbeError("HP module extent exceeds bounds")
-    for rva, size, digest in WINDOWS:
+    for rva, size, digest in WINDOWS+(CURRENT_GATE_WINDOWS if current_gate else ()):
         raw = appearance.read(reader, image_address(base, length, rva, size), size, "HP contract code")
         if hashlib.sha256(raw).hexdigest() != digest:
             raise ProbeError("HP code window differs from the pinned EXE")
@@ -184,7 +191,13 @@ def raw_string_key(watch, record, observed):
     raise ProbeError("StatusInfo _stringKey has no NUL within the fixed bound")
 
 
-def sample(reader, base, length, observed):
+def read_current_gate(watch, status, metadata_mode):
+    """Record the one reviewed gate only after the complete typed Hp mapping."""
+    return {"rawBypassU8": watch.value(status+0x273, "Hp current bypass gate", "<B"),
+            "metadataMode": metadata_mode}
+
+
+def sample(reader, base, length, observed, *, current_gate=False):
     watch = Watch(reader, base, length)
     observed["stage"] = "controlledActor"
     world = watch.link(base+appearance.WORLD_GLOBAL, "world root")
@@ -242,6 +255,8 @@ def sample(reader, base, length, observed):
            (("currentStoredI64", 8), ("baseI64", 0x18), ("normI64", 0x20), ("floorI64", 0x28), ("field30I64", 0x30))},
         "timingAndModeRaw": {hex(offset): raw[offset:offset+size].hex() for offset, size in
                              ((0x10, 8), (0x38, 8), (0x40, 8), (0x50, 2), (0x52, 1), (0x53, 1))}}
+    if current_gate:
+        observed["currentGate"] = read_current_gate(watch, status, mode)
     observed["dependencies"] = watch.finish()
     if watch.value(entry_address+0x48, "entry update counter") != counter:
         raise ProbeError("Hp update counter changed after reread")
@@ -273,10 +288,12 @@ def process_identity(reader):
 
 def reject(report, reason, state="unavailable"):
     report.update(state=state, reason=str(reason)[:2000], **{flag: False for flag in SUCCESS_FLAGS})
+    if "currentGate" in report:
+        report["currentGate"].update(state="unavailable", normalModeOneCandidate=False)
     return report
 
 
-def collect(reader, base, length, *, identity=None, pause=time.sleep):
+def collect(reader, base, length, *, identity=None, pause=time.sleep, current_gate=False):
     identity = identity or (lambda: process_identity(reader))
     report = {"schemaVersion": 2, "mode": "typed-hp-single-entry-read-only", "state": "unavailable", "samples": [],
               **{flag: False for flag in SUCCESS_FLAGS}, "snapshotAtomic": False, "nativeFunctionsInvoked": False,
@@ -286,23 +303,35 @@ def collect(reader, base, length, *, identity=None, pause=time.sleep):
                   "Only one metadata-mapped Hp record is read; unavailable records are not lazy-loaded or replaced by another actor.",
                   "Stored/timing/mode fields do not establish projected current, a HUD maximum, unit conversion or heart ratio.",
                   "Loading, death, mount/script states and changing entries can legitimately make this strict diagnostic unavailable."]}
+    if current_gate:
+        report.update(schemaVersion=3, mode="typed-hp-current-gate-read-only",
+                      currentGate={"rawBypassU8": None, "metadataMode": None,
+                                   "normalModeOneCandidate": False, "state": "unavailable"})
+        report["limitations"].append("The optional mode-1/zero-bypass gate is a static branch candidate, not native current or HUD behavior verification.")
     try:
         before = identity()
         if (type(before.get("pid")) is not int or before["pid"] <= 0 or not str(before.get("creationTime100ns", "")).isdigit()
                 or int(before["creationTime100ns"]) <= 0 or (before.get("moduleBase"), before.get("moduleSize")) != (base, length)):
             raise ProbeError("Reader process/module identity does not match the sample")
         report["process"] = before
-        validate_code(reader, base, length)
+        validate_code(reader, base, length, current_gate=current_gate)
         for index in range(2):
             observed = {"stableDuringSample": False}
             report["samples"].append(observed)
-            sample(reader, base, length, observed)
+            sample(reader, base, length, observed, current_gate=current_gate)
             if index == 0:
                 pause(0.05)
-        validate_code(reader, base, length)
+        validate_code(reader, base, length, current_gate=current_gate)
         if identity() != before or report["samples"][0] != report["samples"][1]:
             raise ProbeError("Process identity or complete typed Hp samples changed")
         report.update(state="observed", typedHpIdentityObserved=True, stableTwoSamples=True)
+        if current_gate:
+            gate = report["samples"][0]["currentGate"]
+            candidate = gate["metadataMode"] == 1 and gate["rawBypassU8"] == 0
+            report["currentGate"].update(gate, normalModeOneCandidate=candidate,
+                                         state="candidate" if candidate else "unsupported")
+            if not candidate:
+                report["currentGate"]["reason"] = "Requires metadata mode 1 and a zero Hp bypass byte"
     except (ProbeError, RuntimeError, OSError, ValueError, struct.error) as error:
         reject(report, error, "unstable" if any(row.get("stableDuringSample") for row in report["samples"]) else "unavailable")
     return report
@@ -312,6 +341,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pid", type=int)
     parser.add_argument("--output", type=Path, default=ROOT/"runtime/typed-health.json")
+    parser.add_argument("--current-gate", action="store_true", help="also observe the typed Hp current branch gate; no value projection")
     args = parser.parse_args()
     output = appearance.output_path(args.output)
     pid = args.pid
@@ -330,7 +360,7 @@ def main():
         version = subprocess.check_output(["powershell", "-NoProfile", "-Command", "(Get-Item -LiteralPath '"+str(path).replace("'", "''")+"').VersionInfo.FileVersion"], text=True).strip()
         digest = appearance.file_digest(path)
         roster.validate_layout_build(profile, version, digest)
-        report = collect(reader, base, length)
+        report = collect(reader, base, length, current_gate=args.current_gate)
         try:
             if (report.get("process", {}).get("pid") != pid or process_identity(reader) != report.get("process")
                     or appearance.file_digest(path) != digest):
@@ -338,7 +368,8 @@ def main():
         except (ProbeError, RuntimeError, OSError, ValueError) as error:
             reject(report, error, "unstable")
         report.update(timeUtc=dt.datetime.now(dt.timezone.utc).isoformat(), gameVersion=version, supportedExeSha256=digest,
-                      contract={"codeWindowCount": len(WINDOWS)+1, "fixedTypeCount": len(TYPES), "namedCategory": "Hp"})
+                      contract={"codeWindowCount": len(WINDOWS)+1+(len(CURRENT_GATE_WINDOWS) if args.current_gate else 0),
+                                "fixedTypeCount": len(TYPES), "namedCategory": "Hp"})
         appearance.write_report(output, report)
         print(json.dumps({"output": str(output), **{key: report.get(key) for key in
                          ("state", "reason", *SUCCESS_FLAGS, "hudReady", "gameMemoryWritten", "nativeFunctionsInvoked")}}, indent=2))

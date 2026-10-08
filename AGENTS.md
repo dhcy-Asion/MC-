@@ -7,9 +7,13 @@ the earlier copy under Desktop/Git.
 
 ## 开始工作与交接
 
-新聊天先阅读本文件、[README.md](README.md)、[docs/architecture.md](docs/architecture.md)、
+新聊天先阅读本文件、[docs/current-state.md](docs/current-state.md)、[README.md](README.md)、[docs/architecture.md](docs/architecture.md)、
 [docs/progress.md](docs/progress.md) 和 [CHANGELOG.md](CHANGELOG.md)，再查看实际 Git 状态和相关源码。
 历史聊天、忽略目录中的研究脚本和进程地址不能作为唯一交接资料。
+
+`docs/current-state.md` 是精简的当前交接入口，历史过程保留在 progress 中。子任务只
+获得必要文件、明确问题及验收条件，修改文件责任互斥。主控独占实际游戏安装、
+操作与恢复；最多三个子代理按独立工作启用，不为填满名额扩展研究范围。
 
 `docs/architecture.md` 描述已经存在的模块和接口；`docs/progress.md` 记录当前里程碑、
 验收条件、检查结果、关键决策及下一步。用户需求细节保存在 `docs/steve-character.md`。
@@ -97,6 +101,7 @@ the earlier copy under Desktop/Git.
 | 临时 Steve 注册／app 对照 | `py -3.12 -B tools/check_steve_probe.py --part-table --rebuild` 检查十三资源注册包；`--app-variant macduff-00000 --rebuild` 检查十四资源单 app 对照；app 必须带头描述文件和注册表，默认十一／十二资源范围保持；完整事务需原临时包先恢复 |
 | 外观只读输入路径 | `py -3.12 -B tools/check_appearance_controller.py`；schema 7 的 `--render-input-paths` 与 RTTI／links 模式互斥，固定 46 个静态窗口及两次全链采样；声明 PAC/PAB 与初始 Appearance 输入，均不证明实际 descriptor 或 Steve 加载 |
 | 受控 Hp 单条诊断 | `py -3.12 -B tools/check_health_probe.py`；固定 EXE、ClientStatus 与三种 metadata 类型、名称 Hp key／单条映射、完整依赖双采样与同句柄进程身份；实机 `probe_health.py` 只读，不投影当前值或声明 HUD 最大值 |
+| 私有部件目录诊断 | `py -3.12 -B tools/check_part_catalog.py`；固定四名称、两目录、构造归属链、桶／节点／完整名称碰撞核对及双采样；原名基线成立才提升缺失结果，不把目录存在等同模型显示 |
 | 原生资源读取客户端 | `py -3.12 -B tools/check_native_resource_probe.py`，使用隔离 HTTP/假进程身份及真实本地资源摘要；实际引擎读取单独记录，不等于模型显示 |
 | 原生资源读取接口 | `python -B tools/check_native_resources.py`；真实 backend 的隔离 host、故障释放/尺寸/队列测试、旧读取函数与补丁回建；完整 ASI 构建后再实测 |
 | Git 同步脚本 | `python tools/check_sync.py`，使用其临时仓库，不重写用户仓库历史 |

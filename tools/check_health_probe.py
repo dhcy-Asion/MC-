@@ -78,7 +78,7 @@ def fixture(disk):
     reader = FakeReader()
     for address in ADDR.values():
         reader.block(address, 0x700)
-    for rva, size, _ in probe.WINDOWS:
+    for rva, size, _ in probe.WINDOWS+probe.CURRENT_GATE_WINDOWS:
         reader.segments[BASE+rva] = bytearray(disk.read(rva, size))
     rva, raw = probe.COUNTER_WINDOW
     reader.segments[BASE+rva] = bytearray(raw)
@@ -147,18 +147,22 @@ class HealthChecks(unittest.TestCase):
     def setUpClass(cls):
         cls.disk = DiskImage(cls.exe)
 
-    def collect(self, reader, pause=lambda _: None, identities=None):
+    def collect(self, reader, pause=lambda _: None, identities=None, *, current_gate=False):
         callback = mock.Mock(side_effect=identities) if identities is not None else lambda: identity(self.disk)
-        return probe.collect(reader, BASE, self.disk.length, identity=callback, pause=pause)
+        return probe.collect(reader, BASE, self.disk.length, identity=callback, pause=pause, current_gate=current_gate)
 
     def assert_unavailable(self, report):
         self.assertNotEqual(report["state"], "observed", report)
         for flag in (*probe.SUCCESS_FLAGS, "hudReady", "snapshotAtomic", "gameMemoryWritten", "nativeFunctionsInvoked"):
             self.assertIs(report[flag], False, flag)
+        if "currentGate" in report:
+            self.assertIs(report["currentGate"]["normalModeOneCandidate"], False)
+            self.assertEqual(report["currentGate"]["state"], "unavailable")
 
     def test_01_fixed_disk_code_types_names_and_counter_pins(self):
         self.assertEqual(len(probe.WINDOWS), 20)
-        for rva, size, digest in probe.WINDOWS:
+        self.assertEqual(len(probe.CURRENT_GATE_WINDOWS), 2)
+        for rva, size, digest in probe.WINDOWS+probe.CURRENT_GATE_WINDOWS:
             self.assertEqual(hashlib.sha256(self.disk.read(rva, size)).hexdigest(), digest, hex(rva))
         rva, raw = probe.COUNTER_WINDOW
         self.assertEqual(self.disk.read(rva, len(raw)), raw)
@@ -170,11 +174,16 @@ class HealthChecks(unittest.TestCase):
         self.assertEqual(self.disk.read(probe.HP_NAME, 3), b"Hp\0")
         self.assertEqual(struct.unpack("<Q", self.disk.read(probe.HP_NAME_SLOT, 8))[0], self.disk.base+probe.HP_NAME)
         probe.validate_code(fixture(self.disk), BASE, self.disk.length)
+        probe.validate_code(fixture(self.disk), BASE, self.disk.length, current_gate=True)
 
     def test_02_nonzero_named_hp_and_nonzero_mapped_index_stored_raw_only(self):
         reader = fixture(self.disk)
         report = self.collect(reader)
         self.assertEqual(report["state"], "observed", report.get("reason"))
+        self.assertEqual(report["schemaVersion"], 2)
+        self.assertNotIn("currentGate", report)
+        self.assertNotIn((ADDR["status"]+0x273, 1), reader.reads)
+        self.assertFalse(any(at==BASE+rva for at, _ in reader.reads for rva, _, _ in probe.CURRENT_GATE_WINDOWS))
         self.assertTrue(report["typedHpIdentityObserved"] and report["stableTwoSamples"])
         first, second = report["samples"]
         self.assertEqual(first, second)
@@ -436,6 +445,130 @@ class HealthChecks(unittest.TestCase):
             report = self.collect(reader, pause=lambda _: reader.put(address, value, fmt))
             self.assert_unavailable(report)
             self.assertEqual(report["state"], "unstable")
+
+    def test_22_optional_mode_one_gate_is_stable_raw_candidate_only(self):
+        for entry_mode in (0, 1, 2, 255):
+            reader = fixture(self.disk)
+            reader.put(ADDR["statusRecord"]+0x11, 1, "<B")
+            reader.put(ENTRY+0x53, entry_mode, "<B")
+            report = self.collect(reader, current_gate=True)
+            self.assertEqual(report["state"], "observed", report.get("reason"))
+            self.assertEqual(report["schemaVersion"], 3)
+            self.assertEqual(report["currentGate"], {"metadataMode": 1, "rawBypassU8": 0,
+                                                    "normalModeOneCandidate": True, "state": "candidate"})
+            self.assertEqual(report["samples"][0], report["samples"][1])
+            self.assertEqual(report["samples"][0]["currentGate"], {"metadataMode": 1, "rawBypassU8": 0})
+            self.assertEqual(reader.reads.count((ADDR["status"]+0x273, 1)), 4)
+            for sample in report["samples"]:
+                self.assertTrue(any(row["address"]==hex(ADDR["status"]+0x273) and row["size"]==1
+                                    and row["bytesHex"]=="00" for row in sample["dependencies"]))
+            for flag in ("projectedCurrentVerified", "maximumVerified", "unitsVerified", "hudReady"):
+                self.assertIs(report[flag], False)
+
+    def test_23_unsupported_gate_keeps_typed_identity_without_candidate(self):
+        for metadata_mode, bypass in ((2, 0), (3, 0), (255, 0), (1, 1), (1, 255), (2, 1)):
+            reader = fixture(self.disk)
+            reader.put(ADDR["statusRecord"]+0x11, metadata_mode, "<B")
+            reader.put(ADDR["status"]+0x273, bypass, "<B")
+            reader.put(ENTRY+0x53, 0, "<B")
+            report = self.collect(reader, current_gate=True)
+            self.assertEqual(report["state"], "observed", report.get("reason"))
+            self.assertTrue(report["typedHpIdentityObserved"] and report["stableTwoSamples"])
+            self.assertEqual(report["currentGate"]["state"], "unsupported")
+            self.assertFalse(report["currentGate"]["normalModeOneCandidate"])
+            self.assertEqual((report["currentGate"]["metadataMode"], report["currentGate"]["rawBypassU8"]),
+                             (metadata_mode, bypass))
+
+    def test_24_optional_gate_short_or_failed_read_cannot_promote_identity(self):
+        for replacement in (None, b"", OSError("gate inaccessible")):
+            reader = fixture(self.disk)
+            original = reader.read
+            def failing(address, size):
+                if (address, size)==(ADDR["status"]+0x273, 1):
+                    if isinstance(replacement, Exception):
+                        raise replacement
+                    return replacement
+                return original(address, size)
+            reader.read = failing
+            # The same inaccessible byte is not touched in default schema 2.
+            self.assertEqual(self.collect(reader)["state"], "observed")
+            self.assert_unavailable(self.collect(reader, current_gate=True))
+
+    def test_25_optional_gate_dependency_reread_and_two_sample_changes_fail(self):
+        for when in ("reread", "samples"):
+            reader = fixture(self.disk)
+            reader.put(ADDR["statusRecord"]+0x11, 1, "<B")
+            original, seen = reader.read, 0
+            def changing(address, size):
+                nonlocal seen
+                raw = original(address, size)
+                if (address, size)==(ADDR["status"]+0x273, 1):
+                    seen += 1
+                    if seen==2:
+                        return b"\x01"
+                return raw
+            if when=="reread":
+                reader.read = changing
+                report = self.collect(reader, current_gate=True)
+            else:
+                report = self.collect(reader, current_gate=True,
+                                      pause=lambda _: reader.put(ADDR["status"]+0x273, 1, "<B"))
+            self.assert_unavailable(report)
+            self.assertIn("changed", report["reason"])
+
+    def test_26_optional_code_pins_fail_before_heap_and_are_rechecked(self):
+        for rva, _, _ in probe.CURRENT_GATE_WINDOWS:
+            reader = fixture(self.disk)
+            reader.segments[BASE+rva][0] ^= 1
+            self.assertEqual(self.collect(reader)["state"], "observed")
+            reader.reads.clear()
+            report = self.collect(reader, current_gate=True)
+            self.assert_unavailable(report)
+            self.assertEqual(report["samples"], [])
+            self.assertFalse(any(at<BASE for at, _ in reader.reads))
+            reader = fixture(self.disk)
+            def mutate(_):
+                reader.segments[BASE+rva][0] ^= 1
+            self.assert_unavailable(self.collect(reader, current_gate=True, pause=mutate))
+
+    def test_27_optional_final_identity_exe_and_exit_clear_candidate(self):
+        before = identity(self.disk)
+        for after in (identity(self.disk, creationTime100ns="999"), probe.ProbeError("Reader exited")):
+            reader = fixture(self.disk)
+            reader.put(ADDR["statusRecord"]+0x11, 1, "<B")
+            self.assert_unavailable(self.collect(reader, current_gate=True, identities=[before, after]))
+        for last in ("digest", "session", "exit"):
+            reader = fixture(self.disk)
+            reader.put(ADDR["statusRecord"]+0x11, 1, "<B")
+            with tempfile.TemporaryDirectory(prefix="health-gate-main-", dir=probe.ROOT/"runtime") as temporary:
+                output = Path(temporary)/"new.json"
+                identities, digests = [before, before, before], [probe.roster.SHA256]*2
+                if last=="digest":
+                    digests[1] = "0"*64
+                elif last=="session":
+                    identities[2] = identity(self.disk, creationTime100ns="999")
+                else:
+                    identities[2] = probe.ProbeError("Reader exited")
+                with mock.patch("sys.argv", ["probe_health", "--pid", "43210", "--current-gate", "--output", str(output)]), \
+                        mock.patch.object(probe.core, "Reader", return_value=reader), \
+                        mock.patch.object(probe, "process_identity", side_effect=identities), \
+                        mock.patch.object(probe.subprocess, "check_output", return_value=probe.roster.VERSION), \
+                        mock.patch.object(probe.appearance, "file_digest", side_effect=digests), mock.patch("builtins.print"):
+                    self.assertEqual(probe.main(), 1)
+                report = json.loads(output.read_bytes())
+                self.assert_unavailable(report)
+                self.assertEqual(report["contract"]["codeWindowCount"], 23)
+                self.assertEqual(report["currentGate"]["rawBypassU8"], 0)
+                self.assertEqual(report["currentGate"]["metadataMode"], 1)
+                reader.close.assert_called_once()
+
+    def test_28_optional_gate_waits_for_complete_typed_hp_mapping(self):
+        for address, value, fmt in ((ADDR["status"], BASE+0x800000, "<Q"), (ADDR["root"], 0x90000, "<Q"),
+                                    (ADDR["map"]+MAP_SLOT*4, -1, "<i"), (ENTRY, HP+1, "<H")):
+            reader = fixture(self.disk)
+            reader.put(address, value, fmt)
+            self.assert_unavailable(self.collect(reader, current_gate=True))
+            self.assertNotIn((ADDR["status"]+0x273, 1), reader.reads)
 
 
 def main():

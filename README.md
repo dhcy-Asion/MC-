@@ -5,6 +5,7 @@
 仓库：[dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。当前开发目录为桌面的 `CrimsonMC`。
 
 开发入口：[AGENTS.md](AGENTS.md) 规定开发和上传流程；
+[当前交接](docs/current-state.md) 保存本轮优先级、现场状态与下一项实验；
 [模块架构与接口](docs/architecture.md) 说明已实现行为；
 [当前状态与里程碑](docs/progress.md) 保存验收标准、证据和下一步。
 M1 文档与只读诊断基线已完成；M6a 独立物品背包已有实现。2026-10-06 最新要求为

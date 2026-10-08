@@ -487,6 +487,15 @@ getter `0x723B90` 只返回 service+40068。该指针须与 World+A8 及 global 
 匿名固定构造合同也不意味着取得标准 RTTI 类名。名称 hash 的 seed 为 0xC5EDE，
 算法、桶边界与碰撞处理仍待独立核对，不套用零 seed 的档案路径 hash 直接读取表。
 
+2026-10-08 收束为 `probe_part_catalog.py`：已核对 hashlittle seed 0xC5EDE，不包含
+NUL、不转大小写或归一化路径。固定 EXE 的 Python 字节解释与 CDMW 在长度 0..128
+的四种对齐共 516 项一致。实现只查询四个固定 stem 的 +70／+90 两张 inline map，
+各桶最多 31 项，节点 +0 必须回指 bucketIndex*31+slot；同 hash 仍核完整名称，
+含真实碰撞反例。原名对应的两个目录必须同时正确，才可将私有名字缺失提升为已观测。
+header、整桶、匹配节点、holder、含 NUL 字符串和整个受控归属链完整回读及双采样；
+clear epoch 并非每次插入的计数，不能代替字节稳定检查。84 个固定窗口和 21 项隔离
+检查通过，末尾同句柄／EXE 失败会清掉顶层及嵌套成功标记。尚未执行实机目录采样。
+
 ### 受控 Hp 单条记录的静态合同补充
 
 后续固定 EXE 研究已建立精确 ClientStatusActorComponent（vtable `0x558D868`）：
@@ -517,3 +526,14 @@ stringKey=`Hp`，characterKey=0、groupKey=1、regenerateType=1、mappedIndex=0�
 stored/base 均为 300000，norm/floor/field30 为 0，更新计数 0。这是精确身份和原始
 记录观测，不能直接宣称 300 点当前／最大生命；投影、单位、分母和受伤／治疗行为
 尚待验收。成功和首版失败报告都保留在 ignored runtime，心形 HUD 尚未接线。
+
+后续静态核对了原生 Hp 数值消费者：StatGauge 主类别 0 取 current `0x17AD670`
+和 base `0x17AD810`，分别按有符号整数朝零截断 /1000；基础数值上限来自 entry+18，
+不能用 norm 或 +30。mode 1 helper `0x17B4040` 直接取 stored+8，但外层遇到
+ClientStatus+273 非零会改取固定 global 的值，所以旧样本不足以证明 current。
+独立 UI 选择器／受控身份／最终分段链另有静态证据；条宽还受配置和动画影响。
+不继续扩展缓存镜像研究来阻碍当前人物显示主线。
+
+`--current-gate` 小扩展加入上述两段固定代码窗口及 +273 单字节，默认 schema 2
+读取保持，开启为 schema 3。全链／全依赖稳定后才生成候选标记；28 项检查通过。
+新字节未在实机采样，候选不宣称行为、单位或心形 HUD 已验证。

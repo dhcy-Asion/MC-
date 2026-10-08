@@ -1,18 +1,19 @@
 # 当前状态与分阶段计划
 
-更新日期：2026-10-07（Asia/Shanghai）。当前开发目录为桌面 `CrimsonMC`，仓库为
+更新日期：2026-10-08（Asia/Shanghai）。当前开发目录为桌面 `CrimsonMC`，仓库为
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-本轮现场状态：用户改为手动启动／退出，十二资源头描述文件包收据
-`64cefed193bc4014914e78495471dc67` 当前已安装。用户进入后确认仍为原角色；schema 7
-已稳定读到初始 app 为 `cd_phm_macduff_00000.app_xml`。只读诊断完成，等待用户正常
-退出后恢复；游戏进程在最近一次核对中仍在运行。下文旧“已恢复”指此前收据，
-不得据此绕过当前 active receipt。窗口自动接管保持停止。
+本轮现场状态：2026-10-08 核实游戏已关闭，十二资源头描述文件包收据
+`64cefed193bc4014914e78495471dc67` 已实际恢复，38 项原始哈希匹配，无 0041／active
+receipt；36 个最新存档、MC 持久状态、原点及 ASI 保持。随后已安装通过完整检查的
+十三资源注册包，**当前 active receipt 为 `90cdf0fca1ce4095aedc43d3515a1525`，待用户
+进入、实测及退出后恢复**。当前交接与下一实验见 [current-state.md](current-state.md)。
+用户手动启动／退出的选择保持，自动接管停止。
 
 用户已于 2026-10-06 将剩余移植工作设为持续目标并要求开始执行，之后再次要求继续。
-目标已建立且未标记完整移植完成。此前一轮触及 usageLimited；用户继续后已恢复 active，
-当前继续原生资产与实机探针工作，没有自行改为 complete/paused/blocked。
+目标已建立且未标记完整移植完成。最近持续目标工具状态为 usageLimited；2026-10-08
+用户明确要求按多智能体分工继续，当前执行其指令，没有自行更改目标状态或缩减范围。
 来源、路线和实测保护见 [../MODLOG.md](../MODLOG.md)。
 
 ## 当前里程碑
@@ -1376,3 +1377,41 @@ regenerateType 1、mappedIndex 0，stored/base 原值 300000，norm/floor/field3
 `runtime/typed-health-head-control-20261007.json`（初版拒绝）及
 `runtime/typed-health-stringkey-head-control-20261007.json`（schema 2 成功）。当前安装／恢复以本文件顶部现场状态
 为准；用户手动退出请求仍待完成，不把之前的 restored 记录当成本轮已恢复。
+
+## 2026-10-08 收束分工、恢复旧包并验证注册修正版
+
+用户要求多智能体与持续目标配合推进，并确认完成修改需同步 GitHub。新增精简
+`current-state.md` 作为交接入口，主控负责安装／实机／恢复，独立子代理仅收束已有
+目录与 HP 诊断；不再为等待游戏扩大逆向支线。完整项目范围保持。
+
+实际检查发现红沙已退出、MC／桥接也停止。原在线记录器因连接被拒没有生成成功
+记录，随即使用独立离线恢复记录器采集持久文件，未伪造在线 API。恢复收据
+`64cefed193bc4014914e78495471dc67` 成功；38 项原始哈希、36 个最新存档、MC 持久状态
+revision 22、原点和 ASI 一致，0041／active receipt 消失。证据位于
+`runtime/steve-head-recovery-20261008-{before-restore,restored}.json`。随后以 `-NoGame`
+正常启动 MC 和桥接，完整在线 MC 状态与原安装前快照相同，游戏未自动启动。
+
+十三资源注册包已实际封装，全部 13 项解包逐字一致，PAZ 743120 字节。报告 SHA256
+`22633e19d57ade19d090e84a26641c5385c53b328941ddb48a1aa20fd66f7b6c`。
+仅供后续对照的十四资源 Macduff 00000 包也已封装，PAZ 744240 字节，报告 SHA256
+`58bfd8539820892721276792ae1e0dbf8667e3d5b282bd546eeff8b96574e3f8`；不会同时安装。
+
+| 本轮检查 | 结果 |
+| --- | --- |
+| `check_steve_probe.py --rebuild` | 21/21，全新重建及隔离安装／恢复通过 |
+| `check_steve_probe.py --head-descriptor --rebuild` | 23/23，77.365 秒；上轮收尾失败在恢复后的原版状态重跑通过 |
+| `check_steve_probe.py --part-table --rebuild` | 23/23，92.556 秒；精确单项增加、报告依赖与恢复通过 |
+| `check_steve_probe.py --app-variant macduff-00000 --rebuild` | 24/24，85.208 秒；单 app 增量、禁止另一个 app、完整事务与重建通过 |
+| `check_asset_overlay.py --verify-game` | 13/13，原始 metadata／索引保持 |
+| `check_part_catalog.py` | 21/21，84 固定窗口、四名称两目录、碰撞、边界与漂移 |
+| `check_health_probe.py` | 28/28，默认 schema 2 和可选 current-gate schema 3 隔离保持 |
+
+四个诊断源码经过独立审查，无需修改。目录及可选 HP 门禁尚待新游戏会话只读实测；
+未写进程内存，未更新 ASI，不把目录成员或条件候选提升为 Steve／HUD 行为完成。
+
+所有封装检查完成后，实际安装十三资源注册包；新收据
+`90cdf0fca1ce4095aedc43d3515a1525`，variant `steve-kliff-part-table-v1`，绑定上述十三包
+报告 SHA。安装前后文件全部匹配，完整 MC 状态、原点及 ASI 不变。证据为
+`runtime/steve-part-table-20261008-before-install.json`／`-installed.json`。已请求用户
+手动进入并反馈实际外观，随后读取受控目录。当前尚未实测显示，亦尚未恢复新包；
+十四包未安装。新的交接文件明确区分当前 active 收据和已经 restored 的历史收据。

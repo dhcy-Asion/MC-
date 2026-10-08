@@ -1,6 +1,7 @@
 # 项目架构与接口约定
 
 本文件描述当前已实现的实验原型。分阶段目标和验收条件见 [progress.md](progress.md)，
+精简现场交接与当前责任分配见 [current-state.md](current-state.md)，
 人物需求见 [steve-character.md](steve-character.md)。2026-10-06 范围调整为启用 mod 后
 持续显示 Steve，兼容两套装备；用户确认心形 UI 使用红沙真实 HP／战斗规则。
 独立第四身份仍是历史研究。角色替换、HP 行为桥接和
@@ -31,6 +32,7 @@ flowchart LR
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断；保留状态记录原始标量 | `health_candidate.plausible` 仅表示数值有界；不推断最大 HP 或时间投影值，`hud_ready=false`；只读权限，不调用游戏函数 |
 | `tools/probe_health.py`、`check_health_probe.py` | 精确受控角色、ClientStatus 回链和三种元数据表映射的单条 Hp 只读观测；完整依赖回读、双采样及同句柄进程身份 | schema 2 区分 serialized key 与表索引，精确 stringKey=Hp；21 项检查及实机双采样通过，投影值、最大值、单位和 `hudReady` 保持 false |
+| `tools/probe_part_catalog.py`、`check_part_catalog.py` | 四个固定原名／私有名称在两张 PAPPT 目录的外部只读查询；构造身份、桶、节点、完整字符串及双采样 | 84 个固定窗口、21 项检查；原名基线正确才确认缺名，所有模型加载／渲染／应用标记保持 false，待实机 |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
 | `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认 schema 4；三个互斥 opt-in 分别读取 primary RTTI、schema 5 的 +68 引用头或 schema 7 的 Skinned PAC/PAB 与初始 Appearance 输入；不调用刷新或写选择 |
 | `tools/prepare_steve_segmented.py`、`check_steve_segmented.py` | 从固定朝向候选生成独立四肢分段蒙皮 PAC，四 LOD 表面／UV 与真实骨链检查 | 不改变旧候选／默认资源；旧 PABC、头部组合、实际装备接点和实机动画仍未验收 |
@@ -346,6 +348,12 @@ serialized key 单独保留，不能与表索引相等比较。再经 CharacterI
 的有界映射只读一条 0x90 记录，u16 key 回核 Hp。71 项实读依赖回读及双采样稳定，
 同一 Reader handle 的创建时间、存活和模块身份复核通过。尚未推导 HUD 当前／最大值，
 不向旧 `health_candidate` 回填成功状态，不在采样失败时返回历史生命值。
+
+可选 `--current-gate` 使用 schema 3，在相同受控 ClientStatus 中读取 +273 的特殊 Hp
+门禁字节，加入全部依赖回读及双采样。仅模式 1 且该字节为 0 时给出
+`normalModeOneCandidate`；模式 2／非零门禁为 unsupported，末尾身份失败撤销候选。
+默认 schema 2 不读该字节，公共 Watch 不变。扩展共 28 项检查通过、开启时 23 个固定
+窗口；尚未实测新增模式，current／maximum／units／HUD 就绪仍 false。
 
 ## 关键决策
 
