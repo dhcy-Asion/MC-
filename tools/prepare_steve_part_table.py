@@ -1,8 +1,9 @@
 """Append two private Steve stems to the fixed native part-prefab table offline.
 
 The original part/head rows stay in their original order and retain every byte.
-Only the two counts and four appended, stem-renamed copies differ. This is a
-resource registration candidate, not evidence that the engine loaded Steve.
+Only the two counts and four appended rows differ. The new part rows declare
+only the components retained in the private prefabs; descriptor rows keep the
+donor metadata. This does not establish that the engine loaded Steve.
 """
 from __future__ import annotations
 
@@ -17,9 +18,9 @@ import prepare_steve_orientation as orientation
 from prepare_steve_prefab import strict_json
 
 ROOT = native.ROOT
-DEFAULT_OUTPUT = ROOT/"build/steve-part-table"
+DEFAULT_OUTPUT = ROOT/"build/steve-part-table-v2"
 REPORT_NAME = "steve-part-table-report.json"
-VARIANT = "steve-private-body-head-part-prefab-table-probe"
+VARIANT = "steve-private-body-head-part-prefab-table-probe-v2"
 TABLE_PATH = "character/bin__/partprefabtable.pappt"
 SOURCE_SHA256 = "d6947dcb57d32e0503704da28edf4645baaa8faad8fbd47d09a8a8832686abed"
 SOURCE_SIZE = 2130295
@@ -30,9 +31,10 @@ FORMAT_SOURCE = "cdmw/core/pappt_format.py"
 FORMAT_SOURCE_SHA256 = "50585868bace762cccb294ec8ef9db3fc59da848c43cbd68610387f0ae47d52c"
 CLONES = (
     {"original": "cd_phm_00_nude_01_0002_macduff", "private": "crimsonmc_steve_body_1_21_1", "folder": "1_pc/01_phm/nude",
-     "parts": ["CD_Nude", "CD_Underwear"]},
+     "parts": ["CD_Nude", "CD_Underwear"], "privateParts": ["CD_Nude"]},
     {"original": "cd_phm_00_head_00_0001_macduff", "private": "crimsonmc_steve_head_1_21_1", "folder": "1_pc/01_phm/head/head",
-     "parts": ["CD_Head", "CD_EyeLeft", "CD_EyeRight", "CD_Eyebrows", "CD_Eyelashes", "CD_Tooth", "CD_Nude_Hair"]},
+     "parts": ["CD_Head", "CD_EyeLeft", "CD_EyeRight", "CD_Eyebrows", "CD_Eyelashes", "CD_Tooth", "CD_Nude_Hair"],
+     "privateParts": ["CD_Head"]},
 )
 INTEGRATION = {key: False for key in ("installed", "runtimePartTableLoaded", "privatePrefabsResolved", "appearanceApplied",
     "steveVisible", "actorLocal", "animationVerified", "equipmentVerified", "restorationVerified")}
@@ -135,16 +137,43 @@ def validate_source(source):
     return parsed
 
 
-def clone_row(source, row, stem):
+def clone_row(source, row, stem, part_names=None):
     encoded = stem.encode("utf-8")+b"\0"
     if not 1 < len(encoded) <= 255 or b"\0" in encoded[:-1] or "/" in stem or "\\" in stem:
         raise ValueError("PAPPT private stem is not a bounded bare name")
-    return bytes([len(encoded)])+encoded+source[row["stemEnd"]:row["end"]]
+    prefix = bytes([len(encoded)])+encoded
+    if part_names is None:
+        return prefix+source[row["stemEnd"]:row["end"]]
+    if not part_names or len(set(part_names)) != len(part_names):
+        raise ValueError("PAPPT private parts must be nonempty and unique")
+    reader = Reader(source)
+    reader.pos = row["stemEnd"]
+    reader.string(), reader.string()  # Folder and sockets stay byte-identical.
+    reader.u8(), reader.string(), reader.u8()  # Tag, extra and record flag.
+    prefix += source[row["stemEnd"]:reader.pos]
+    count = reader.u8()
+    slots = {}
+    for _ in range(count):
+        start = reader.pos
+        name = reader.string()
+        reader.u8()
+        if name in slots:
+            raise ValueError("PAPPT source has duplicate part slots")
+        slots[name] = source[start:reader.pos]
+    if reader.pos != row["end"] or any(name not in slots for name in part_names):
+        raise ValueError("PAPPT private parts differ from the donor slots")
+    return prefix+bytes([len(part_names)])+b"".join(slots[name] for name in part_names)
+
+
+def private_part_record(row, clone):
+    parts = {part["name"]: part for part in row["parts"]}
+    return dict(semantic(row), stem=clone["private"],
+                parts=[dict(parts[name]) for name in clone["privateParts"]])
 
 
 def build_table(source):
     parsed = validate_source(source)
-    part_rows = [clone_row(source, unique_row(parsed["records"], clone["original"]), clone["private"]) for clone in CLONES]
+    part_rows = [clone_row(source, unique_row(parsed["records"], clone["original"]), clone["private"], clone["privateParts"]) for clone in CLONES]
     head_rows = [clone_row(source, unique_row(parsed["headRecords"], clone["original"]), clone["private"]) for clone in CLONES]
     offset = parsed["headCountOffset"]
     candidate = (source[:8]+struct.pack("<I", SOURCE_PART_COUNT+2)+source[12:offset]+b"".join(part_rows)
@@ -156,6 +185,8 @@ def build_table(source):
             raise ValueError("PAPPT rewrite altered original row bytes or order")
         for row, clone in zip(new[-2:], CLONES):
             expected = dict(semantic(unique_row(old, clone["original"])), stem=clone["private"])
+            if section == "records":
+                expected = private_part_record(unique_row(old, clone["original"]), clone)
             if semantic(row) != expected or sum(r["stem"]==clone["private"] for r in new) != 1:
                 raise ValueError("PAPPT appended row changed metadata or shadowed a stem")
     restored = (candidate[:8]+struct.pack("<I", SOURCE_PART_COUNT)+candidate[12:actual["records"][-2]["start"]]
@@ -171,9 +202,13 @@ def verify_cdmw(source, candidate):
     original = parse_pappt(source)
     if original.reserved != b"\0"*8 or original.tag_prefix != b"\x01" or encode_pappt(original) != source:
         raise ValueError("CDMW PAPPT original round trip differs")
-    records = tuple(replace(next(row for row in original.records if row.stem==clone["original"]), stem=clone["private"]) for clone in CLONES)
+    records = []
+    for clone in CLONES:
+        donor = next(row for row in original.records if row.stem==clone["original"])
+        records.append(replace(donor, stem=clone["private"],
+                               parts=tuple(next(slot for slot in donor.parts if slot.name==name) for name in clone["privateParts"])))
     heads = tuple(replace(next(row for row in original.head_records if row.stem==clone["original"]), stem=clone["private"]) for clone in CLONES)
-    expected = replace(original, records=original.records+records, head_records=original.head_records+heads)
+    expected = replace(original, records=original.records+tuple(records), head_records=original.head_records+heads)
     if encode_pappt(expected) != candidate or parse_pappt(candidate) != expected:
         raise ValueError("CDMW PAPPT appended candidate differs")
     for raw, table in ((source, original), (candidate, expected)):
@@ -211,7 +246,8 @@ def make_report(source):
     for clone in CLONES:
         part, head = (unique_row(parsed[section], clone["original"]) for section in ("records", "headRecords"))
         added.append({"templateStem": clone["original"], "privateStem": clone["private"],
-                      "partRecord": dict(semantic(part), stem=clone["private"]),
+                      "partRecord": private_part_record(part, clone),
+                      "omittedDonorParts": [name for name in clone["parts"] if name not in clone["privateParts"]],
                       "headRecord": dict(semantic(head), stem=clone["private"]),
                       "prefabPath": "character/bin__/prefab/"+clone["folder"]+"/"+clone["private"]+".prefab"})
     row = {"virtualPath": TABLE_PATH, "localFile": "replacements/"+TABLE_PATH, "sha256": native.sha256(candidate),
@@ -232,7 +268,7 @@ def make_report(source):
                                      "independentFullDecodeMatches": True}},
             "integration": dict(INTEGRATION),
             "limitations": [
-                "Offline single-table candidate. Exactly two part records and two head records append original body/head metadata with private stems.",
+                "Offline v2 single-table candidate. New part rows declare only CD_Nude/CD_Head, matching the retained private prefab components; descriptor rows only rename their donor stems.",
                 "All original rows, order, folder/socket/extra/flags/part slots and reserved/tag bytes remain intact; original stems are not overwritten.",
                 "The two private prefab paths and their descriptors, meshes and materials are separate reviewed resources, not bundled here.",
                 "This global table registration does not select an appearance app, refresh a controlled actor, or prove private prefab resolution/display in game.",
@@ -275,7 +311,7 @@ def load_candidate(report_path):
 
 def prepare(game, output, source, deps):
     protected = [game, source, deps, *(ROOT/("build/"+name) for name in (
-        "steve-assembly", "steve-appearance", "steve-head-descriptor", "steve-app-macduff-00000", "steve-app-macduff-00002"))]
+        "steve-part-table", "steve-assembly", "steve-appearance", "steve-head-descriptor", "steve-app-macduff-00000", "steve-app-macduff-00002"))]
     output = orientation.preflight(output, protected)
     native.load_cdmw(source, deps)
     if native.file_hash(source/FORMAT_SOURCE) != FORMAT_SOURCE_SHA256:

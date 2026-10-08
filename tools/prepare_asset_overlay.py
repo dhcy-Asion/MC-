@@ -253,6 +253,8 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
             raise ValueError("Unexpected Steve part table identity or duplicate resource")
         resources.append(dict(row, localFile=str((part_table_report.parent / row["localFile"]).relative_to(ROOT))))
         payloads[table_path] = table_payloads[table_path]
+        from prepare_steve_probe_overlay import audit_part_components
+        audit_part_components(payloads)
         replacement_paths.add(table_path)
         replacement_snapshot.update(table_snapshot)
         inputs[str(part_table_report.relative_to(ROOT))] = native.file_hash(part_table_report)

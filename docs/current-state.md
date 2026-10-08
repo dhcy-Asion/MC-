@@ -11,9 +11,12 @@
 
 - 十一资源及十二资源头描述文件实测均仍是原角色。
 - 已实读当前初始 app 为 Macduff 00000；运行时选项表有两私有名字，不代表加载成功。
-- 原 PAPPT 两段缺私有名字。下一项为十三资源包：在十二资源基础上只加名称注册表。
-- 若仍失败，先读实际目录成员和初始 app，再决定是否进入已准备的单 app 十四资源对照。
-- 暂不扩大模型／材质／骨架修改范围，避免混淆这次修复的效果。
+- 原 PAPPT 两段缺私有名字。十三资源 v1 加注册表后，用户报告进入游戏闪退；恢复
+  原资源后同一存档可正常进入。此包实机失败，不能继续安装旧十四资源包。
+- 已确认静态缺陷：新增注册项沿用原版身体 2／头 7 个组件，而私有 prefab 各只有
+  CD_Nude／CD_Head 一个组件；原版两者列表逐项相等。v2 已修正新行列表与跨资源检查。
+- 修复只改 PAPPT 新行中的部件列表；模型、材质、骨架与 app 保持。静态缺陷成立，
+  但尚无异常堆栈证明它是闪退的唯一原因，v2 仍须实机验证。
 
 ## 现场和恢复
 
@@ -21,29 +24,38 @@
   `64cefed193bc4014914e78495471dc67`；38 项原始哈希匹配，0041 和 active receipt 消失。
 - 恢复前后 36 个最新红沙存档、MC 持久状态 revision 22、原点与 ASI 保持。
 - 当时 MC／桥接后台已停止，本次恢复比较的是持久文件，未伪造在线 API 状态。
-- 后台已用 `-NoGame` 启动，完整 MC API 状态与原快照相同。十三资源包通过检查后已
-  安装：当前 active receipt 为 `90cdf0fca1ce4095aedc43d3515a1525`，variant
-  `steve-kliff-part-table-v1`。**当前有临时包，尚待实测后退出恢复**；不能用上一条
-  旧包已恢复推断现在不存在 0041。安装后全部文件、库存、原点与 ASI 核对一致。
+- 十三资源 v1 收据 `90cdf0fca1ce4095aedc43d3515a1525` 已在进程退出后实际恢复。
+  当时无临时包、0041 或 active receipt；38 项原始哈希匹配，36 个最新存档、
+  完整 MC 状态、原点与 ASI 保持。用户手动启动新会话后确认可正常进入、不再闪退；
+  新会话再次核对完整 MC 状态不变。
+- 用户随后正常退出，主控核实进程结束后已安装十三资源 v2。**当前 active receipt
+  为 `045d94ec45d74007a5dfd1c53dd8e00a`，variant `steve-kliff-part-table-v2`，0041
+  存在，待实测及退出后恢复**；安装后全部文件、MC、原点与 ASI 核对通过。
 - 游戏启动、进入和退出仍由用户手动完成；主控独占安装、游戏诊断与恢复操作。
-- 恢复证据：`runtime/steve-head-recovery-20261008-{before-restore,restored}.json`。
+- 本次恢复证据：`runtime/steve-part-table-20261008-{before-restore,restored}.json`。
+  闪退日志及恢复后用户对照记录：`runtime/steve-crash-20261008/`。日志在角色创建处
+  中断，没有异常堆栈；指定时段 Windows 应用事件未找到匹配的崩溃记录。
 - 持续目标未完成；最近工具元数据为 `usageLimited`，当前按用户明确指令继续执行。
 
 ## 本轮交接
 
 | 工作 | 负责人 | 状态／验收 |
 | --- | --- | --- |
-| 恢复旧包，构建／检查十三资源与备用十四资源 | 主控 | 11／12／13／14 包分别 21／23／23／24 检查通过；已安装十三包，十四包保留备用 |
-| 目录及 HP 已有代码收束 | diagnostic_review | 目录 21/21、HP 28/28 通过，无需修复；新模式待实机 |
-| 新包显示、目录读取、退出恢复 | 主控＋用户手动进出游戏 | 已请求用户手动进入并反馈外观；等新会话只读观测，随后退出恢复 |
+| 闪退恢复、封装交叉检查与 v2 事务 | 主控 | v1 已恢复，原版进入正常；v2 十三／十四包分别 24/24、25/25 通过 |
+| PAPPT v2 修复 | crash_asset_audit | 完成；10/10 通过，原表及旧失败产物保持 |
+| 封装和安装准入复核 | diagnostic_review | 完成静态复核；加载顺序、旧收据恢复与跨资源拒绝无阻断问题 |
+| v2 游戏内对照 | 主控＋用户手动进出游戏 | 已安装十三包并请求用户手动进入反馈；十四包未安装 |
 
 四个诊断源文件进入本轮提交：`probe_part_catalog.py`、`check_part_catalog.py`、
 `probe_health.py`、`check_health_probe.py`，均在 `tools/`。目录成员不等于模型渲染；
 HP 可选门禁不等于心形 HUD 可用。不为等待现场操作而继续扩展无关逆向支线。
 
-本轮十三包快照脚本 `build/record-steve-part-table-20261008.py`，证据前缀
-`runtime/steve-part-table-20261008-`；已完成 before-install／installed，后续依次 in-world、
-before-restore、专用 `install_steve_probe.py --restore`、restored。每步成功后才执行下一步。
+旧十三包未取得 in-world 探针结果，不能补填成功记录；before-restore／restored 已完成。
+v2 使用独立 `build/steve-part-table-v2` 与 `build/steve-part-table-v2-probe-overlay`，
+variant 为 `steve-kliff-part-table-v2`，不能复用 v1 快照脚本中的固定计划／收据绑定。
+新版脚本 `build/record-steve-part-table-v2-20261008.py` 及同名 runtime 证据前缀，
+已完成 before-install／installed。计划 SHA256 为
+`19b5ae4841a63795324f642a8332fec23aca1783ed4af3804affd1237fdd54dc`。
 
 ## 协作规则
 

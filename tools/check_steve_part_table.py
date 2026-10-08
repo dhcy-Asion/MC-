@@ -40,6 +40,9 @@ class PartTableChecks(unittest.TestCase):
         self.assertEqual((row["archiveFlags"], row["templateArchiveFlags"]), (50, 50))
         self.assertEqual(len(self.source), 2130295)
         self.assertEqual(native.sha256(self.source), "d6947dcb57d32e0503704da28edf4645baaa8faad8fbd47d09a8a8832686abed")
+        self.assertEqual(len(self.candidate), 2130527)
+        self.assertEqual(native.sha256(self.candidate), "832897bfe3322f2e76abd192ee4ca2d1f09a9b2ed6d40fa3ec9e79382f224ea5")
+        self.assertEqual(self.report["variant"], "steve-private-body-head-part-prefab-table-probe-v2")
         self.assertEqual(set(self.payloads), {table.TABLE_PATH})
         self.assertTrue(all(value is False for value in self.report["integration"].values()))
         code = ("import sys;from pathlib import Path;sys.path.insert(0,'tools');import prepare_steve_part_table as t;"
@@ -75,16 +78,15 @@ class PartTableChecks(unittest.TestCase):
             original_head = next(row for row in original.head_records if row.stem==old)
             actual_part = [row for row in actual.records if row.stem==new]
             actual_head = [row for row in actual.head_records if row.stem==new]
-            self.assertEqual(actual_part, [replace(original_part, stem=new)])
+            self.assertEqual(actual_part, [replace(original_part, stem=new, parts=original_part.parts[:1])])
             self.assertEqual(actual_head, [replace(original_head, stem=new)])
             self.assertEqual(actual_part[0].folder, folder)
             self.assertEqual(actual_part[0].prefab_path, PARTS[part]["target"])
             self.assertEqual(actual_part[0].sockets_path, "")
             self.assertEqual(actual_part[0].extra, "")
             self.assertEqual(actual_part[0].flag, 0)
-        self.assertEqual([slot.name for slot in actual.records[-2].parts], ["CD_Nude", "CD_Underwear"])
-        self.assertEqual([slot.name for slot in actual.records[-1].parts],
-                         ["CD_Head", "CD_EyeLeft", "CD_EyeRight", "CD_Eyebrows", "CD_Eyelashes", "CD_Tooth", "CD_Nude_Hair"])
+        self.assertEqual([slot.name for slot in actual.records[-2].parts], ["CD_Nude"])
+        self.assertEqual([slot.name for slot in actual.records[-1].parts], ["CD_Head"])
         self.assertEqual(encode_pappt(original), self.source)
         self.assertEqual(encode_pappt(actual), self.candidate)
         table.verify_cdmw(self.source, self.candidate)
@@ -122,6 +124,7 @@ class PartTableChecks(unittest.TestCase):
                  lambda r: r["integration"].update(installed=0),
                  lambda r: r["audit"]["partCounts"].update(after=15567),
                  lambda r: r["audit"]["addedRegistrations"][0]["partRecord"].update(sockets_path="fabricated.xml"),
+                 lambda r: r.update(variant="steve-private-body-head-part-prefab-table-probe"),
                  lambda r: r.update(supportedExeSha256="0"*64)]
         with tempfile.TemporaryDirectory(prefix="steve-table-report-", dir=native.ROOT/"build") as temporary:
             target = Path(temporary)/"copy"
@@ -161,7 +164,7 @@ class PartTableChecks(unittest.TestCase):
                     table.prepare(game, output, source, deps)
                 load.assert_not_called()
             self.assertEqual((output/"sentinel").read_bytes(), b"retain")
-        for directory in ("steve-assembly", "steve-appearance", "steve-head-descriptor", "steve-app-macduff-00000", "steve-app-macduff-00002"):
+        for directory in ("steve-part-table", "steve-assembly", "steve-appearance", "steve-head-descriptor", "steve-app-macduff-00000", "steve-app-macduff-00002"):
             with mock.patch.object(native, "load_cdmw") as load:
                 with self.assertRaisesRegex(ValueError, "overlaps"):
                     table.prepare(game, native.ROOT/("build/"+directory+"/new"), source, deps)
@@ -194,7 +197,7 @@ class PartTableChecks(unittest.TestCase):
         if not self.rebuild:
             self.skipTest("Use --rebuild for fixed archive extraction and deterministic full-byte rebuild")
         prior = {}
-        for name in ("steve-assembly", "steve-appearance", "steve-head-descriptor", "steve-app-macduff-00000", "steve-app-macduff-00002"):
+        for name in ("steve-part-table", "steve-assembly", "steve-appearance", "steve-head-descriptor", "steve-app-macduff-00000", "steve-app-macduff-00002"):
             directory = native.ROOT/("build/"+name)
             if directory.exists():
                 for path in directory.rglob("*"):
@@ -211,6 +214,49 @@ class PartTableChecks(unittest.TestCase):
             self.assertEqual((report, payloads), (self.report, self.payloads))
         table.orientation.verify_snapshot(prior)
         table.orientation.verify_snapshot(self.snapshot)
+
+    def test_09_registered_slots_match_actual_original_and_private_prefab_components(self):
+        from prepare_steve_parts_prefab import PARTS, strict_layout
+        private_hashes = {"body": "484412c4ffb2e026d505ade4076d64084eb9e3a3ba21c32108150f9f6d2427fd",
+                          "head": "36aef15ab3d1b085846a8b7837ab8108d79073e7379899f85ea69fe5ca2d6df0"}
+        base = native.ROOT/"build/steve-assembly"
+        for kind, clone in zip(("body", "head"), table.CLONES):
+            for section, relative, stem, digest in (
+                    (self.original, "template/"+PARTS[kind]["template"], clone["original"], PARTS[kind]["sha256"]),
+                    (self.added, "resources/"+PARTS[kind]["target"], clone["private"], private_hashes[kind])):
+                raw = (base/relative).read_bytes()
+                self.assertEqual(native.sha256(raw), digest)
+                decoded, _ = strict_layout(raw)
+                slots = table.unique_row(section["records"], stem)["parts"]
+                self.assertEqual([slot["name"] for slot in slots], [obj.name for obj in decoded.objects])
+
+    def test_10_old_donor_slot_registration_rejected_even_with_updated_hashes(self):
+        from cdmw.core.pappt_format import parse_pappt, encode_pappt
+        original, actual = parse_pappt(self.source), parse_pappt(self.candidate)
+        donors = tuple(replace(next(row for row in original.records if row.stem==clone["original"]),
+                               stem=clone["private"]) for clone in table.CLONES)
+        legacy = encode_pappt(replace(actual, records=original.records+donors))
+        self.assertEqual(len(legacy), 2130624)
+        self.assertEqual(native.sha256(legacy), "eb93bcc19dc47a012891721dea074b3cbf0915b8648c068666c2dd79e4318cbf")
+        with self.assertRaisesRegex(ValueError, "appended candidate differs"):
+            table.verify_cdmw(self.source, legacy)
+        with tempfile.TemporaryDirectory(prefix="steve-table-donor-slots-", dir=native.ROOT/"build") as temporary:
+            target = Path(temporary)/"copy"
+            shutil.copytree(self.output, target)
+            relative = "replacements/"+table.TABLE_PATH
+            (target/relative).write_bytes(legacy)
+            with self.assertRaisesRegex(ValueError, "four appended rows"):
+                table.load_candidate(target/table.REPORT_NAME)
+            forged = copy.deepcopy(self.report)
+            forged["targetReplacements"][0]["sha256"] = native.sha256(legacy)
+            forged["files"][relative] = native.sha256(legacy)
+            forged["audit"]["candidateBytes"] = len(legacy)
+            for row, clone in zip(forged["audit"]["addedRegistrations"], table.CLONES):
+                row["partRecord"]["parts"] = [{"name": name, "flag": 1} for name in clone["parts"]]
+                row["omittedDonorParts"] = []
+            (target/table.REPORT_NAME).write_bytes(table.report_bytes(forged))
+            with self.assertRaisesRegex(ValueError, "contract"):
+                table.load_candidate(target/table.REPORT_NAME)
 
 
 def main():

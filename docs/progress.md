@@ -4,11 +4,13 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-本轮现场状态：2026-10-08 核实游戏已关闭，十二资源头描述文件包收据
-`64cefed193bc4014914e78495471dc67` 已实际恢复，38 项原始哈希匹配，无 0041／active
-receipt；36 个最新存档、MC 持久状态、原点及 ASI 保持。随后已安装通过完整检查的
-十三资源注册包，**当前 active receipt 为 `90cdf0fca1ce4095aedc43d3515a1525`，待用户
-进入、实测及退出后恢复**。当前交接与下一实验见 [current-state.md](current-state.md)。
+本轮现场状态：2026-10-08 十三资源注册 v1 包进入游戏后闪退，收据
+`90cdf0fca1ce4095aedc43d3515a1525` 已实际恢复；38 项原始哈希匹配，无 0041／active
+receipt，36 个最新存档、完整 MC 状态、原点及 ASI 保持。用户随后确认恢复后同一
+存档可正常进入、不再闪退。已发现新增注册项与私有 prefab 的组件列表不一致，
+v2 已修复并通过候选／事务检查。用户正常退出后已安装新版十三资源包，当前收据
+`045d94ec45d74007a5dfd1c53dd8e00a`，待手动进入及退出后恢复；**不能把静态修复记为
+闪退已修复**。当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
 用户已于 2026-10-06 将剩余移植工作设为持续目标并要求开始执行，之后再次要求继续。
@@ -1415,3 +1417,52 @@ revision 22、原点和 ASI 一致，0041／active receipt 消失。证据位于
 `runtime/steve-part-table-20261008-before-install.json`／`-installed.json`。已请求用户
 手动进入并反馈实际外观，随后读取受控目录。当前尚未实测显示，亦尚未恢复新包；
 十四包未安装。新的交接文件明确区分当前 active 收据和已经 restored 的历史收据。
+
+## 2026-10-08 十三包闪退恢复与组件注册 v2
+
+用户报告进入后闪退；现场确认原进程已结束。执行
+`build/record-steve-part-table-20261008.py before-restore`、
+`tools/install_steve_probe.py --restore`、同脚本 `restored` 均成功。收据
+`90cdf0fca1ce4095aedc43d3515a1525` 已恢复，38 项原始哈希匹配，0041 与 active receipt
+消失；36 个最新存档、完整 MC 状态 revision 22、原点与 ASI 保持。用户手动重新
+进入同一存档后确认“可以正常进入，不再闪退”，新会话 MC 状态再次核对不变。
+证据在 `runtime/steve-crash-20261008/incident.json` 和旧十三包恢复前后快照。
+
+已保存失败会话的 cdmodkit.log，最后记录在 10:21:10 的角色创建阶段，没有异常
+堆栈；10:19～10:25 的 Windows Application 1000／1001／1002 未找到匹配红沙记录。
+未把旧 WER 挂起报告或日志最后一行当作崩溃根因。
+
+独立资产审查确认：原 PAPPT 两 donor 行与原 prefab 的组件名逐项相等，分别是身体
+2 项、头部 7 项；新私有 prefab 已只保留 CD_Nude／CD_Head，但 v1 注册行仍沿用
+2／7 项，声明了不存在的 CD_Underwear 及六个头部细件。实际二进制解码和 assembly
+哈希均核对一致。两私有名称在原两段中无同 hash 项，未发现排序要求的依据。
+这是一处明确的跨资源不一致；未取得堆栈，尚不能断定是唯一闪退原因。
+
+v2 只缩减新 body／head part 行的组件列表。原 15566 个 part 行、2630 个 descriptor
+行及两条新 descriptor 行逐字保持，其他 12 项资源不变。新 PAPPT 2130527 字节，
+SHA256 `832897bfe3322f2e76abd192ee4ca2d1f09a9b2ed6d40fa3ec9e79382f224ea5`，报告
+SHA256 `50bd6289f50558f2c20158d232f976c210b45494ffefd746ccdd54f79a5cde14`。
+封装发布前及安装准入都新增真实 prefab 解码后的组件列表核对；旧多部件报告及
+payload 被拒绝。旧包／失败证据保留，旧收据恢复不经过新版准入。
+
+| 检查 | 实际结果 |
+| --- | --- |
+| `check_steve_part_table.py --rebuild` | 10/10，32.332 秒；真实原／私有 prefab 对照及旧错误拒绝 |
+| `check_steve_probe.py --part-table --rebuild` | 24/24，100.971 秒；新版封装、事务、真实组件交叉检查 |
+| `check_steve_probe.py --app-variant macduff-00000 --rebuild` | 25/25，104.524 秒；备用十四资源新版兼容 |
+| v1／v2 payload 差异及旧计划拒绝 | 两包都只改变 PAPPT；旧十三／十四准入拒绝，十一／十二准入保持 |
+| 独立封装／安装代码审查 | 未发现阻断；CDMW 加载顺序、延迟 import、旧恢复及十四继承检查正确 |
+
+十三包输出 `build/steve-part-table-v2-probe-overlay`，13 项／PAZ 743040 字节，报告
+SHA256 `19b5ae4841a63795324f642a8332fec23aca1783ed4af3804affd1237fdd54dc`。
+备用十四包输出 `build/steve-app-macduff-00000-part-table-v2-probe-overlay`，14 项／
+PAZ 744160 字节，报告 SHA256
+`7d045575a9bce1ceca356d6d8e853466e70db3aa27e0e657726b5c4b14d33449`，没有实际安装。
+差异证据保存在 `runtime/steve-crash-20261008/v2-delta.json`。
+
+用户正常退出后，核实无进程、原始文件一致，已安装新版十三包；收据
+`045d94ec45d74007a5dfd1c53dd8e00a`，variant `steve-kliff-part-table-v2`。
+新版快照脚本 `build/record-steve-part-table-v2-20261008.py` 固定上述计划 SHA，
+before-install／installed 均通过；文件、MC、原点与 ASI 保持。已请求用户手动
+进入同一存档，待实际结果及退出恢复；没有写外观内存、换 ASI 或消费材料。
+当前修复验收仍分两步：先能正常进入，再核验 Steve 显示；不能以检查数量代替结果。

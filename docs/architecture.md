@@ -39,7 +39,7 @@ flowchart LR
 | `tools/prepare_steve_parts.py`、`check_steve_parts.py` | 把固定分段候选拆成头／帽与身体／四肢两 PAC，分别配同名材质及共享 DDS | 四 LOD 的完整顶点记录与合并源一致；使用旧 neutral，不安装或选择角色 |
 | `tools/prepare_steve_parts_prefab.py`、`check_steve_parts_prefab.py` | 真实 Macduff 模板的独立 CD_Nude／CD_Head，严格组件 footer 与路径往返，原字节当前 descriptor | 保留部件名／shrink／空骨架字段；原发须、外部依赖、当前 rig 适配及 actor-local 应用仍需单独验证 |
 | `tools/prepare_steve_head_descriptor.py`、`check_steve_head_descriptor.py` | 为私有头 basename 复制原字节 HeadPrefabData，独立单资源报告及纯 loader | 固定 466 字节、七字段、flags 48；缺失配套文件的单变量对照，未证明运行时必需或已解决装配 |
-| `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | 只改两个 count 和四条新增 stem 行；全局资源表，不代替实际模型解析、显示或 actor-local 应用 |
+| `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
 | `tools/prepare_steve_assembly.py`、`check_steve_assembly.py` | 固定十资源组合：头身两 PAC、两 PAMI、三 DDS、两私有 prefab、当前身体 descriptor | 身体用当前 neutral 补偿；头保持原 split，Head PABC 未覆盖其唯一加权骨 93；PAB 回退与身体继承均只是离线假设 |
@@ -329,10 +329,16 @@ loader input key。两属性保留精确构造 vtable／直接 owner 门禁，�
 新增十三资源只加固定 PAPPT，两段各登记私有 Body／Head；十四资源必须在此基础上
 显式选择 `macduff-00000` 或 `macduff-00002` 的单份 app。报告集合严格对应 2／3／4／5
 项，缺依赖或未知报告拒绝；旧路径白名单为 meshparam、PAPPT 和可选的那一份 app。
-一般新增资产入口仍仅允许 crimsonmc basename。新增 variant 为 `steve-kliff-part-table-v1`
-或 `steve-kliff-app-00000-part-table-v1`／00002，同样绑定整个计划。PAPPT／app 均是
+一般新增资产入口仍仅允许 crimsonmc basename。新版 variant 为 `steve-kliff-part-table-v2`
+或 `steve-kliff-app-00000-part-table-v2`／00002，同样绑定整个计划。PAPPT／app 均是
 共享资源，其全部消费者会受影响；实际只观察到当前身体使用 00000。新包完整重建、
 事务与实机结果见进度，不以生成候选代替加载验收。
+
+2026-10-08 的 v1 注册包进入后闪退，撤回后同一存档正常。已确认新注册行沿用原版
+2／7 个组件，私有 prefab 却各仅保留 1 个。v2 新行只声明实际 CD_Nude／CD_Head，
+全部原行与描述目录保持；封装发布前及安装准入均独立解码真实 prefab，逐项比较
+注册组件名。旧报告不满足新准入而被拒绝；恢复只依已有收据／备份，旧 v1 恢复路径
+不受影响。模型、材质、骨架保持，不能据此宣称引擎崩溃或外观已修复。
 
 角色诊断的 `health_candidate` 仅解码首 int32 为零的完整 0x38 字节记录。
 `current_stored_raw/base_raw/norm_raw/floor_raw/field_30_raw` 保留原始值，

@@ -82,6 +82,8 @@ def load_plan(plan):
         if row.get("archiveFlags") != FLAGS[source["kind"]]:
             raise ValueError("Steve storage flags differ from the reviewed templates")
         payloads[row["virtualPath"]] = item["payload"]
+    if part_table:
+        steve.audit_part_components(payloads)
     wanted = {f"package/{name}/0.pamt", f"package/{name}/0.paz",
               "metadata-before/0.papgt", "metadata-before/0.pathc", "metadata-after/0.papgt", "metadata-after/0.pathc"}
     if set(report.get("files", {})) != wanted:
@@ -102,11 +104,11 @@ def load_plan(plan):
     steve.orientation.verify_snapshot(snapshot)
     variant = "steve-kliff-head-descriptor-v1" if head_descriptor else "steve-kliff-meshparams-v1"
     if part_table:
-        variant = "steve-kliff-part-table-v1"
+        variant = "steve-kliff-part-table-v2"
     if app:
         path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
         number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")
-        variant = f"steve-kliff-app-{number}-part-table-v1"
+        variant = f"steve-kliff-app-{number}-part-table-v2"
     return {"plan": plan, "report": report, "reportSha256": native.sha256(raw), "name": name,
             "probeVariant": variant,
             "candidateReport": str(models),

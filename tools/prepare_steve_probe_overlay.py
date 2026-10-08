@@ -22,14 +22,36 @@ DEFAULT_APPEARANCE = ROOT / "build/steve-appearance/steve-appearance-report.json
 DEFAULT_OUTPUT = ROOT / "build/steve-probe-overlay"
 HEAD_DESCRIPTOR_REPORT = ROOT / "build/steve-head-descriptor/steve-head-descriptor-report.json"
 HEAD_DESCRIPTOR_OUTPUT = ROOT / "build/steve-head-descriptor-probe-overlay"
-PART_TABLE_REPORT = ROOT / "build/steve-part-table/steve-part-table-report.json"
-PART_TABLE_OUTPUT = ROOT / "build/steve-part-table-probe-overlay"
+PART_TABLE_REPORT = ROOT / "build/steve-part-table-v2/steve-part-table-report.json"
+PART_TABLE_OUTPUT = ROOT / "build/steve-part-table-v2-probe-overlay"
 
 
 def app_output(report_path):
     import prepare_steve_app as app
     report, _, _ = app.load_candidate(report_path)
-    return ROOT / ("build/steve-app-" + report["appearanceVariant"] + "-probe-overlay")
+    return ROOT / ("build/steve-app-" + report["appearanceVariant"] + "-part-table-v2-probe-overlay")
+
+
+def audit_part_components(payloads):
+    """Compare registration slots with the actual decoded private prefab bytes.
+
+    Call only after loading the fixed CDMW implementation. A valid table and a
+    valid prefab can still disagree, so neither file's own audit is sufficient.
+    """
+    import prepare_steve_part_table as parts
+    import prepare_steve_parts_prefab as private
+    records = parts.parse_table(payloads[parts.TABLE_PATH])["records"]
+    result = {}
+    for kind, spec in private.PARTS.items():
+        if spec["target"] not in payloads:
+            raise ValueError("Steve registration has no matching private prefab")
+        row = parts.unique_row(records, Path(spec["target"]).stem)
+        decoded, _ = private.strict_layout(payloads[spec["target"]])
+        actual = [obj.name for obj in decoded.objects]
+        if [slot["name"] for slot in row["parts"]] != actual:
+            raise ValueError("Steve registration components differ from private prefab: " + kind)
+        result[kind] = actual
+    return result
 
 
 def replacement_paths(resources):

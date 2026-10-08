@@ -169,7 +169,7 @@ class StevePartTableProbeChecks(SteveProbeChecks):
     baseline_plan = steve.steve.HEAD_DESCRIPTOR_OUTPUT
     resource_count = 13
     extra_path = "character/bin__/partprefabtable.pappt"
-    expected_variant = "steve-kliff-part-table-v1"
+    expected_variant = "steve-kliff-part-table-v2"
     control_reports = ("steve-head-descriptor-report.json", "steve-part-table-report.json")
     expected_replacements = (steve.steve.appearance.TARGET_PATH, extra_path)
     rebuild_args = ("--head-descriptor-report", str(steve.steve.HEAD_DESCRIPTOR_REPORT),
@@ -207,6 +207,32 @@ class StevePartTableProbeChecks(SteveProbeChecks):
                 steve.load_plan(plan)
         self.assert_original()
 
+    def test_25_registration_slots_match_real_prefab_components(self):
+        from dataclasses import replace
+        from cdmw.core.pappt_format import parse_pappt, encode_pappt
+        from prepare_steve_parts_prefab import PARTS
+        path = "character/bin__/partprefabtable.pappt"
+        payloads = dict(self.reviewed["payloads"])
+        self.assertEqual(steve.steve.audit_part_components(payloads),
+                         {"body": ["CD_Nude"], "head": ["CD_Head"]})
+        table = parse_pappt(payloads[path])
+        for kind, donor_name in (("body", "cd_phm_00_nude_01_0002_macduff"),
+                                 ("head", "cd_phm_00_head_00_0001_macduff")):
+            # Recreate the failed v1 mistake from the independently decoded
+            # original row: advertise components removed from the new prefab.
+            donor = next(row for row in table.records if row.stem == donor_name)
+            private_name = Path(PARTS[kind]["target"]).stem
+            changed = replace(table, records=tuple(
+                replace(row, parts=donor.parts) if row.stem == private_name else row
+                for row in table.records))
+            bad = dict(payloads, **{path: encode_pappt(changed)})
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "components differ"):
+                steve.steve.audit_part_components(bad)
+            missing = dict(payloads)
+            del missing[PARTS[kind]["target"]]
+            with self.assertRaisesRegex(ValueError, "no matching private prefab"):
+                steve.steve.audit_part_components(missing)
+
 
 class SteveInitialAppProbeChecks(StevePartTableProbeChecks):
     resource_count = 14
@@ -222,7 +248,7 @@ class SteveInitialAppProbeChecks(StevePartTableProbeChecks):
         cls.extra_path = spec["path"]
         report = app.default_output(variant) / app.REPORT_NAME
         cls.plan = steve.steve.app_output(report)
-        cls.expected_variant = "steve-kliff-app-" + variant.removeprefix("macduff-") + "-part-table-v1"
+        cls.expected_variant = "steve-kliff-app-" + variant.removeprefix("macduff-") + "-part-table-v2"
         cls.expected_replacements = (*StevePartTableProbeChecks.expected_replacements, cls.extra_path)
         cls.rebuild_args = (*StevePartTableProbeChecks.rebuild_args, "--app-report", str(report))
 
