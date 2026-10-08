@@ -28,6 +28,14 @@ HEAD_MESH_CONTROL_REPORT = ROOT / "build/steve-head-mesh-control/steve-head-mesh
 NATIVE_HEAD_OUTPUT = ROOT / "build/steve-native-head-probe-overlay"
 NATIVE_HEAD_PREFAB = "character/bin__/prefab/1_pc/01_phm/head/head/crimsonmc_steve_head_1_21_1.prefab"
 ASSEMBLY_HEAD_SHA256 = "36aef15ab3d1b085846a8b7837ab8108d79073e7379899f85ea69fe5ca2d6df0"
+HEAD_ROOT_REPORT = ROOT / "build/steve-native-head-root/steve-native-head-root-report.json"
+NATIVE_HEAD_ROOT_OUTPUT = ROOT / "build/steve-native-head-root-probe-overlay"
+HEAD_ROOT_RESOURCES = {
+    "character/model/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac":
+        ("e75f7a7989137756c4744a16c001bce8f91a6f0b6caabb84214f5d42b710d9b9", "skinnedMesh", 1),
+    "character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml":
+        ("01f17ad65bf24e4d8ce59bec0de2c9d3cf570992101a67ac2e0ac94ce52d0538", "skinnedMaterial", 50),
+}
 
 
 def app_output(report_path):
@@ -64,7 +72,12 @@ def replacement_paths(resources):
 
 
 def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
-               head_mesh_control_path=None):
+               head_mesh_control_path=None, head_root_path=None):
+    if head_root_path is not None:
+        if app_path is not None or head_mesh_control_path is not None:
+            raise ValueError("Native-head-root control cannot be combined with app or head-mesh controls")
+        if head_descriptor_path is None or part_table_path is None:
+            raise ValueError("Native-head-root control requires the private head descriptor and v2 part table")
     if head_mesh_control_path is not None:
         if app_path is not None:
             raise ValueError("Native-head mesh control cannot be combined with an initial app control")
@@ -145,6 +158,31 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
                                          "payload": control_payloads[NATIVE_HEAD_PREFAB]}
         reports[str(head_mesh_control_path.relative_to(ROOT))] = native.file_hash(head_mesh_control_path)
         snapshot.update(control_snapshot)
+    if head_root_path is not None:
+        import prepare_steve_native_head_root as head_root
+        for path, (digest, kind, flags) in HEAD_ROOT_RESOURCES.items():
+            original = resources.get(path)
+            if (original is None or original["row"].get("kind") != kind
+                    or original["row"].get("sha256") != digest or native.sha256(original["payload"]) != digest):
+                raise ValueError("Native-head-root control requires the fixed original assembly head resources")
+        head_root_path = native.output_directory(head_root_path)
+        candidate, root_payloads, root_snapshot = head_root.load_candidate(head_root_path)
+        rows = candidate["candidateResources"]
+        if (len(rows) != 2 or {row.get("virtualPath") for row in rows} != set(HEAD_ROOT_RESOURCES)
+                or set(root_payloads) != set(HEAD_ROOT_RESOURCES)):
+            raise ValueError("Native-head-root control must override exactly the private head PAC and material")
+        for row in rows:
+            path = row["virtualPath"]
+            old_digest, kind, flags = HEAD_ROOT_RESOURCES[path]
+            if (row.get("kind") != kind or row.get("archiveFlags") != flags
+                    or row.get("sha256") != native.sha256(root_payloads[path]) or row["sha256"] == old_digest):
+                raise ValueError("Native-head-root resource identity differs from its reviewed candidate")
+            # The pure loader admits the new native head donor/template. The
+            # old assembly's body-template provenance must not be substituted.
+            resources[path] = {"row": row, "localPath": head_root_path.parent / row["localFile"],
+                               "payload": root_payloads[path]}
+        reports[str(head_root_path.relative_to(ROOT))] = native.file_hash(head_root_path)
+        snapshot.update(root_snapshot)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)
@@ -165,7 +203,7 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
 
 
 def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_descriptor_path=None,
-            app_path=None, part_table_path=None, head_mesh_control_path=None):
+            app_path=None, part_table_path=None, head_mesh_control_path=None, head_root_path=None):
     assembly_path, appearance_path = native.output_directory(assembly_path), native.output_directory(appearance_path)
     protected = [assembly_path.parent, appearance_path.parent, source, deps, game]
     private_reports = [assembly_path]
@@ -182,12 +220,15 @@ def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_
     if head_mesh_control_path is not None:
         head_mesh_control_path = native.output_directory(head_mesh_control_path)
         protected.append(head_mesh_control_path.parent)
+    if head_root_path is not None:
+        head_root_path = native.output_directory(head_root_path)
+        protected.append(head_root_path.parent)
     output = orientation.preflight(output, protected)
     expected, _, snapshot = candidates(assembly_path, appearance_path, head_descriptor_path, app_path, part_table_path,
-                                       head_mesh_control_path)
+                                       head_mesh_control_path, head_root_path)
     result = overlay.prepare(game, private_reports, output, source, deps, replacement_report=appearance_path,
                              initial_appearance_report=app_path, part_table_report=part_table_path,
-                             head_mesh_control_report=head_mesh_control_path)
+                             head_mesh_control_report=head_mesh_control_path, head_root_report=head_root_path)
     orientation.verify_snapshot(snapshot)
     if result["replacementPaths"] != replacement_paths(expected) or len(result["resources"]) != len(expected):
         raise ValueError("Prepared Steve package differs from its reviewed resource set")
@@ -207,6 +248,8 @@ def main():
                         help="Register the two private body/head stems; requires --head-descriptor-report")
     parser.add_argument("--head-mesh-control-report", type=Path,
                         help="Use the native head mesh in the fixed private prefab; requires the thirteen-resource v2 controls and excludes --app-report")
+    parser.add_argument("--head-root-report", type=Path,
+                        help="Replace only the private head PAC/material with the native head-root candidate; requires descriptor and v2 table, excludes app/head-mesh controls")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cdmw-source", type=Path, default=ROOT / "build/cdmw-fixed-source")
     parser.add_argument("--deps", type=Path, default=ROOT / "build/cdmw-deps")
@@ -215,19 +258,26 @@ def main():
         parser.error("Registration/initial app control requires --head-descriptor-report")
     if args.app_report and not args.part_table_report:
         parser.error("--app-report requires --part-table-report")
+    if args.head_root_report:
+        if args.app_report or args.head_mesh_control_report:
+            parser.error("--head-root-report cannot be combined with --app-report or --head-mesh-control-report")
+        if not args.head_descriptor_report or not args.part_table_report:
+            parser.error("--head-root-report requires --head-descriptor-report and --part-table-report")
     if args.head_mesh_control_report:
         if args.app_report:
             parser.error("--head-mesh-control-report cannot be combined with --app-report")
         if not args.head_descriptor_report or not args.part_table_report:
             parser.error("--head-mesh-control-report requires --head-descriptor-report and --part-table-report")
     game = args.game_root or Path(json.loads((ROOT / "runtime/installation.json").read_text(encoding="utf-8-sig"))["gameRoot"])
-    output = args.output or (NATIVE_HEAD_OUTPUT if args.head_mesh_control_report else
+    output = args.output or (NATIVE_HEAD_ROOT_OUTPUT if args.head_root_report else
+                            NATIVE_HEAD_OUTPUT if args.head_mesh_control_report else
                             app_output(args.app_report) if args.app_report else
                             PART_TABLE_OUTPUT if args.part_table_report else
                             HEAD_DESCRIPTOR_OUTPUT if args.head_descriptor_report else DEFAULT_OUTPUT)
     result = prepare(game, args.assembly_report, args.appearance_report, output, args.cdmw_source, args.deps,
                      head_descriptor_path=args.head_descriptor_report, app_path=args.app_report,
-                     part_table_path=args.part_table_report, head_mesh_control_path=args.head_mesh_control_report)
+                     part_table_path=args.part_table_report, head_mesh_control_path=args.head_mesh_control_report,
+                     head_root_path=args.head_root_report)
     print(json.dumps({key: result[key] for key in ("directoryName", "replacementPaths", "packageAudit", "integration")}, indent=2))
 
 

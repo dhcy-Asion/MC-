@@ -47,14 +47,16 @@ def load_plan(plan):
     with_head = required | {"steve-head-descriptor-report.json"}
     with_table = with_head | {"steve-part-table-report.json"}
     with_native_head = with_table | {"steve-head-mesh-control-report.json"}
-    allowed = with_native_head | {"steve-app-report.json"}
+    with_head_root = with_table | {"steve-native-head-root-report.json"}
+    allowed = with_native_head | with_head_root | {"steve-app-report.json"}
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
         if file.name not in allowed or file.name in by_name:
             raise ValueError("Unrecognized or ambiguous Steve candidate report name")
         by_name[file.name] = file
-    if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"}, with_native_head):
+    if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"},
+                           with_native_head, with_head_root):
         raise ValueError("Unrecognized Steve candidate report names")
     for path, digest in candidate_reports.items():
         if native.file_hash(build_path(path)) != digest:
@@ -65,7 +67,8 @@ def load_plan(plan):
     part_table = by_name.get("steve-part-table-report.json")
     app = by_name.get("steve-app-report.json")
     head_mesh_control = by_name.get("steve-head-mesh-control-report.json")
-    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table, head_mesh_control)
+    head_root = by_name.get("steve-native-head-root-report.json")
+    expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table, head_mesh_control, head_root)
     if report.get("replacementPaths") != steve.replacement_paths(expected):
         raise ValueError("Steve probe exact replacement targets differ")
     if inputs != candidate_reports:
@@ -110,6 +113,8 @@ def load_plan(plan):
         variant = "steve-kliff-part-table-v2"
     if head_mesh_control:
         variant = "steve-kliff-native-head-part-table-v2"
+    if head_root:
+        variant = "steve-kliff-native-head-root-part-table-v2"
     if app:
         path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
         number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")

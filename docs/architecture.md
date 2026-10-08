@@ -40,6 +40,7 @@ flowchart LR
 | `tools/prepare_steve_parts_prefab.py`、`check_steve_parts_prefab.py` | 真实 Macduff 模板的独立 CD_Nude／CD_Head，严格组件 footer 与路径往返，原字节当前 descriptor | 保留部件名／shrink／空骨架字段；原发须、外部依赖、当前 rig 适配及 actor-local 应用仍需单独验证 |
 | `tools/prepare_steve_head_descriptor.py`、`check_steve_head_descriptor.py` | 为私有头 basename 复制原字节 HeadPrefabData，独立单资源报告及纯 loader | 固定 466 字节、七字段、flags 48；缺失配套文件的单变量对照，未证明运行时必需或已解决装配 |
 | `tools/prepare_steve_head_mesh_control.py`、`check_steve_head_mesh_control.py` | 将固定私有 CD_Head 的 PAC 引用改回原生头，保留单组件其余语义；独立固定字节生成与 CDMW 正逆向核对 | 1921 字节、flags 0，与原生 donor 首组件逐字一致；只作定位对照，不是 Steve 外观修复 |
+| `tools/prepare_steve_native_head_root.py`、`check_steve_native_head_root.py` | 原生头三 LOD 模板重建 Steve 48 点／24 面，固定 slot0 改为公共父骨 B_face_com122，真实 Head PABC 中立逆补偿及材质映射 | 其余191骨项与未知数据保持；生成时只读固定0009，纯准入只读包内五份来源；十三包仅覆盖头 PAC／材质，不代表实际位置或动画验收 |
 | `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |

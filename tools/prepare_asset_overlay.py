@@ -206,7 +206,16 @@ def publish(output: Path, files: dict[str, bytes]) -> None:
 
 def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: Path,
             *, replacement_report: Path | None = None, initial_appearance_report: Path | None = None,
-            part_table_report: Path | None = None, head_mesh_control_report: Path | None = None) -> dict:
+            part_table_report: Path | None = None, head_mesh_control_report: Path | None = None,
+            head_root_report: Path | None = None) -> dict:
+    if head_root_report is not None:
+        if initial_appearance_report is not None or head_mesh_control_report is not None:
+            raise ValueError("Native-head-root control cannot be combined with app or head-mesh controls")
+        if replacement_report is None or part_table_report is None:
+            raise ValueError("Native-head-root control requires the thirteen-resource v2 controls")
+        base_reports = {path.name: path for path in reports}
+        if len(reports) != 2 or set(base_reports) != {"steve-assembly-report.json", "steve-head-descriptor-report.json"}:
+            raise ValueError("Native-head-root control requires exactly the assembly and private head descriptor reports")
     if head_mesh_control_report is not None:
         if initial_appearance_report is not None:
             raise ValueError("Native-head mesh control cannot be combined with an initial app control")
@@ -296,6 +305,36 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                 raise ValueError("Native-head control must preserve the other twelve resources")
         inputs = expected_inputs
         replacement_snapshot.update(control_snapshot)
+    if head_root_report is not None:
+        # Two fixed replacements within the original thirteen-resource plan.
+        # The general loader continues to reject every duplicate virtual path.
+        import prepare_steve_probe_overlay as steve
+        head_root_report = native.output_directory(head_root_report)
+        expected, expected_inputs, root_snapshot = steve.candidates(
+            base_reports["steve-assembly-report.json"], replacement_report,
+            base_reports["steve-head-descriptor-report.json"], part_table_path=part_table_report,
+            head_root_path=head_root_report)
+        control_key = str(head_root_report.relative_to(ROOT))
+        if (len(resources) != 13 or set(payloads) != set(expected)
+                or inputs != {key: value for key, value in expected_inputs.items() if key != control_key}):
+            raise ValueError("Native-head-root control requires the exact thirteen-resource v2 provenance")
+        for index, resource in enumerate(resources):
+            path = resource["virtualPath"]
+            item = expected[path]
+            if path in steve.HEAD_ROOT_RESOURCES:
+                digest, kind, flags = steve.HEAD_ROOT_RESOURCES[path]
+                if (resource["kind"] != kind or resource["sha256"] != digest
+                        or native.sha256(payloads[path]) != digest):
+                    raise ValueError("Native-head-root control requires the fixed original assembly head resources")
+                resources[index] = dict(item["row"], localFile=str(item["localPath"].relative_to(ROOT)))
+                payloads[path] = item["payload"]
+            elif (any(resource.get(key) != item["row"][key]
+                      for key in ("virtualPath", "kind", "templatePath", "templateSha256", "sha256"))
+                  or payloads[path] != item["payload"]
+                  or native.output_directory(ROOT / resource["localFile"]) != item["localPath"].resolve()):
+                raise ValueError("Native-head-root control must preserve the other eleven resources")
+        inputs = expected_inputs
+        replacement_snapshot.update(root_snapshot)
     if part_table_report is not None:
         from prepare_steve_probe_overlay import audit_part_components
         audit_part_components(payloads)

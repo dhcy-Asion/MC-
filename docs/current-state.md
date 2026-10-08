@@ -20,7 +20,7 @@
 - 用户截图已出现 MC 方块头／蓝绿身体／紫色下肢，但位置错开并与红沙衣服、头发及
   装备混叠。**模型资源可见，完整外观装配失败**；不是原来的“资源没有显示”阶段。
   原衣服主要来自独立 Armor，头发来自 Hair，不足以证明旧 Nude／Head 重复。
-  当前优先只换私有头的一个 PAC 引用到原生头，区分网格资源链和共同装配。
+  原生头单引用对照中用户确认头正常连接，优先修正自建头的网格／材质／绑定链。
 
 ## 现场和恢复
 
@@ -35,15 +35,18 @@
 - 十三资源 v2 收据 `045d94ec45d74007a5dfd1c53dd8e00a` 已实测并在用户正常退出后
   恢复。该阶段无 active receipt／0041；38 项原始哈希、36 个最新
   存档、完整 MC 状态、原点与 ASI 均核对保持。
-- 原生头单引用对照已通过 9 项候选及 27 项完整包检查并安装。**当前 active receipt
-  为 `57b18550c3e344c19278ecd6f0b9d2c6`，0041 存在，待实测及退出恢复**；variant
-  `steve-kliff-native-head-part-table-v2`。安装前后原始基线／安装文件、完整 MC、原点
-  与 ASI 核对通过。用户已收到手动进入并反馈原生头位置的请求。
+- 原生头单引用对照已实测，用户确认正常连接在肩膀上方；收据
+  `57b18550c3e344c19278ecd6f0b9d2c6` 已在实际退出后恢复，38 项原始哈希、36 个
+  最新存档、完整 MC、原点与 ASI 均保持。
+- 新原生头模板／共同父骨候选 9/9、完整十三包28/28通过，已安装。**当前 active
+  receipt 为 `5dfe1a43fa9846d6a1f1399bd42a4e2d`，0041存在，待实机和退出恢复**；
+  variant `steve-kliff-native-head-root-part-table-v2`。安装前游戏已关闭；安装后文件、
+  完整 MC、原点及 ASI 核对保持。用户收到手动进入、反馈 MC 头位置并暂留运行请求。
 - 游戏启动、进入和退出仍由用户手动完成；主控独占安装、游戏诊断与恢复操作。
 - 本次恢复证据：`runtime/steve-part-table-v2-20261008-{before-restore,restored}.json`。
   闪退日志及恢复后用户对照记录：`runtime/steve-crash-20261008/`。日志在角色创建处
   中断，没有异常堆栈；指定时段 Windows 应用事件未找到匹配的崩溃记录。
-- 持续目标未完成；最近工具元数据为 `usageLimited`，当前按用户明确指令继续执行。
+- 持续目标未完成；2026-10-08 10:58 工具重新核实状态为 `active`，完整范围保持。
 
 ## 本轮交接
 
@@ -54,7 +57,10 @@
 | 显示错位分析 | steve_position_audit | 未定位明确 palette／坐标错误；建议原生头引用对照，不盲目补骨或平移 |
 | 原生头封装接入 | diagnostic_review | 独立五报告集合、固定单路径覆盖及 app 互斥；主控完成 27/27 包检查 |
 | v2 游戏内对照 | 主控＋用户手动进出游戏 | 正常进入，目录双采样通过；截图显示错位及混叠，已退出恢复；十四包未安装 |
-| 原生头游戏内对照 | 主控＋用户手动进出游戏 | 已安装，待原生头位置反馈；完成后退出恢复 |
+| 原生头游戏内对照 | 主控＋用户手动进出游戏 | 用户确认连接正常；已退出恢复，文件／最新存档／MC 保持 |
+| 原生头／自建头 PAC 结构差异 | steve_position_audit | 三 LOD 原字节自重建及 48 条原生记录控制通过；Head93 不在原生 palette，旧绑定不可直接移植 |
+| 原生头共同父骨候选 | crash_asset_audit＋steve_position_audit | 生成器／独立检查器完成，最终9/9通过；明确 slot0→B_face_com122，其余191项和未知数据保持 |
+| 新头候选封装与安装 | diagnostic_review＋主控 | 完整28/28通过；已安装并核对，等待MC头位置反馈，随后退出恢复 |
 
 目录成员与用户实际画面分别记录；探针不因为截图而回填 native rendered 成功标记。
 HP 仍未接入 HUD，不在当前外观排障中扩展无关逆向支线。
@@ -73,12 +79,34 @@ variant 为 `steve-kliff-part-table-v2`，不能复用 v1 快照脚本中的固�
 计划 SHA256 为
 `19b5ae4841a63795324f642a8332fec23aca1783ed4af3804affd1237fdd54dc`。
 
-**当前包**：`build/steve-native-head-probe-overlay`，计划 SHA256
+**已恢复的原生头包**：`build/steve-native-head-probe-overlay`，计划 SHA256
 `043c8b22e074da3d24e2c6c2e25f388f4ce57865b289de97f365be508b7503a5`。
 快照脚本 `build/record-steve-native-head-20261008.py` 和同名 runtime 前缀；已完成
-before-install／installed。后续实读、正常退出、before-restore、
-`install_steve_probe.py --restore`、restored。其余十二资源与 v2 完全相同，未启用 app
-对照。原生头正确只能缩小到私有网格资源链，不能单独证明骨权重为根因。
+before-install／installed／in-world／before-restore／restored。新会话 PID 18364
+（10:55:22 启动）已退出；此前实读受控链，
+两次采样稳定；`runtime/steve-native-head-20261008-appearance.json` 为 notReady，
+未把原来就为空的 PAC 声明提升为渲染资源身份。文件、完整 MC、原点与 ASI 保持。
+用户确认原生头正常连接，原话和恢复证据记录于 ignored
+`runtime/steve-crash-20261008/native-head-visual-result.json`。其余十二资源与 v2
+完全相同，未启用 app 对照；可缩小到私有网格资源链，不能单独证明骨权重为根因。
+
+原生头 PAC 为 3 LOD，实际几何节为 2／3／4；自建头来自 4 LOD 身体模板，节为
+1／2／3／4。偏移 80 的 flags 分别为 `0x00000002` 与 `0x01000082`，差异 bit 的
+含义未知，不直接翻位。自建头 `[447,63218)` 的 62,771 字节未知元数据仍与身体
+donor 相同，现有检查只证明身体 donor 保持，不能证明独立头适配。
+固定 CDMW parser 按 `4-section` 读取，但 builder 按 `n_lods-section` 重建，
+直接传入原生头 donor 会保留原节 4 并写入节 1～3；下一候选必须显式处理布局，
+不能把 donor 替换当成修复。证据在 ignored
+`build/steve-head-pac-format-research-20261008/{structure-report,metadata-difference}.json`。
+
+**当前 MC 头包**：`build/steve-native-head-root-probe-overlay`，计划SHA256
+`2b3bd9241cf5711cc06f479e18bd0210629260471911945338d37af4973d4ff0`。
+候选报告SHA256 `2d850067c97a7d44762eadb68154dbbb992aa2010f3851b63e3b0e8dfd6085a8`；
+快照脚本 `build/record-steve-native-head-root-20261008.py`，同名runtime前缀。
+before-install／installed已完成，后续实际进入后记录in-world，实际退出后
+before-restore → `install_steve_probe.py --restore` → restored；不得覆盖旧阶段证据。
+新包只有头PAC及其PAMI两项变化，其余11项与v2保持；head prefab恢复使用私有MC路径，
+与原生头引用对照互斥。真实头位置／动画尚未验收，身体与装备错位仍未完成。
 
 ## 协作规则
 

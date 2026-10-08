@@ -707,3 +707,38 @@ prefab 路径、单 CD_Head、flags 0；1918→1921 字节，只改一条资源�
 预期只判断原生头的位置：若正确，优先查私有 PAC 及其资源链；若仍错位，优先查
 共同的组件／descriptor 装配。该对照连带使用原生 PAC 自己的材质依赖，因此不能
 仅凭结果把根因限定为骨权重。它不修身体、不隐藏装备，也不应作为 Steve 成品使用。
+
+## 原生头模板与共同父骨的 Steve 候选
+
+原生头引用实测已正常连接，测试后恢复完成。旧自建头使用身体模板的四 LOD、
+palette slot8→Head93；原生头实际是三 LOD／节2、3、4，192项均为 B_face_com122
+子骨，Head93 不在其中。独立候选保留原生结构，只把固定 slot0 的一个 hash 改为
+共同父骨122，其余191项保持；替换全部脸几何，eyecover置空，MC头48点／24面
+刚性绑定slot0。按真实 Head PABC 对该骨逆补偿并量化回放，保留 UV、表面和材质纹理。
+这是一项明示的新绑定策略，不声称原 palette 完全不变或实际动画已验证。
+
+```powershell
+py -3.12 -B tools/prepare_steve_native_head_root.py
+py -3.12 -B tools/check_steve_native_head_root.py --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table-v2/steve-part-table-report.json --head-root-report build/steve-native-head-root/steve-native-head-root-report.json
+py -3.12 -B tools/check_steve_probe.py --native-head-root --rebuild
+```
+
+前置为已核对的 assembly、头描述文件与PAPPTv2。生成入口从 `--game-root` 或
+本机 installation.json 读取固定0009原生头，核对EXE、索引、精确路径、flags及哈希；
+不依赖研究目录。原版资产及五份来源复制在 ignored `build/steve-native-head-root`，
+其 `load_candidate` 无 CDMW 或游戏读取，并从这些固定来源重构 PAC／材质逐字准入。
+输出目录存在时拒绝覆盖；需要另一份输出时使用新的 `--output`。
+
+封装输出 `build/steve-native-head-root-probe-overlay`，variant为
+`steve-kliff-native-head-root-part-table-v2`；仍13资源，仅覆盖私有头 PAC和对应PAMI，
+其他11项保持。独立五报告集合同时保留旧assembly与新候选来源；与app及原生头引用
+对照互斥，通用重复路径保护保持。只有游戏关闭后才能安装／恢复：
+
+```powershell
+py -3.12 -B tools/install_steve_probe.py --install --plan build/steve-native-head-root-probe-overlay
+py -3.12 -B tools/install_steve_probe.py --restore
+```
+
+检查结果和实际收据以 [current-state.md](current-state.md) 为准。候选只验证头部路径，
+仍须验收引擎蒙皮、表情、scale与实际位置；身体错位、装备、发型和持续外观未完成。

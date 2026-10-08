@@ -11,13 +11,15 @@ receipt，36 个最新存档、完整 MC 状态、原点及 ASI 保持。用户�
 v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已显示但定位错开且与原装备
 混叠，完整外观未通过。用户退出后，v2 收据 `045d94ec45d74007a5dfd1c53dd8e00a` 已
 恢复，原资源、最新存档与 MC 状态保持。随后原生头单引用对照已检查并安装，
-**当前收据 `57b18550c3e344c19278ecd6f0b9d2c6` 待实测及退出恢复**。
+用户随后确认原生头正常连接在肩膀上方，正常退出后收据
+`57b18550c3e344c19278ecd6f0b9d2c6` 已恢复。新原生头模板／共同父骨候选离线检查
+与事务通过后安装，**当前收据 `5dfe1a43fa9846d6a1f1399bd42a4e2d` 待实机及恢复**。
 当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
 用户已于 2026-10-06 将剩余移植工作设为持续目标并要求开始执行，之后再次要求继续。
-目标已建立且未标记完整移植完成。最近持续目标工具状态为 usageLimited；2026-10-08
-用户明确要求按多智能体分工继续，当前执行其指令，没有自行更改目标状态或缩减范围。
+目标已建立且未标记完整移植完成。2026-10-08 工具重新核实持续目标状态为 active，
+按用户授权的多智能体分工推进，没有缩减完整范围。
 来源、路线和实测保护见 [../MODLOG.md](../MODLOG.md)。
 
 ## 当前里程碑
@@ -1527,3 +1529,84 @@ payload 差异为私有头 prefab，其余 12 项和 metadata-before 相同，�
 用户手动进入同一存档并反馈原生头是否正常连接，待实机和退出恢复。这是诊断，
 不会把原生头当作 Steve 完成。结果仅区分私有 PAC 及依赖与共同装配路径，不能仅凭
 原生头正常就认定是权重错误；原生 PAC 会使用自己的材质链。
+
+2026-10-08 10:57 核实新实例 PID 18364（10:55:22 启动）仍运行，原生头收据仍
+installed。新 `in-world` 快照成功：全部文件、完整 MC、原点与 ASI 保持。外观输入
+诊断两次稳定读取受控链、Scene 和初始 app，但 PAC 声明依旧空，整体 notReady；
+这不是新会话闪退或模型加载失败的证明。用户头部位置反馈尚待，未恢复正在运行的
+游戏资源。持续目标工具同时重新核实为 active，替代此前 usageLimited 元数据。
+
+2026-10-08 离线原生头 PAC 结构检查发现：原生头声明 3 LOD，实际几何节为
+2／3／4；自建 Steve 头沿用身体模板的 4 LOD 与 1／2／3／4。文件偏移 80 的 flags
+分别为 `0x00000002`／`0x01000082`，含义未解释；自建头 section0 的未知尾部
+`[447,63218)` 共 62,771 字节与身体 donor 逐字相同。现有门禁证明 donor 保持，
+不证明这些元数据适合独立头。这是下一候选的结构约束，尚未证明游戏错位根因。
+固定 CDMW `mesh_parser.py` 按 `4-section_index` 解码，`mesh_pac_builder.py`
+1097／1198／1322 行却按 `n_lods` 判断／重建；直接换原生头 donor 会把原节 4
+当作额外节保留，并重建 1～3。必须先验证精确 3 LOD 布局适配，不能盲改 flags。
+报告与原生提取件在 ignored `build/steve-head-pac-format-research-20261008/`，原生
+头 SHA256 `779cc8247bd72e49c8a86c7cec2535682371d2adff07380e8fe9e9288cab539d`。
+主控再次核实原生头会话 PID 18364 仍运行，恢复请求已发给用户；未写运行中资源。
+
+随后用户直接反馈“原生头正常连接在肩膀上方，已退出”。核实实际进程结束后，按
+before-restore → 专用 `install_steve_probe.py --restore` → restored 顺序执行成功。
+38 项原始文件哈希、36 个最新存档、完整 MC 状态、原点及 ASI 均保持，0041 与 active
+receipt 消失。用户观察和恢复证据关联保存在 ignored
+`runtime/steve-crash-20261008/native-head-visual-result.json`；未回填 native 渲染成功标记。
+原生 PAC 能在同一私有 prefab／descriptor／登记路径正确连接，下一步优先私有 PAC
+及材质／绑定链，不能据此证明单一根因；身体错位和装备覆盖仍是未完成项。
+
+原生头显式三 LOD 原型在 ignored
+`build/steve-native-head-rebuild-research-20261008/` 已完成原件 259,413 字节逐字自重建，
+额外 48 条真实原生记录／16 面控制各层均为 2016 字节，几何节 2／3／4 全部重新生成，
+没有旧节 4 残留。只改变已解释 counts／offset，未知 metadata 保持，不修改 CDMW。
+旧 Steve 头 48 点／24 面要求 Head93，原生 192 项 palette 不含该骨，原型明确拒绝。
+另一独立报告 `build/steve-native-head-binding-research-20261008/binding-report.json`
+（SHA256 `96c4c779298a01dd8d18bd35db86f4fe741c167419dd9e440191d41e8d387458`）
+确认全部 192 项为 122/B_face_com 的直接子骨，共同父链 122→93→60→40→24→16→13→0；
+Head PABC 覆盖 122 和全部 192 子骨，不覆盖 93。slot8 实际为 214/B_Eyeside_12_R，
+不能沿用旧身体模板的 slot8→93。3431 个原生顶点正权重独立核对通过。
+下一独立候选采用明确共同父骨 122：保持 palette 长度192，只替换固定 slot0 的四字节
+hash，其他191项和未知数据保持；清除旧脸／eyecover几何，把48点全部绑定新slot0，
+按真实 Head PABC neutral 逆补偿。这是显式新绑定策略，须独立核对量化回放、UV、
+三 LOD 和材质映射后再封装；未宣称实际表情／动画或整体 Steve 外观通过。
+
+## 2026-10-08 原生头模板与共同父骨的独立候选
+
+新增 `prepare_steve_native_head_root.py` 与独立 `check_steve_native_head_root.py`。
+固定原生头3LOD／2、3、4节，主draw各层48点／24面，原生eyecover清零；palette192
+项只有已定位slot0从骨194的hash改到明确共同父骨122/B_face_com，其他191项与未知
+metadata保持。所有顶点raw权重255／0…，绑定slot0；HeadPABC覆盖122。按真实中立
+矩阵逆补偿，并与固定CDMW交叉核对，量化回放最大误差
+`1.6295988343182753e-7 m`，normal／packed V最小dot分别为
+`0.9999999999999706`／`0.9999980887382965`。全部UV／拓扑保持；六种材质变体各保留
+原Steve head shader／纹理，将wrapper映射到原生main-head与空eyecover两draw。
+
+生成入口只读原版0009，核对EXE／索引／精确条目flags1／解码SHA；不再依赖研究
+目录。纯loader不加载CDMW或读取游戏，从包内五份固定template/provenance重构
+PAC／PAMI并逐字准入，未知报告字段、篡改、路径逸出、布尔类型和输出覆盖拒绝。
+最终 `py -3.12 -X utf8 -B tools/check_steve_native_head_root.py --rebuild`
+9/9通过，19.823秒。独立扫描确认metadata中唯一可解析192项表在count344/hash346，
+不依赖CDMW最长表扫描的隐式选择。此前基础9/9后收紧kind和包内来源，因此最终重跑。
+
+PAC96721字节，SHA256
+`182fc7385116a74536adf3f6603c057d4103f885bf1c6519d62d6689ea877660`；PAMI SHA256
+`442b56d40caf42e31f082123577483d195e107504a6cb85bcba556a3638c8ff9`；候选报告
+SHA256 `2d850067c97a7d44762eadb68154dbbb992aa2010f3851b63e3b0e8dfd6085a8`。
+`--head-root-report` 接入独立五报告十三包，强制descriptor和PAPPTv2，与app及
+head-mesh-control互斥；只允许覆盖固定旧assembly头PAC和PAMI两路径，双旧SHA／
+新候选重构／完整来源同时检查，其他11payload与metadata-before保持。一般重复路径
+保护不放宽。旧默认11、descriptor12、v2十三、原生头十三和00000 app十四纯准入通过；
+00002十四计划本机不存在，未执行该计划。组件列表交叉核对仍为CD_Nude／CD_Head。
+`check_steve_probe.py --native-head-root --rebuild` 28/28通过，97.477秒，含安装、
+最新存档保持、故障回滚、完整重建、双payload/来源篡改及混合报告拒绝。
+
+新包 `build/steve-native-head-root-probe-overlay` 13条，PAZ768192字节，计划SHA256
+`2b3bd9241cf5711cc06f479e18bd0210629260471911945338d37af4973d4ff0`。确认游戏关闭
+后顺序执行新的before-install、专用安装、installed快照，收据
+`5dfe1a43fa9846d6a1f1399bd42a4e2d` installed，variant
+`steve-kliff-native-head-root-part-table-v2`；安装文件、完整MC、原点、ASI核对保持。
+证据前缀 `runtime/steve-native-head-root-20261008`，独立脚本
+`build/record-steve-native-head-root-20261008.py` 绑定该计划，禁止覆写旧阶段。已请求用户
+手动进入同一存档反馈MC头是否正确连接并暂留运行；后续记录in-world、退出恢复。
+仍不把静态中立回放等同原生蒙皮／表情／scale或实际显示；身体、装备及持续外观未完成。
