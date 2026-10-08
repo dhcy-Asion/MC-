@@ -2099,3 +2099,42 @@ runtime/steve-body-native-material-20261008-owner-components.json`，不能复�
 核对通过，git diff --check通过；原件、build、runtime、记录器与备份保持忽略。代码／文档
 按授权正常同步GitHub。当前身体临时包已安装，待手动进入反馈、只读实采及随后退出恢复；
 持续目标active，完整Steve和装备／攻击仍未完成。
+
+
+## 2026-10-08 已通过头位置的材质合同内接回MC主颜色贴图
+
+上一goal turn完成默认服装实测恢复、身体原PAMI包实际安装及代码同步，属于progress。
+本次继续先核实Git4fe4a63干净、实际游戏未运行、body收据069425c3a6a0430fa9c576e3afe8f20b
+installed／active0041、41安装文件匹配及完整MC状态保持。手动进入／身体反馈请求仍待答复；
+不重复安装或把会话意图当作live进程等待。利用此期间完成MC头皮肤的独立离线候选，
+保持完整目标，不改变当前身体实验。
+
+新增 `tools/prepare_steve_head_basecolor.py`、`tools/check_steve_head_basecolor.py`。只替换
+已通过头位置的原生PAMI三个主draw baseColor路径，使用当前包内已存在的Steve DDS；
+不沿用改变完整shader合同的旧Standard改写。固定原件440a9e…ba9a5/16149B，候选
+16134B SHA `cc86b387583430d7e2d8ef136db965dd39d3e5754501626b7c82fa606b2abf3f`。
+三个49→44路径span之外逐字保持、逆恢复原件；原生3×2draw／EyeCover／Wrinkle和Aging／
+14/14/16主参数、ItemID、flags、其他纹理与BOM／CRLF保持。当前头PAC182fc…77660不改。
+四固定来源完全重构canonical报告与单候选资源，6项绝对Path包内快照、37项已有原输入
+保持；DDS仅依赖，87536B、256×256／DXT5／9mip实际字节范围核对，不重复新增资源。
+默认报告 `build/steve-head-basecolor/steve-head-basecolor-report.json` 36429B SHA
+`56d0ee077c290395c6efcc013c1c48524fe0db1af5c3bea6137d01a944c9f466`。
+prepare和pureloader仅读取已有准入包，不访问游戏／CDMW／网络；保护source及现有
+头／衣服／身体overlay目录，已有输出／交叠拒绝，不写当前正在等待反馈的计划。
+
+`py -3.12 -B tools/check_steve_head_basecolor.py --rebuild` **10/10通过，2.429秒**：
+独立固定span／逆恢复／外部字节与全XML／9mip、来源及候选／manifest改hash篡改、
+unknown／duplicates／类型／路径、pure noCDMW、source race、来源／overlay输出保护和
+真实新owned目录重建。独立QA内存28项篡改与2路径逃逸拒绝通过，没有生成重复包。
+其只读复核当前body14包DDS唯一flags0、逐项decoded字节与PATHC55c944…e703直接注册，
+官方64×64PNG固定d876e…18d0；旧设计中的13包计数是历史上下文，后续完整包需保持另13项。
+
+本候选未接封装／安装／实机，安装／MC头皮肤成功标志全部false；之后必须提供独立
+准入和事务检查，保持头PAC及其他13资源、DDS唯一flags0和直接注册，实际正常退出后
+才能改资源。当前仍是body8报告installed包，手动身体反馈／新组件只读采样／退出恢复
+待执行；完整MC皮肤、人物装配、全部原装备使用禁止、MC单击攻击／敌人击退仍未完成。
+
+发布前2份新增Python AST、7文档71相对链接／围栏及2份候选／收据JSON检查通过，
+git diff --check通过；现有安装入口混入该第9报告在hash／游戏访问前拒绝，未改准入边界。
+新资源留ignored build，不上传游戏／DDS／存档。代码与文档按授权正常同步GitHub；
+当前body测试与手动反馈保持，持续目标active。

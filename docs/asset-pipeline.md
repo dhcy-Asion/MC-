@@ -981,3 +981,39 @@ py -3.12 -B tools/install_steve_probe.py --restore
 
 当前状态以 [current-state.md](current-state.md) 与 [progress.md](progress.md) 为准；
 生成器成功与历史头位置反馈不能替代这次身体材质的实机验收。
+
+
+## 保留原生头材质合同的MC主颜色贴图候选
+
+身体材质对照尚待人工反馈时，离线完成下一项独立候选；不覆盖当前安装包。
+
+```powershell
+py -3.12 -B tools/prepare_steve_head_basecolor.py
+py -3.12 -B tools/check_steve_head_basecolor.py --rebuild
+```
+
+默认输出 `build/steve-head-basecolor/steve-head-basecolor-report.json`，variant
+`steve-head-basecolor-only-v1`。已有输出拒绝覆盖，另选新 `--output`；来源可用
+`--head-material-report`及`--assembly-report`显式选择，仍须固定完整纯准入。
+原件SHA `440a9e68a2e1ef425d9eef90cb0c50895f6888cb01c301eb7f04efa8197ba9a5`、16149字节。
+只改三个主draw的 `_baseColorTexture` 路径byte spans [1406,1455)、[6516,6565)、
+[11631,11680)，改为 `character/texture/crimsonmc_steve_1_21_1.dds`。新件16134字节SHA
+`cc86b387583430d7e2d8ef136db965dd39d3e5754501626b7c82fa606b2abf3f`；候选spans
+[1406,1450)、[6511,6555)、[11621,11665)逆替换逐字恢复原件。其余全部字节及3变体×2draw、
+EyeCover、Wrinkle／Aging shader、参数／ItemID／flags、其他纹理、BOM／CRLF保持。
+
+四份包内固定来源为原PAMI、当前头PAC、已有DDS和原生头材质报告；完整canonical报告
+由这些字节重构，pureloader返回单头PAMI资源与6项绝对Path快照。来源DDS SHA
+`653aa5d14644e515da6284fecd65711fae65a187323697a1b571dbbab74a6b1a`、87536字节，保留
+256×256 DXT5九mip，全部载荷字节范围核对。它是已有固定MC皮肤编码依赖，不新增
+candidate resource，也不将BC3说成无损；此工具不重编码PNG或读取游戏／CDMW／网络。
+保护原输入及已有头／衣服／身体对照包，未知字段、路径／flags／type／duplicate、
+来源／候选／报告改hash篡改、source race、输出覆盖／交叠均拒绝。
+
+2026-10-08独立检查含真实纯重建10/10通过；报告36429字节SHA
+`56d0ee077c290395c6efcc013c1c48524fe0db1af5c3bea6137d01a944c9f466`，37项原输入快照保持。
+独立只读QA核对当前身体14资源包中同DDS唯一flags0、decoded字节一致和PATHC直接注册。
+这些归档事实不证明新头PAMI已被引擎读取或最终MC皮肤正确。该候选未接封装／安装；
+后续新准入只允许该PAMI替换，另13资源与当前头PAC保持，依赖仍须唯一flags0并有
+直接注册。现有安装器没有该报告入口，不能直接安装此候选或把它混入身体8报告计划。
+先完成身体单变量的手动实测／只读采样／正常退出恢复，再确定下一对照。

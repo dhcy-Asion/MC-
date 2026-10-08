@@ -65,6 +65,7 @@ flowchart LR
 | `tools/prepare_steve_head_native_material.py`、`check_steve_head_native_material.py` | 单 PAMI 位置对照：在固定 head-root PAC／PAMI 基线上，只把私有头材质换为原生头 16149 字节原件 | 保留真实 MC 头几何及原生 3 变体×2 draw 完整合同；用户已确认头位置正常并退出恢复，最终 MC 皮肤、身体和动画仍未验收 |
 | `tools/prepare_steve_clothing_control.py`、`check_steve_clothing_control.py` | 固定 Macduff 00000 app 仅删除 Armor 内 12 行默认／预览 Prefab，保留空 Armor 和外部 XML；纯 loader 重构报告及单旧路径替换 | 1117→523 字节、flags 48、逐字可逆；用户已确认原服装消失并退出恢复，左手缺失、背部重叠和头比例仍未解决；动态装备禁止另验 |
 | `tools/prepare_steve_body_native_material.py`、`check_steve_body_native_material.py` | 在完整空 Armor 十四资源上，仅把私有身体 PAMI 换为固定原生 50017 字节原件；纯 loader 重构整报告与单资源 | 原生 6 变体×3 draw 的 Skin shader／参数／纹理逐字保持；其余 13 项（含当前身体补偿 PAC）保持，暂用原生纹理，左手／身体／动画实机未验 |
+| `tools/prepare_steve_head_basecolor.py`、`check_steve_head_basecolor.py` | 独立离线候选，仅替换原生头PAMI三个主draw的baseColor贴图路径为已有Steve DDS | 固定四来源、单PAMI、16149→16134字节及逐字逆恢复；EyeCover、shader、参数及其他纹理保持；未接封装／安装／实机皮肤验收 |
 | `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
@@ -514,6 +515,17 @@ before-install／installed 两阶段均 exit 0，41 项安装文件、36 个存�
 schema3/revision25、原点和 ASI 保持。等待用户手动进入反馈，尚无本轮实机结果，
 之后仍须退出恢复。左手、身体、动画、装备与最终 MC 皮肤均未验收，不能据头部
 材质的历史结果推定身体对照成功。
+
+独立 `prepare_steve_head_basecolor.py` 仅从已准入的原生头材质／assembly包读取固定
+原生头PAMI、当前头PAC、已有Steve DDS与原生头报告四份来源。三个主draw的
+`_baseColorTexture`路径按固定byte span替换，16149→16134字节，逆替换恢复原件；
+EyeCover、shader、参数／ItemID／flags、其他纹理、BOM及CRLF逐字保持。报告完整
+canonical重构，pureloader只返回一个头PAMI及6项绝对Path快照；DDS只是固定依赖，
+256×256 DXT5九mip完整字节范围已核对，不重复打包或声称BC3无损。
+生成不读取游戏／CDMW／网络，保护来源目录和已有头／衣服／身体对照包，拒绝覆盖。
+10/10隔离检查及真实重建通过；当前十四资源包中的DDS唯一entry／flags0、decoded字节
+与PATHC直接注册由独立只读QA另行核实。候选尚未接封装／安装；后续入口仍需保持
+其余13项与当前PAC、依赖唯一注册，游戏内MC皮肤／alpha／光照尚未验收。
 
 独立 `probe_owner_components.py` 复用已核对的受控角色／controller／SceneObjectClient
 回链及固定代码门禁，但不改变旧appearance探针。只读owner+210的完整16字节目录、

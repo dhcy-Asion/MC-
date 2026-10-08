@@ -97,8 +97,13 @@ app仅清空Armor内12个默认／预览Prefab的可逆对照已经完成，保�
   不解释背部模型或禁装。进入后使用新PID及
   `probe_owner_components.py --pid <当前PID> --output runtime/steve-body-native-material-20261008-owner-components.json`。
 
-服装优先之后再接回MC头贴图；已固定三个baseColor路径span及包内Steve DDS，对应
-官方64×64 PNG和原编码，纯内存逆替换通过；尚未写皮肤候选或实测。原生装备
+MC头主颜色贴图候选现已离线完成：`build/steve-head-basecolor/steve-head-basecolor-report.json`
+SHA `56d0ee077c290395c6efcc013c1c48524fe0db1af5c3bea6137d01a944c9f466`，10/10隔离重建通过。
+仅三处baseColor路径换为已有固定Steve DDS，16149→16134字节、逆恢复原件；头PAC、
+EyeCover、shader、参数、其他纹理／BOM／CRLF保持。四固定来源、6项包内及37项原输入
+快照核对通过，不新增DDS资源。该候选未接封装／安装／实机皮肤，当前身体8报告包保持；
+之后需独立准入、保持另外13资源、纹理唯一flags0及直接注册，再正常退出后更换对照。
+身体反馈前不覆盖当前包或猜测新外观已成功。原生装备
 14条稳定记录仅证明只读观察链；共享apply并非安全写前禁装入口，表插入／删除的局部
 拒绝也不证明全禁装或可逆恢复。伤害最新窗口209BDC0只有两独立形式输入，缺少具体
 攻击者／敌人类型和owner回链，不能据此调用DamageApply或宣称击退完成。
