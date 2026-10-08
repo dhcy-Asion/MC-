@@ -54,12 +54,21 @@ YXZ 顺序须从 MC ZYX 四元数转换。它不包含实际 owner 朝向、rend
 SceneObject 生命周期；原生位置接口里的父四元数不能替代人物朝向。局部几何和旋转
 转换的离线证明与运行时跟随分开验收，详见[资产流程](asset-pipeline.md)。
 
+`prepare_steve_rigid_geometry.py`再把已准入的六组pivot-local几何分别转换为12层单draw
+PAM／PAMLOD，共24文件。固定蓝cube模板只支持原有descriptor数量，因此内外层分别
+保存，不强行新增draw。按角位置及几何法线双射选原20字节record，XYZ／UV外的字节
+逐字保持；LOD复用主网格的完整records、indices和bbox，0.9375不写进顶点。
+只输出几何与来源报告，没有PAMI、prefab、HKX、纹理或安装manifest；尚无角色部件组
+创建接口。保留packed着色字段不等于解释了法线／切线编码或验证了新UV下的切线。
+
 当前蓝方块 prefab 只有一个明示 MeshComponent，唯一绘制资源为 PAMI；没有可单独
 删除的 collision 组件，PAMI 也没有显式总碰撞开关。该模板已有碰撞实测结果，不能据
 组件列表推断无碰撞，也不能靠删除伴随 HKX 文件猜测禁用。无碰撞载体仍须另行证明。
 实际创建仍使用原有全局flags默认1,1,0。对当前EXE创建入口及两个直接消费者的有界
-读取，仅证明flag向任务描述／记录透传及上下文门禁，没有独立物理禁用合同；host替身
-绕过原生边界，不能弥补这一证据。原flags、显隐和对象重建接口均未在本轮修改。
+读取，仅证明flag向描述符／值记录透传及上下文门禁，没有独立物理禁用合同。共享
+vfptr558af40现经当前primary RTTI确认是`pa::VariantItem<bool>`；+8初始化零、+10承载
+bool，不能称碰撞owner或任务。第0槽呈析构形态，第1槽立即跳转，未展开目标，停止
+此vfptr路线。host替身绕过原生边界，不能弥补证据；创建flags与显隐接口保持。
 
 头UV对照新增严格10报告／14资源封装：从固定九报告本地包只换一个头PAC，保留其他
 13项编码、PAMI和DDS，元数据按实际归档CRC重建；安装仍走相同所有权／关闭游戏／

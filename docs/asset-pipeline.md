@@ -1348,3 +1348,27 @@ py -3.12 -B tools/check_steve_rigid_adapter.py --rebuild --output build/steve-ri
 情况及2个tile布局。位置和比例输出为float32，拒绝非有限、非正、非均匀以及缩放下溢。
 当前成功证据见`build/steve-rigid-adapter-check-20261008-final/check-results.json`；它只
 执行隔离算术程序，不调用游戏或MC服务器。原生显示、无碰撞、完整renderer和输入仍未验收。
+
+## 六组刚体几何的原生文件转换（2026-10-08）
+
+```powershell
+py -3.12 -B tools/prepare_steve_rigid_geometry.py
+py -3.12 -B tools/check_steve_rigid_geometry.py --output build/steve-rigid-geometry-check-new
+```
+
+生成器只读固定本地CDMW源、蓝cube模板和已准入的官方Steve适配产物，不读游戏安装。
+输出`build/steve-rigid-geometry-1.21.1`，每个关节的base／outer各保存一个单draw PAM及
+PAMLOD，共12层／24文件；每层24顶点、12三角形。外层完整保留，不能因头帽透明就
+把袖子等所有外层删掉。新文件按原native角顺序排列，通过位置和面法线匹配MC原角，
+使用pivot-local米坐标及`U,1-V` half UV，原native索引绕序保持；不再次翻轴或乘0.9375。
+
+主网格和LOD共用完整20字节records与相同float32 bbox。原record的`[6,8)`和`[12,20)`
+逐字复制，不能称已解码packed法线／切线；解析器显示的法线由几何计算，新UV对应的
+切线和材质采样仍未知。报告明确geometryAuthored=true，而materialBinding、collisionless、
+groupObjects、ownerFollow、nativeApplied、installed及installableResourcePackage=false。
+它不是可安装角色包，不包含PAMI／prefab／HKX或纹理，不能交给临时包安装器。
+
+生成器与检查器均拒绝覆盖已有输出；生成器在发布前后核完整来源快照、CDMW／依赖目录，
+拒绝与任一来源父目录重叠。检查证据只能新建在build直接子目录，不能嵌套写入模型源。
+独立检查从原glTF accessor和中立关节计算预期位置／UV，直接解码u16及half，核对全部
+面覆盖、绕序、保留字节和两格式一致性；另以新Python进程验证确定性重建及输出拒绝。

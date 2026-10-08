@@ -171,18 +171,29 @@ MC动作实时应用与完整系统未实现。
 `build/steve-rigid-adapter-1.21.1`，成功证据
 `build/steve-rigid-adapter-check-20261008-final/check-results.json`。只证明identity root的
 feet-frame；原生单位尚未实机校准，renderer蹲姿／世界偏移、owner朝向、native播放仍false。
+
+六组几何现已转换为原生PAM／PAMLOD：`prepare_steve_rigid_geometry.py`输出
+`build/steve-rigid-geometry-1.21.1`，base／outer独立单draw共12层、24文件，每格式
+288顶点／144三角形，未烘焙0.9375。独立检查8/8通过（87.068秒），原glTF oracle核
+位置max5.96e-9、UV误差0，完整records／indices／bbox及新进程重建一致，2080来源保持。
+报告SHA40407ce6…，检查证据`build/steve-rigid-geometry-check-20261008/check-results.json`。
+它只完成几何：没有材质、prefab、HKX或安装manifest，碰撞、对象组合、owner跟随均未证。
+下一项可独立核对固定Standard材质与MC内外层alpha合同；不新增原生函数扫描或安装此几何。
+
 无碰撞donor审计10项通过、27来源保持；同一蓝cube模板HKX实际含物理网格，prefab唯一
 MeshComponent不可只删碰撞，meshinfo字段仅声明、值／写偏移未证。报告
-`build/steve-collisionless-donor-20261008/report.json`，没有候选。下一步仅核验已锚定的
-StaticMesh／MeshComponent加载合同；缺锚点则停止该路径，不能删HKX或猜字段后安装。
+`build/steve-collisionless-donor-20261008/report.json`，没有候选。后续加载／创建合同
+核对结果见下文；不能删HKX或猜字段后安装。
 
 此后已有资料检索未找到当前static／HKX消费者锚点；创建源码及host seam也无已证
 collision-only入口。主控已从本日启动记录定位并在固定EXE核对创建入口3b58180、名称
 引用、5372字节unwind窗口及两个直接callee（5211／364字节）。f1/f3进入描述符，f3
 派生值参与TLS／上下文门禁，不能当物理开关。两处记录的候选vfptr同为558af40，+10
-分别接f2／f1；正式类型、+8来源和执行消费者未证。证据
-`build/steve-scene-create-flags-20261008/consumer-review.json`（effeb183…）；本轮到此
-收束，未调用或改flags。下一项仅考虑此确切记录的类型／+10消费，不枚举未知函数。
+分别接f2／f1；后续仅对该确切vfptr读取primary RTTI，确认是`pa::VariantItem<bool>`，
+并非已证任务或碰撞对象。+8在两构造路径初始化为零，+10承载bool；第0槽92字节为
+析构形态，第1槽首条即跳转，不是已证getter，未展开目标。已停止此vfptr路线，不能
+据此改flags，也不能反推flags在未知业务消费者中绝无碰撞作用。新证据在
+`build/steve-scene-flag-record-20261008/record-review.json`（b6f256fa…）；旧窗口保持。
 当前无碰撞候选仍不存在；头部待测包、存档、ASI与生产服务未修改。
 
 背部具体组件→prefab/PAC链未定位。14条raw装备记录只为观察；共享apply和表增删局部拒绝

@@ -4,7 +4,39 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：原生碰撞控制的有界追踪
+## 2026-10-08 最新：六组原生几何及布尔值记录身份
+
+新增`tools/prepare_steve_rigid_geometry.py`和`tools/check_steve_rigid_geometry.py`。
+固定蓝cube writer不能新增原始descriptor数量，因此六关节每组base／outer分别保存为
+单draw PAM／PAMLOD，共12层／24文件。保持全部288顶点、144三角形（每种格式），
+从原MC角和法线双射到native记录顺序，pivot-local几何不再次翻轴或乘0.9375；UV采用
+既有静态几何合同`U,1-V`。保留原native indices和record的非XYZ／UV字节，LOD完整
+records与主PAM相同，并显式复制相同bbox，避免writer自行扩大bbox造成解释差异。
+packed字段只是逐字保留，解析法线由几何推导；切线与新UV／shader语义未证。
+
+`py -3.12 -X utf8 -B tools/prepare_steve_rigid_geometry.py`已成功生成canonical
+`build/steve-rigid-geometry-1.21.1`。每PAM2276字节、PAMLOD1288字节，报告411511字节／
+SHA`40407ce6766dcb3efad97e87c0dacb9ffdaa67f8cb128ef0c61adc5d4b97f8f7`；2080项来源
+包含完整CDMW／依赖、固定上游及新生成器，首末目录与字节回读一致，已有源和产物保持。
+输出拒绝覆盖、链接及全部来源父目录重叠；检查证据只允许build直接子目录。
+
+`py -3.12 -X utf8 -B tools/check_steve_rigid_geometry.py` **8/8通过／87.068秒／exit0**。
+从原glTF accessor和中立关节独立计算预期，直接u16／half解码，位置最大误差
+5.960464483090178e-9、UV误差0；面覆盖／绕序、donor字节、两格式一致、新进程重建和
+输出拒绝均通过。证据在`build/steve-rigid-geometry-check-20261008/check-results.json`。
+只读双代理审查修正发布前的字典顺序、LOD bbox、空依赖快照和检查输出保护；未修改旧
+adapter／准入工具。geometryAuthored=true，材质、碰撞、部件组创建、跟随、nativeApplied
+及installed仍false；不含PAMI／prefab／HKX／纹理或安装manifest，不能交给游戏安装器。
+
+原生flags分支也已收束：只读当前固定EXE，复验原两个LEA后，vfptr558af40的primary
+COL／TypeDescriptor明确为`pa::VariantItem<bool>`。+8由零临时初始化，+10接f1/f2；
+第0槽92字节呈析构形态，第1槽限定32字节首条为跳转，未读目标。该记录不是已证
+任务／physics owner，停止沿此vfptr追碰撞开关；也不据此断言原flags永无物理作用。
+证据`build/steve-scene-flag-record-20261008/record-review.json` SHA b6f256fa…，四输入
+末读保持；独立缓存审查10来源保持，几何可行性13来源保持。没有调用native或改flags。
+头部透明帽层包fc6a85…仍等待手动实测，完整Steve／MC动作和装备、战斗要求未完成。
+
+## 2026-10-08 原生碰撞控制的有界追踪
 
 在六刚体坐标已通过的基础上核对无碰撞前置，未生成猜测资源或修改创建flags。
 已有资料检索报告`build/steve-collision-loader-anchor-20261008/report.json`核对20来源；
