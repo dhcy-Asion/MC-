@@ -1610,3 +1610,37 @@ head-mesh-control互斥；只允许覆盖固定旧assembly头PAC和PAMI两路径
 `build/record-steve-native-head-root-20261008.py` 绑定该计划，禁止覆写旧阶段。已请求用户
 手动进入同一存档反馈MC头是否正确连接并暂留运行；后续记录in-world、退出恢复。
 仍不把静态中立回放等同原生蒙皮／表情／scale或实际显示；身体、装备及持续外观未完成。
+
+## 2026-10-08 身体模板、普通skin与空draw的限时复核
+
+本轮头部测试包仍installed，核实游戏尚未启动，没有替换／恢复它。主控直接以固定
+CDMW解析原current 01_0002 prefab（SHA
+`0184309bae4ded9d51e07269ddebea8ed6f6b08701c59a077f9d866d6002e757`），CD_Nude原本
+引用 `character/model/1_pc/1_phm/nude/cd_phm_00_nude_00_0001.pac`，私有身体使用的
+donor与原部件一致；不能仅按文件名把它换成猜测的01_0002网格。
+
+独立限时身体审查写入 ignored
+`build/steve-body-deformation-research-20261008/{audit.py,report.json}`，report SHA256
+`629841944e2da2121a8abe026eacdf8e356ea8a9aa2015996bf7b0cca56a52c7`。固定donor、
+身体候选8f26d6…、PAB及当前420条PABC前后核对保持。189项palette唯一在count447／
+hash449，全部被PABC覆盖；候选13个实际加权骨及父链也覆盖，13骨均出现在原生真实
+记录中。三个原descriptor保留，Head／Hand四层counts为0，身体各层1008点／504面，
+每节43344字节，start／split／local索引闭合，没有旧几何尾。metadata仅改既有
+counts／offset及main六float bbox，`[447,63218)`62771字节保持；其中1231以后的
+运行时语义未解释，不能据此提升为蒙皮ABI已验证。
+
+slot→PAB映射：身体136→25/Spine_Sub；右臂56→138/UpArmTwist、100→356/Forearm_sub、
+78→355/Hand；左臂51→133、92→349、82→348；右腿138→17/Thigh、140→48/Calf_Sub、
+144→46/Foot；左腿176→18、161→54、160→53，外层与对应内层相同。六slot包括
+零权重项全部合法，raw权重总和255，原／新记录gate均63。
+
+固定 `pac_cloth_guides.py:97–99` 取flags bits8–11，`0x01000082`为layout0，返回
+无guide区块；不能把bit7／bit24当作cloth启用，也不能把metadata当runtime render_flags。
+每层byte38为252×32、253×16、254×48、255×912；`pac_jiggle_skinning.py:112–130`
+在有runtime buffer且blend>0等条件下使用全byte或低4bits，骨override可优先。该参考
+标注游戏1.0.0.2944，当前1.0.0.2976的render_flags／buffer／override尚未读证；
+不会仅因此清零、置255或宣称动态变形为错位根因。embedded-volume helper会因忽略
+空descriptor而拒绝候选，这是mesh_parser:1618／pabv_parser:254的工具限制，不能
+补写成引擎加载失败。原图小腿处棕色块尚未映射到逻辑部件，Armor遮挡不证明旧Nude
+重复。本轮未找到新确证静态缺陷，收束该支线；下一步仍是新版头实际位置与必要的
+身体／装备显示对照，未改源码、游戏、材料或当前测试包。

@@ -61,6 +61,7 @@
 | 原生头／自建头 PAC 结构差异 | steve_position_audit | 三 LOD 原字节自重建及 48 条原生记录控制通过；Head93 不在原生 palette，旧绑定不可直接移植 |
 | 原生头共同父骨候选 | crash_asset_audit＋steve_position_audit | 生成器／独立检查器完成，最终9/9通过；明确 slot0→B_face_com122，其余191项和未知数据保持 |
 | 新头候选封装与安装 | diagnostic_review＋主控 | 完整28/28通过；已安装并核对，等待MC头位置反馈，随后退出恢复 |
+| 身体结构复核 | steve_position_audit＋主控 | 原current prefab已确认引用同一00_0001 donor；189项palette/PABC覆盖、四层边界与13加权骨核对通过，未找到新确证错位字段 |
 
 目录成员与用户实际画面分别记录；探针不因为截图而回填 native rendered 成功标记。
 HP 仍未接入 HUD，不在当前外观排障中扩展无关逆向支线。
@@ -107,6 +108,15 @@ before-install／installed已完成，后续实际进入后记录in-world，实�
 before-restore → `install_steve_probe.py --restore` → restored；不得覆盖旧阶段证据。
 新包只有头PAC及其PAMI两项变化，其余11项与v2保持；head prefab恢复使用私有MC路径，
 与原生头引用对照互斥。真实头位置／动画尚未验收，身体与装备错位仍未完成。
+
+身体限时复核证据：ignored `build/steve-body-deformation-research-20261008/report.json`，
+SHA256 `629841944e2da2121a8abe026eacdf8e356ea8a9aa2015996bf7b0cca56a52c7`。
+原01_0002 prefab本就引用00_0001 PAC，不能因名字不同另换donor。身体候选13个实际
+加权骨及全部189个palette项被当前420条PABC覆盖；四层各1008点／504面，边界闭合。
+metadata flags不是运行时render_flags；`0x01000082`在固定guide解码器中layout为0，
+不应简称“cloth启用”。每层96条byte38继承252／253／254，其是否参与jiggle还取决于
+运行时buffer／override；旧参考针对1.0.0.2944，未在当前2976验证，不据此直接改字段。
+暂未发现新的确证静态错误，等待实际MC头结果后再选择身体／装备显示对照。
 
 ## 协作规则
 
