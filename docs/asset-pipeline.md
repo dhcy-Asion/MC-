@@ -742,3 +742,74 @@ py -3.12 -B tools/install_steve_probe.py --restore
 
 检查结果和实际收据以 [current-state.md](current-state.md) 为准。候选只验证头部路径，
 仍须验收引擎蒙皮、表情、scale与实际位置；身体错位、装备、发型和持续外观未完成。
+
+## 保留 MC 头几何的原生头 PAMI 单变量对照
+
+此对照以固定 head-root 十三资源包为基线，只替换私有头 PAMI；三 LOD PAC 仍保留
+真实 MC 头／帽的 48 点、24 面、公共父骨绑定及 UV。它暂用原生头材质和原生纹理
+检查位置，最终 MC 皮肤、头身位置、动画、身体装配、原装备禁用及持续完整 Steve
+仍未完成。本对照已实际安装，等待用户手动进入后的反馈；显示／位置尚未验收，
+不能据离线通过或安装文件匹配声称显示修复。
+
+```powershell
+py -3.12 -B tools/prepare_steve_head_native_material.py
+py -3.12 -B tools/check_steve_head_native_material.py --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table-v2/steve-part-table-report.json --head-root-report build/steve-native-head-root/steve-native-head-root-report.json --head-native-material-report build/steve-head-native-material/steve-head-native-material-report.json
+py -3.12 -B tools/check_steve_probe.py --head-native-material --rebuild
+```
+
+生成器默认输出 `build/steve-head-native-material/steve-head-native-material-report.json`，
+候选 variant 为 `steve-head-native-material-only-v1`。新输出目录必须不存在；已有产物
+需要保留，另选新的 `--output`。原生来源为固定 0009 中
+`character/modelproperty/1_pc/1_phm/head/head/cd_phm_00_head_00_0001_macduff.pac_xml`，
+读取前后核对 EXE／索引 SHA、精确路径、flags 50 与原件 SHA。基线也必须通过固定
+head-root 的纯 loader，并核对以下三项字节身份：
+
+| 资源 | SHA256 |
+| --- | --- |
+| 保留的 head-root PAC | `182fc7385116a74536adf3f6603c057d4103f885bf1c6519d62d6689ea877660` |
+| 被替换的 head-root PAMI | `442b56d40caf42e31f082123577483d195e107504a6cb85bcba556a3638c8ff9` |
+| 新原生头 PAMI，16149 字节 | `440a9e68a2e1ef425d9eef90cb0c50895f6888cb01c301eb7f04efa8197ba9a5` |
+
+原生 PAMI 保留 3 变体×2 draw 的完整原字节合同，每个变体都有 EyeCover 和主 draw：
+
+| 变体 | EyeCover shader／参数数 | 主 draw shader／参数数 |
+| --- | --- | --- |
+| 0 | `SkinnedMeshEyeCover`／1 | `SkinnedMeshSkinWrinkle`／14 |
+| 1 | `SkinnedMeshEyeCover`／1 | `SkinnedMeshSkinWrinkle`／14 |
+| 2 | `SkinnedMeshEyeCover`／1 | `SkinnedMeshSkinWrinkleAging`／16 |
+
+draw 名称、wrapper 元数据、全部参数及顺序、原生纹理和 wrinkle 引用逐字保持，
+不序列化 XML，也不扩成上一份 Steve PAMI 的 6 变体。报告只有一项
+`candidateResources`：虚拟路径为
+`character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml`，
+kind 为 `skinnedMaterial`，`payloadSize=16149`，两个 archive flags 均为 50；
+`sourceVirtualPath`／`templatePath` 和 `templateSha256` 指向上述固定原生头 PAMI。
+
+包内保存原生 PAMI、旧 PAMI、保留 PAC、固定 head-root 报告四份来源。
+`load_candidate(report_path)` 返回 `(report, {virtualPath: bytes}, snapshot)`，
+snapshot 使用绝对 `Path` key，直接兼容 `orientation.verify_snapshot`。纯 loader
+只读这些包内来源和候选，从固定来源重构整个 manifest 并逐字比对，不加载 CDMW
+或读取游戏，也不使用报告中的成功标记准入。2026-10-08 独立检查器含真实固定重建
+**10/10**、完整封装及隔离安装／恢复／故障／重建检查 **28/28** 通过；这些检查未安装
+实际游戏。PAZ 为 768912 字节，计划报告 SHA256 为
+`991fa0fcf756bfec6138a3be13f651658721fb2a0a2b9f9e7dbe724871d39048`。
+
+新封装默认输出 `build/steve-head-native-material-probe-overlay`，安装 variant 为
+`steve-kliff-native-head-root-original-material-part-table-v2`。报告集合必须恰好包含
+`steve-assembly-report.json`、`steve-appearance-report.json`、
+`steve-head-descriptor-report.json`、`steve-part-table-report.json`、
+`steve-native-head-root-report.json` 和 `steve-head-native-material-report.json`。
+先应用 head-root 的两项覆盖，再只替换固定旧 SHA 的 PAMI；仍为 13 个资源，PAC 及
+其余 11 项与 head-root 包逐字保持，原有 meshparam／PAPPT 两个旧路径覆盖范围保持。
+缺头描述文件／注册表／head-root 或混入 app／head-mesh 时拒绝；通用重复路径保护保持。
+
+完整事务通过并核实游戏关闭后，安装入口为
+`install_steve_probe.py --install --plan build/steve-head-native-material-probe-overlay`；
+测试后正常退出，仍用 `install_steve_probe.py --restore`。它沿用
+`kind=steve-mesh-parameters` 的所有权／备份／收据和共享锁，恢复不覆盖安装后的最新
+存档。2026-10-08 已实际安装，收据为 `5249d2f2339844f3a5b27b77d1353a66`；
+before-install／installed 两阶段均 exit 0，41 项文件匹配，36 个最新存档、完整 schema3
+MC 状态、原点和 ASI 保持。等待用户手动进入后的反馈，显示／位置尚未验收；
+实际检查及恢复状态见
+[progress.md](progress.md) 与 [current-state.md](current-state.md)。

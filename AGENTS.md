@@ -99,6 +99,7 @@ the earlier copy under Desktop/Git.
 | Steve 部件名称注册 | `py -3.12 -B tools/check_steve_part_table.py --rebuild`；固定 PAPPT 的两段各追加身体／头部两行，新 part 行的组件列表必须匹配私有 prefab，全部旧行保持；v1 沿用原版多组件列表的包已闪退并恢复，不得重装；目录存在不等于显示验收 |
 | Steve 原生头网格对照 | `py -3.12 -B tools/check_steve_head_mesh_control.py --rebuild`，封装后 `check_steve_probe.py --native-head --rebuild`；仅替换已注册私有 CD_Head 的一个 PAC 引用，其余十二资源保持，与 app 对照互斥；用于区分私有网格资源链和装配，不是人物修复 |
 | Steve 原生头共同父骨候选 | `py -3.12 -B tools/check_steve_native_head_root.py --rebuild`，封装后 `check_steve_probe.py --native-head-root --rebuild`；固定原生三 LOD 布局、仅 palette slot0→B_face_com122、完整 UV／权重／中立回放；仅覆盖私有头 PAC／材质，其他十一项保持，动画和实际位置须另验 |
+| Steve 原生头原字节材质对照 | `py -3.12 -B tools/check_steve_head_native_material.py --rebuild`；封装后 `check_steve_probe.py --head-native-material --rebuild`；严格六报告，保持失败共同父骨 PAC 及其余十二资源，仅换固定原生头 PAMI 的三变体／两draw完整字节；暂用原生纹理验证位置，不等于最终MC皮肤或装配修复 |
 | Steve 初始 app 引用 | `py -3.12 -B tools/check_steve_app.py --rebuild`；00000／00002 必须显式二选一，每报告仅改一份 app 的 Nude/Head Name；不得猜受控实例实际 app，不同时改两份 app |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |

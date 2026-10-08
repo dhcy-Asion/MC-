@@ -15,8 +15,11 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 `57b18550c3e344c19278ecd6f0b9d2c6` 已恢复。新原生头模板／共同父骨候选离线检查
 与事务通过后安装并有实际运行会话；核实进程结束后收据
 `5dfe1a43fa9846d6a1f1399bd42a4e2d` 已恢复，38项原文件及退出时最新存档／MC保持。
-**当前无待恢复资源，用户补充MC头仍错位或未显示，本轮外观未通过**；
-不把原生采样记为显示通过。
+该次恢复后用户补充MC头仍错位或未显示，外观未通过，不把原生采样记为显示通过。
+随后已准备并安装只改原字节头PAMI的十三资源对照；当前收据
+`5249d2f2339844f3a5b27b77d1353a66` 为 installed，有待实测／退出恢复的0041。
+安装前核实实际游戏关闭，文件、最新存档／完整schema3 MC／原点／ASI保持；
+当前等待用户手动进入同一存档并反馈方块头位置，不能宣称新对照已修复外观。
 当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
@@ -1872,3 +1875,71 @@ body固定字节/pdata/unwind、48正常分支、三个精确类型虚表和EXE�
 通过。本次只更新四份交接／公开摘要，不上传原件、快照或ignored研究目录；没有重跑
 已通过的MC规则检查、启动游戏、改安装或消费材料。持续目标active，下轮优先独立
 PAMI原字节对照的生成／准入／十三资源封装，正式显示与全功能验收仍未完成。
+
+## 2026-10-08 保留 MC 几何的原生头材质单变量对照
+
+依据上轮失败反馈与完整PAMI差异，新增
+`tools/prepare_steve_head_native_material.py` 和独立
+`tools/check_steve_head_native_material.py`。固定0009中原生头PAMI双次读取、EXE／
+索引／flags／来源SHA均核对；只把完整16149字节原件放到私有头PAMI路径。三变体、
+两draw、EyeCover与SkinWrinkle/Aging shader、全部参数／顺序／原生纹理保持原字节，
+不强扩成六变体、不做XML重序列化。完整合同与CLI见[asset-pipeline.md](asset-pipeline.md)。
+
+候选报告 `build/steve-head-native-material/steve-head-native-material-report.json` SHA256
+`1ca1972751b346ce8afd9da684ab3d419ef60a92e557a53be1b111145cdb7c7a`。包内四份固定来源为
+原生PAMI、失败PAMI、保留PAC和固定head-root报告；纯loader不加载CDMW或读取游戏，
+重构整个规范报告逐字比对，拒绝未知字段／重复JSON键／路径逸出／类型及字节篡改。
+snapshot为绝对Path，沿用发布前来源回读。所有integration能力仍为false。
+
+`prepare_asset_overlay.py`、`prepare_steve_probe_overlay.py` 与 `install_steve_probe.py`
+增加严格六报告模式：assembly、appearance、head-descriptor、v2 part-table、head-root、
+head-native-material必须同在，与app及head-mesh互斥。先应用head-root两覆盖，再只改
+固定失败PAMI；通用重复路径、旧路径覆盖和存储flags保护保持。失败PAC SHA
+`182fc7385116a74536adf3f6603c057d4103f885bf1c6519d62d6689ea877660` 保持；旧PAMI
+`442b56d40caf42e31f082123577483d195e107504a6cb85bcba556a3638c8ff9` 替换为原件
+`440a9e68a2e1ef425d9eef90cb0c50895f6888cb01c301eb7f04efa8197ba9a5`。新十三包中只有
+这一资源变化，其他12项row／localPath／payload及metadata-before／pathc保持。
+
+本轮相关检查：
+
+- `py -3.12 -X utf8 -B tools/check_steve_head_native_material.py --rebuild` **10/10通过**，
+  包含真实固定来源重建、完整合同、纯加载、来源／报告／路径与输出拒绝保护。
+- `py -3.12 -X utf8 -B tools/check_steve_probe.py --head-native-material --rebuild`
+  **28/28通过，95.864秒**，包含真实新输出重建、逐项解包、只改一PAMI、隔离安装／
+  故障回滚／恢复、最新存档保持，以及缺依赖／混控／篡改后重算哈希的拒绝。
+- 独立审查确认测试22覆盖父类同名方法，无重复错误断言；strict六报告在hash前排除
+  非法组合。旧十一／十二／v2注册／原生头／共同父骨及新材质计划纯准入通过；
+  历史`steve-app-macduff-00000-probe-overlay`仍引用旧v1注册报告，被组件合同拒绝。
+  该历史包不是v2回归通过记录，不能重装或放宽准入；已有v2单app支持未被删除。
+
+新计划 `build/steve-head-native-material-probe-overlay/reports/overlay-report.json` SHA256
+`991fa0fcf756bfec6138a3be13f651658721fb2a0a2b9f9e7dbe724871d39048`；PAZ768912字节，
+13项payload往返、边界／校验和及PAMT无编辑重建一致。安装variant为
+`steve-kliff-native-head-root-original-material-part-table-v2`。这份诊断暂用原生头贴图，
+实际MC头几何／UV和palette保持，最终MC皮肤尚未完成；不证明shader是错位根因。
+
+核实实际游戏关闭、无active receipt／0041且38项原始文件匹配后，沿已授权手动进出
+流程实际安装新包。收据 `5249d2f2339844f3a5b27b77d1353a66` 为 installed，kind为
+`steve-mesh-parameters`。新记录器 `build/record-steve-head-native-material-20261008.py`
+绑定此variant／计划SHA，证据前缀 `runtime/steve-head-native-material-20261008-`。
+before-install／installed两阶段均exit0；41项安装文件、36个存档、完整MC schema3／
+revision25、原点及ASI核对保持。阶段输出拒绝覆盖，恢复须比较退出时最新MC／存档。
+
+当前临时包在游戏目录中，已请求用户手动进入同一存档、反馈方块头位置并先保持运行。
+尚无本包游戏内位置结果；之后需实际新会话核对及必要只读采样，用户正常退出并确认
+进程结束后恢复。头／身体／动画、持续外观、MC装备穿戴、红沙装备禁用与MC攻击仍未完成。
+current-state已缩短为现场入口，历史证据留在本文件，不复制旧PID作为当前地址。
+
+本轮另一项有界静态伤害审查：
+`build/steve-combat-owner-pair-20261008/combat-owner-pair-review-v2.json` SHA256
+`56b242368064909d724d452a01ccece21df00378b63c635f2741727354e3f042`。仅选择已有39行列表中
+call209C573，完整pdata窗口209BDC0..209CB2C，3436字节，窗口SHA
+`0529743fe686bf116aede3e3cb2fbb6aed50bbe25bc9450bfb8cd7a01fbab774`。两形参链独立，
+但窗口没有具体输入构造、精确攻击者／敌人类型或两条owner回链，指针比较也不证明
+敌我；40字节尾部为switch数据，未当作指令。结论typed ownerpair unavailable，未访问
+游戏进程／写内存／调用伤害或击退。不能将此线索当作MC单击攻击完成。
+
+发布前六份相关源码与新ignored记录器共7份AST、七份文档67个相对链接／围栏、四份
+候选／计划／安装阶段JSON及两个报告固定摘要核对通过，`git diff --check`通过。
+本轮没有修改MC规则、重建ASI／JAR或消费材料；源码／文档正常同步，游戏原件及
+runtime／backups／build保持忽略。持续目标active，等待当前单变量实机结果并继续完成。

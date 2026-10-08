@@ -61,6 +61,7 @@ flowchart LR
 | `tools/prepare_steve_head_descriptor.py`、`check_steve_head_descriptor.py` | 为私有头 basename 复制原字节 HeadPrefabData，独立单资源报告及纯 loader | 固定 466 字节、七字段、flags 48；缺失配套文件的单变量对照，未证明运行时必需或已解决装配 |
 | `tools/prepare_steve_head_mesh_control.py`、`check_steve_head_mesh_control.py` | 将固定私有 CD_Head 的 PAC 引用改回原生头，保留单组件其余语义；独立固定字节生成与 CDMW 正逆向核对 | 1921 字节、flags 0，与原生 donor 首组件逐字一致；只作定位对照，不是 Steve 外观修复 |
 | `tools/prepare_steve_native_head_root.py`、`check_steve_native_head_root.py` | 原生头三 LOD 模板重建 Steve 48 点／24 面，固定 slot0 改为公共父骨 B_face_com122，真实 Head PABC 中立逆补偿及材质映射 | 其余191骨项与未知数据保持；生成时只读固定0009，纯准入只读包内五份来源；十三包仅覆盖头 PAC／材质，不代表实际位置或动画验收 |
+| `tools/prepare_steve_head_native_material.py`、`check_steve_head_native_material.py` | 单 PAMI 位置对照：在固定 head-root PAC／PAMI 基线上，只把私有头材质换为原生头 16149 字节原件 | 保留真实 MC 头几何；原生 3 变体×2 draw、全部参数／纹理逐字保持；纯 loader 只读包内四份固定来源，显示／位置／动画尚未验收 |
 | `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
@@ -77,7 +78,7 @@ flowchart LR
 | `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 去声明 Y 轴对照已显示纹理并通过碰撞/清理；三轴完整验收、原生光照/采样仍未完成；单位立方碰撞不适用于特殊形状 |
 | `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 默认 CLI/loader 只接收 crimsonmc 新 basename；程序内部 replacement_report 仅接受固定 Kliff meshparam；只写 ignored build |
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 默认 CLI 临时安装/恢复 21 项原木 overlay；共享关闭游戏、索引、备份、所有权和并发事务 | 默认 kind=oak-log；拒绝 Steve 收据与外部修改；恢复不覆盖后来存档，不接通正式 MC 模型映射 |
-| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 默认十一资源；十二资源加头描述文件，十三加部件注册表，十四再加一份显式初始 app；分别输出，使用共享事务 | kind=steve-mesh-parameters，按完整计划区分 probeVariant，同一 owner／锁／active receipt；必须用本入口恢复，完整检查及实测状态见进度 |
+| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 默认十一资源；十二资源加头描述文件，十三加部件注册表，十四再加一份显式初始 app；十三资源另支持 head-root 和依赖它的单原生头 PAMI 对照；分别输出，使用共享事务 | kind=steve-mesh-parameters，按完整计划区分 probeVariant，同一 owner／锁／active receipt；必须用本入口恢复，完整检查及实测状态见进度 |
 | `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木；`--side-view` 优先现有侧方候选以减少遮挡 | 默认取点不变、不移动角色／相机；画面须另验，只清理自有 UID／变换，不消费 MC 材料 |
 | `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
 | `tools/prepare_native_block_control.py`、`check_native_block_control.py` | 在独立 build 目录准备三种单资源对照：原蓝 prefab、原蓝 PAMI、仅去除原木 Y PAMI 的 XML 声明 | 每种对照的其余 20 项资源逐字保持；身份贯穿资源报告、安装收据与实体日志，不能视为原木显示验收 |
@@ -359,7 +360,7 @@ loader input key。两属性保留精确构造 vtable／直接 owner 门禁，�
 不凭 variant 猜测删除范围。默认十一资源 21 项及十二资源 23 项事务检查通过。
 
 新增十三资源只加固定 PAPPT，两段各登记私有 Body／Head；十四资源必须在此基础上
-显式选择 `macduff-00000` 或 `macduff-00002` 的单份 app。报告集合严格对应 2／3／4／5
+显式选择 `macduff-00000` 或 `macduff-00002` 的单份 app。上述既有报告集合严格对应 2／3／4／5
 项，缺依赖或未知报告拒绝；旧路径白名单为 meshparam、PAPPT 和可选的那一份 app。
 一般新增资产入口仍仅允许 crimsonmc basename。新版 variant 为 `steve-kliff-part-table-v2`
 或 `steve-kliff-app-00000-part-table-v2`／00002，同样绑定整个计划。PAPPT／app 均是
@@ -378,6 +379,40 @@ loader input key。两属性保留精确构造 vtable／直接 owner 门禁，�
 只接受 assembly／meshparam／head descriptor／PAPPT／head control 五报告集合，
 与单 app 五报告集合互斥，不接受混合六报告；通用 loader 的重复路径拒绝保持。
 variant 为 `steve-kliff-native-head-part-table-v2`，恢复仍依收据原有所有权与备份。
+
+原生头材质对照必须先准入 head-root 的十三资源，依次应用其固定 PAC／PAMI，再只
+替换私有 `character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml`。
+PAC 保留 SHA256 `182fc7385116a74536adf3f6603c057d4103f885bf1c6519d62d6689ea877660`；
+旧 PAMI 必须为 `442b56d40caf42e31f082123577483d195e107504a6cb85bcba556a3638c8ff9`，
+新 PAMI 必须是原生头原件 `440a9e68a2e1ef425d9eef90cb0c50895f6888cb01c301eb7f04efa8197ba9a5`。
+仍为 13 项，只有这一个 PAMI 相对 head-root 包改变，另外 12 项及原有旧路径覆盖范围
+保持。原生头的 3 变体各有 2 个 draw；EyeCover 参数数为 1，三个主 draw 分别使用
+SkinWrinkle／SkinWrinkle／SkinWrinkleAging，参数数为 14／14／16。XML、wrapper
+元数据、完整参数、原生纹理及 wrinkle 引用全部保留原字节，不扩成旧材质的 6 变体。
+
+`prepare_steve_head_native_material.load_candidate(report_path)` 返回报告、仅以该私有
+PAMI 虚拟路径为 key 的 bytes 字典和绝对 `Path`→bytes 快照。纯准入从包内原生 PAMI、
+旧 PAMI、保留 PAC、固定 head-root 报告四份来源重构完整 manifest，并核对资源字节；
+不加载 CDMW 或读取游戏。资源行固定 `kind=skinnedMaterial`、`payloadSize=16149`、
+`templateArchiveFlags=archiveFlags=50`，`sourceVirtualPath`／`templatePath` 均为原生
+`cd_phm_00_head_00_0001_macduff.pac_xml` 的完整头材质路径。
+
+封装入口新增 `head_native_material_path`，传给 overlay 的参数为
+`head_native_material_report`；CLI 为 `--head-native-material-report`，必须同时提供
+`--head-root-report`、`--head-descriptor-report` 和 `--part-table-report`。安装只接受
+assembly／appearance／head descriptor／PAPPT／head-root／head-native-material 六份
+固定报告，与 app 或 head-mesh 对照互斥；缺依赖、未知报告和通用重复路径仍拒绝。
+独立输出为 `build/steve-head-native-material-probe-overlay`，variant 为
+`steve-kliff-native-head-root-original-material-part-table-v2`，专用检查选择
+`check_steve_probe.py --head-native-material --rebuild`，恢复沿用 Steve kind 的共享事务，
+不覆盖安装后的最新存档。
+
+2026-10-08 单 PAMI 生成器／独立检查器 10/10、完整封装及隔离事务／重建检查 28/28
+通过。本对照已实际安装，收据为 `5249d2f2339844f3a5b27b77d1353a66`；
+before-install／installed 两阶段均 exit 0，41 项文件匹配，36 个最新存档、完整 schema3
+MC 状态、原点和 ASI 保持。等待用户手动进入后的反馈，显示／位置尚未验收。
+它继续使用真实 MC 头几何，暂用原生头材质／纹理诊断位置；最终 MC 皮肤、
+头身位置、动画、身体装配、原装备禁用及持续完整 Steve 仍未完成。
 
 角色诊断的 `health_candidate` 仅解码首 int32 为零的完整 0x38 字节记录。
 `current_stored_raw/base_raw/norm_raw/floor_raw/field_30_raw` 保留原始值，

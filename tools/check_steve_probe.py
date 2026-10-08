@@ -495,6 +495,142 @@ class SteveNativeHeadRootProbeChecks(StevePartTableProbeChecks):
         self.assert_original()
 
 
+class SteveHeadNativeMaterialProbeChecks(StevePartTableProbeChecks):
+    plan = steve.steve.HEAD_NATIVE_MATERIAL_OUTPUT
+    baseline_plan = steve.steve.NATIVE_HEAD_ROOT_OUTPUT
+    expected_variant = "steve-kliff-native-head-root-original-material-part-table-v2"
+    control_reports = (*SteveNativeHeadRootProbeChecks.control_reports, "steve-head-native-material-report.json")
+    rebuild_args = (*SteveNativeHeadRootProbeChecks.rebuild_args, "--head-native-material-report",
+                    str(steve.steve.HEAD_NATIVE_MATERIAL_REPORT))
+
+    def test_22_control_adds_exactly_one_reviewed_resource(self):
+        helper = steve.steve
+        import prepare_steve_head_native_material as material
+        old = steve.load_plan(self.baseline_plan)
+        target = material.MATERIAL_PATH
+        self.assertEqual(len(self.reviewed["payloads"]), 13)
+        self.assertEqual(set(self.reviewed["payloads"]), set(old["payloads"]))
+        self.assertEqual({path for path in old["payloads"]
+                          if old["payloads"][path] != self.reviewed["payloads"][path]}, {target})
+        self.assertEqual(steve.native.sha256(old["payloads"][target]), material.OLD_MATERIAL_SHA256)
+        self.assertEqual(steve.native.sha256(self.reviewed["payloads"][target]), material.NATIVE_MATERIAL_SHA256)
+        self.assertEqual(self.reviewed["before"], old["before"])
+        self.assertEqual(self.reviewed["after"]["meta/0.pathc"], old["after"]["meta/0.pathc"])
+        expected_inputs = dict(old["report"]["candidateReports"])
+        control = helper.HEAD_NATIVE_MATERIAL_REPORT
+        expected_inputs[str(control.relative_to(steve.ROOT))] = steve.native.file_hash(control)
+        self.assertEqual(self.reviewed["report"]["candidateReports"], expected_inputs)
+        candidate, payloads, _ = material.load_candidate(control)
+        self.assertEqual(self.reviewed["payloads"][target], payloads[target])
+        actual = next(row for row in self.reviewed["report"]["resources"] if row["virtualPath"] == target)
+        expected, = candidate["candidateResources"]
+        for key in ("virtualPath", "kind", "sha256", "templatePath", "templateSha256", "archiveFlags"):
+            self.assertEqual(actual[key], expected[key])
+        self.assertEqual(actual["archiveFlags"], 50)
+        self.assertEqual(helper.audit_part_components(self.reviewed["payloads"]),
+                         {"body": ["CD_Nude"], "head": ["CD_Head"]})
+        self.assertEqual(self.reviewed["probeVariant"], self.expected_variant)
+        receipt = self.install()
+        self.assertEqual(receipt["probeVariant"], self.expected_variant)
+        self.assertEqual(receipt["planSha256"], self.reviewed["reportSha256"])
+        self.restore()
+        self.assert_original()
+
+    def test_26_material_requires_all_dependencies_and_excludes_other_modes_before_io(self):
+        helper = steve.steve
+        for changes in ({"head_descriptor_path": None}, {"part_table_path": None}, {"head_root_path": None},
+                        {"app_path": self.test_root / "unused-app-report.json"},
+                        {"head_mesh_control_path": helper.HEAD_MESH_CONTROL_REPORT}):
+            options = {"head_descriptor_path": helper.HEAD_DESCRIPTOR_REPORT,
+                       "part_table_path": helper.PART_TABLE_REPORT, "head_root_path": helper.HEAD_ROOT_REPORT,
+                       "head_native_material_path": helper.HEAD_NATIVE_MATERIAL_REPORT, **changes}
+            with self.subTest(changes=changes), mock.patch.object(helper.assembly, "load_candidate") as opened:
+                with self.assertRaises(ValueError):
+                    helper.candidates(helper.DEFAULT_ASSEMBLY, helper.DEFAULT_APPEARANCE, **options)
+                opened.assert_not_called()
+        for reports, changes in (([helper.DEFAULT_ASSEMBLY], {}),
+                ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT], {"replacement_report": None}),
+                ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT], {"part_table_report": None}),
+                ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT], {"head_root_report": None}),
+                ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT],
+                 {"initial_appearance_report": self.test_root / "unused-app-report.json"}),
+                ([helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT],
+                 {"head_mesh_control_report": helper.HEAD_MESH_CONTROL_REPORT})):
+            options = {"replacement_report": helper.DEFAULT_APPEARANCE,
+                       "part_table_report": helper.PART_TABLE_REPORT, "head_root_report": helper.HEAD_ROOT_REPORT,
+                       "head_native_material_report": helper.HEAD_NATIVE_MATERIAL_REPORT, **changes}
+            with self.subTest(changes=changes), mock.patch.object(steve.native, "load_cdmw") as opened:
+                with self.assertRaises(ValueError):
+                    helper.overlay.prepare(self.game, reports, self.test_root / "rejected-overlay",
+                                           self.source, self.deps, **options)
+                opened.assert_not_called()
+
+    def test_27_material_exact_report_set_rejects_mixed_or_missing_dependencies_before_hashing(self):
+        plan, path, original = self.altered_plan()
+        for missing in ("steve-head-descriptor-report.json", "steve-part-table-report.json",
+                        "steve-native-head-root-report.json"):
+            report = json.loads(json.dumps(original))
+            key = next(key for key in report["candidateReports"] if key.endswith(missing))
+            del report["candidateReports"][key]
+            path.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(missing=missing), mock.patch.object(steve.native, "file_hash") as hashed:
+                with self.assertRaises(ValueError):
+                    steve.load_plan(plan)
+                hashed.assert_not_called()
+        for extra in ("steve-app-report.json", "steve-head-mesh-control-report.json", "unknown-report.json"):
+            report = json.loads(json.dumps(original))
+            report["candidateReports"]["build/unused-control/" + extra] = "0" * 64
+            path.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(extra=extra), mock.patch.object(steve.native, "file_hash") as hashed:
+                with self.assertRaises(ValueError):
+                    steve.load_plan(plan)
+                hashed.assert_not_called()
+        self.assert_original()
+
+    def test_28_material_pins_the_failed_root_pac_and_pami_and_keeps_generic_duplicates_rejected(self):
+        helper = steve.steve
+        import prepare_steve_native_head_root as head_root
+        candidate, payloads, snapshot = head_root.load_candidate(helper.HEAD_ROOT_REPORT)
+        for target in helper.HEAD_ROOT_RESOURCES:
+            altered_candidate = json.loads(json.dumps(candidate))
+            altered_payloads = dict(payloads)
+            altered_payloads[target] += b"changed"
+            next(row for row in altered_candidate["candidateResources"]
+                 if row["virtualPath"] == target)["sha256"] = steve.native.sha256(altered_payloads[target])
+            with self.subTest(target=target), mock.patch.object(head_root, "load_candidate",
+                    return_value=(altered_candidate, altered_payloads, snapshot)):
+                with self.assertRaisesRegex(ValueError, "fixed failed head-root"):
+                    helper.candidates(helper.DEFAULT_ASSEMBLY, helper.DEFAULT_APPEARANCE,
+                                      helper.HEAD_DESCRIPTOR_REPORT, part_table_path=helper.PART_TABLE_REPORT,
+                                      head_root_path=helper.HEAD_ROOT_REPORT,
+                                      head_native_material_path=helper.HEAD_NATIVE_MATERIAL_REPORT)
+        with self.assertRaisesRegex(ValueError, "Duplicate overlay resource"):
+            helper.overlay.load_resources([helper.DEFAULT_ASSEMBLY, helper.HEAD_ROOT_REPORT])
+
+    def test_29_material_tamper_with_updated_outer_and_inner_hashes_is_rejected(self):
+        helper = steve.steve
+        plan, path, original = self.altered_plan()
+        control_key = next(key for key in original["candidateReports"]
+                           if key.endswith("steve-head-native-material-report.json"))
+        changed_root = self.test_root / "tampered-native-material"
+        shutil.copytree(helper.HEAD_NATIVE_MATERIAL_REPORT.parent, changed_root)
+        changed_path = changed_root / helper.HEAD_NATIVE_MATERIAL_REPORT.name
+        changed = json.loads(changed_path.read_bytes())
+        row, = changed["candidateResources"]
+        payload = changed_root / row["localFile"]
+        payload.write_bytes(payload.read_bytes() + b"tampered")
+        row["sha256"] = steve.native.file_hash(payload)
+        if row["localFile"] in changed.get("files", {}):
+            changed["files"][row["localFile"]] = row["sha256"]
+        changed_path.write_text(json.dumps(changed, indent=2) + "\n", encoding="utf-8")
+        del original["candidateReports"][control_key]
+        original["candidateReports"][str(changed_path.relative_to(steve.ROOT))] = steve.native.file_hash(changed_path)
+        path.write_text(json.dumps(original), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            steve.load_plan(plan)
+        self.assert_original()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path)
@@ -503,6 +639,7 @@ def main():
     mode.add_argument("--part-table", action="store_true")
     mode.add_argument("--native-head", action="store_true")
     mode.add_argument("--native-head-root", action="store_true")
+    mode.add_argument("--head-native-material", action="store_true")
     mode.add_argument("--app-variant", choices=("macduff-00000", "macduff-00002"))
     parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
@@ -510,7 +647,8 @@ def main():
         case = SteveInitialAppProbeChecks
         case.select_variant(args.app_variant)
     else:
-        case = (SteveNativeHeadRootProbeChecks if args.native_head_root else SteveNativeHeadProbeChecks if args.native_head else
+        case = (SteveHeadNativeMaterialProbeChecks if args.head_native_material else
+                SteveNativeHeadRootProbeChecks if args.native_head_root else SteveNativeHeadProbeChecks if args.native_head else
                 StevePartTableProbeChecks if args.part_table else SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks)
     case.plan, case.rebuild = args.plan or case.plan, args.rebuild
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(case))

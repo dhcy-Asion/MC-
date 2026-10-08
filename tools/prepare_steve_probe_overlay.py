@@ -30,6 +30,8 @@ NATIVE_HEAD_PREFAB = "character/bin__/prefab/1_pc/01_phm/head/head/crimsonmc_ste
 ASSEMBLY_HEAD_SHA256 = "36aef15ab3d1b085846a8b7837ab8108d79073e7379899f85ea69fe5ca2d6df0"
 HEAD_ROOT_REPORT = ROOT / "build/steve-native-head-root/steve-native-head-root-report.json"
 NATIVE_HEAD_ROOT_OUTPUT = ROOT / "build/steve-native-head-root-probe-overlay"
+HEAD_NATIVE_MATERIAL_REPORT = ROOT / "build/steve-head-native-material/steve-head-native-material-report.json"
+HEAD_NATIVE_MATERIAL_OUTPUT = ROOT / "build/steve-head-native-material-probe-overlay"
 HEAD_ROOT_RESOURCES = {
     "character/model/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac":
         ("e75f7a7989137756c4744a16c001bce8f91a6f0b6caabb84214f5d42b710d9b9", "skinnedMesh", 1),
@@ -72,7 +74,12 @@ def replacement_paths(resources):
 
 
 def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
-               head_mesh_control_path=None, head_root_path=None):
+               head_mesh_control_path=None, head_root_path=None, head_native_material_path=None):
+    if head_native_material_path is not None:
+        if head_root_path is None or head_descriptor_path is None or part_table_path is None:
+            raise ValueError("Native-head material control requires head-root, descriptor and v2 part table")
+        if app_path is not None or head_mesh_control_path is not None:
+            raise ValueError("Native-head material control excludes app and head-mesh controls")
     if head_root_path is not None:
         if app_path is not None or head_mesh_control_path is not None:
             raise ValueError("Native-head-root control cannot be combined with app or head-mesh controls")
@@ -183,6 +190,40 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
                                "payload": root_payloads[path]}
         reports[str(head_root_path.relative_to(ROOT))] = native.file_hash(head_root_path)
         snapshot.update(root_snapshot)
+    if head_native_material_path is not None:
+        import prepare_steve_head_native_material as material
+        import prepare_steve_native_head_root as head_root
+        path = material.MATERIAL_PATH
+        original = resources.get(path)
+        preserved = resources.get(head_root.PAC_PATH)
+        if (original is None or original["row"].get("kind") != "skinnedMaterial"
+                or original["row"].get("archiveFlags") != 50
+                or original["row"].get("sha256") != material.OLD_MATERIAL_SHA256
+                or native.sha256(original["payload"]) != material.OLD_MATERIAL_SHA256
+                or preserved is None or preserved["row"].get("kind") != "skinnedMesh"
+                or preserved["row"].get("sha256") != material.PRESERVED_PAC_SHA256
+                or native.sha256(preserved["payload"]) != material.PRESERVED_PAC_SHA256):
+            raise ValueError("Native-head material control requires the fixed failed head-root PAC and material")
+        head_native_material_path = native.output_directory(head_native_material_path)
+        candidate, material_payloads, material_snapshot = material.load_candidate(head_native_material_path)
+        rows = candidate["candidateResources"]
+        if len(rows) != 1 or set(material_payloads) != {path}:
+            raise ValueError("Native-head material control must override exactly the private head PAMI")
+        row = rows[0]
+        if (row.get("virtualPath") != path or row.get("kind") != "skinnedMaterial"
+                or row.get("archiveFlags") != 50 or row.get("payloadSize") != 16149
+                or row.get("templatePath") != material.NATIVE_MATERIAL_PATH
+                or row.get("sourceVirtualPath") != material.NATIVE_MATERIAL_PATH
+                or row.get("templateSha256") != material.NATIVE_MATERIAL_SHA256
+                or row.get("sha256") != material.NATIVE_MATERIAL_SHA256
+                or native.sha256(material_payloads[path]) != material.NATIVE_MATERIAL_SHA256):
+            raise ValueError("Native-head material resource differs from its fixed original head source")
+        # This second replacement is specific to the admitted failed PAMI.
+        # General duplicate resources remain rejected by the overlay loader.
+        resources[path] = {"row": row, "localPath": head_native_material_path.parent / row["localFile"],
+                           "payload": material_payloads[path]}
+        reports[str(head_native_material_path.relative_to(ROOT))] = native.file_hash(head_native_material_path)
+        snapshot.update(material_snapshot)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)
@@ -203,7 +244,8 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
 
 
 def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_descriptor_path=None,
-            app_path=None, part_table_path=None, head_mesh_control_path=None, head_root_path=None):
+            app_path=None, part_table_path=None, head_mesh_control_path=None, head_root_path=None,
+            head_native_material_path=None):
     assembly_path, appearance_path = native.output_directory(assembly_path), native.output_directory(appearance_path)
     protected = [assembly_path.parent, appearance_path.parent, source, deps, game]
     private_reports = [assembly_path]
@@ -223,12 +265,16 @@ def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_
     if head_root_path is not None:
         head_root_path = native.output_directory(head_root_path)
         protected.append(head_root_path.parent)
+    if head_native_material_path is not None:
+        head_native_material_path = native.output_directory(head_native_material_path)
+        protected.append(head_native_material_path.parent)
     output = orientation.preflight(output, protected)
     expected, _, snapshot = candidates(assembly_path, appearance_path, head_descriptor_path, app_path, part_table_path,
-                                       head_mesh_control_path, head_root_path)
+                                       head_mesh_control_path, head_root_path, head_native_material_path)
     result = overlay.prepare(game, private_reports, output, source, deps, replacement_report=appearance_path,
                              initial_appearance_report=app_path, part_table_report=part_table_path,
-                             head_mesh_control_report=head_mesh_control_path, head_root_report=head_root_path)
+                             head_mesh_control_report=head_mesh_control_path, head_root_report=head_root_path,
+                             head_native_material_report=head_native_material_path)
     orientation.verify_snapshot(snapshot)
     if result["replacementPaths"] != replacement_paths(expected) or len(result["resources"]) != len(expected):
         raise ValueError("Prepared Steve package differs from its reviewed resource set")
@@ -250,10 +296,17 @@ def main():
                         help="Use the native head mesh in the fixed private prefab; requires the thirteen-resource v2 controls and excludes --app-report")
     parser.add_argument("--head-root-report", type=Path,
                         help="Replace only the private head PAC/material with the native head-root candidate; requires descriptor and v2 table, excludes app/head-mesh controls")
+    parser.add_argument("--head-native-material-report", type=Path,
+                        help="Replace only the failed head-root PAMI with fixed original head material; requires --head-root-report and its descriptor/table controls")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cdmw-source", type=Path, default=ROOT / "build/cdmw-fixed-source")
     parser.add_argument("--deps", type=Path, default=ROOT / "build/cdmw-deps")
     args = parser.parse_args()
+    if args.head_native_material_report:
+        if not args.head_root_report or not args.head_descriptor_report or not args.part_table_report:
+            parser.error("--head-native-material-report requires --head-root-report, --head-descriptor-report and --part-table-report")
+        if args.app_report or args.head_mesh_control_report:
+            parser.error("--head-native-material-report excludes --app-report and --head-mesh-control-report")
     if (args.app_report or args.part_table_report) and not args.head_descriptor_report:
         parser.error("Registration/initial app control requires --head-descriptor-report")
     if args.app_report and not args.part_table_report:
@@ -269,7 +322,8 @@ def main():
         if not args.head_descriptor_report or not args.part_table_report:
             parser.error("--head-mesh-control-report requires --head-descriptor-report and --part-table-report")
     game = args.game_root or Path(json.loads((ROOT / "runtime/installation.json").read_text(encoding="utf-8-sig"))["gameRoot"])
-    output = args.output or (NATIVE_HEAD_ROOT_OUTPUT if args.head_root_report else
+    output = args.output or (HEAD_NATIVE_MATERIAL_OUTPUT if args.head_native_material_report else
+                            NATIVE_HEAD_ROOT_OUTPUT if args.head_root_report else
                             NATIVE_HEAD_OUTPUT if args.head_mesh_control_report else
                             app_output(args.app_report) if args.app_report else
                             PART_TABLE_OUTPUT if args.part_table_report else
@@ -277,7 +331,7 @@ def main():
     result = prepare(game, args.assembly_report, args.appearance_report, output, args.cdmw_source, args.deps,
                      head_descriptor_path=args.head_descriptor_report, app_path=args.app_report,
                      part_table_path=args.part_table_report, head_mesh_control_path=args.head_mesh_control_report,
-                     head_root_path=args.head_root_report)
+                     head_root_path=args.head_root_report, head_native_material_path=args.head_native_material_report)
     print(json.dumps({key: result[key] for key in ("directoryName", "replacementPaths", "packageAudit", "integration")}, indent=2))
 
 

@@ -207,7 +207,21 @@ def publish(output: Path, files: dict[str, bytes]) -> None:
 def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: Path,
             *, replacement_report: Path | None = None, initial_appearance_report: Path | None = None,
             part_table_report: Path | None = None, head_mesh_control_report: Path | None = None,
-            head_root_report: Path | None = None) -> dict:
+            head_root_report: Path | None = None,
+            head_native_material_report: Path | None = None) -> dict:
+    if head_native_material_report is not None:
+        if initial_appearance_report is not None or head_mesh_control_report is not None:
+            raise ValueError("Native-head material control cannot be combined with app or head-mesh controls")
+        if replacement_report is None or part_table_report is None or head_root_report is None:
+            raise ValueError("Native-head material control requires the complete native-head-root v2 controls")
+        controls = ((replacement_report, "steve-appearance-report.json"),
+                    (part_table_report, "steve-part-table-report.json"),
+                    (head_root_report, "steve-native-head-root-report.json"),
+                    (head_native_material_report, "steve-head-native-material-report.json"))
+        if (len(reports) != 2 or {path.name for path in reports} != {
+                "steve-assembly-report.json", "steve-head-descriptor-report.json"}
+                or any(path.name != name for path, name in controls)):
+            raise ValueError("Native-head material control requires exactly its six reviewed reports")
     if head_root_report is not None:
         if initial_appearance_report is not None or head_mesh_control_report is not None:
             raise ValueError("Native-head-root control cannot be combined with app or head-mesh controls")
@@ -335,6 +349,44 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                 raise ValueError("Native-head-root control must preserve the other eleven resources")
         inputs = expected_inputs
         replacement_snapshot.update(root_snapshot)
+    if head_native_material_report is not None:
+        # This single reviewed material override follows the two head-root
+        # overrides; duplicate paths remain forbidden in the general loader.
+        import prepare_steve_head_native_material as material
+        import prepare_steve_native_head_root as head_root
+        path = material.MATERIAL_PATH
+        original = [resource for resource in resources if resource["virtualPath"] == path]
+        pac = [resource for resource in resources if resource["virtualPath"] == head_root.PAC_PATH]
+        if (path != head_root.MATERIAL_PATH
+                or len(resources) != 13 or len(inputs) != 5 or len(original) != 1 or len(pac) != 1
+                or original[0]["kind"] != "skinnedMaterial"
+                or original[0]["sha256"] != material.OLD_MATERIAL_SHA256
+                or native.sha256(payloads[path]) != material.OLD_MATERIAL_SHA256
+                or original[0].get("archiveFlags") != 50
+                or pac[0]["kind"] != "skinnedMesh"
+                or pac[0]["sha256"] != material.PRESERVED_PAC_SHA256
+                or native.sha256(payloads[head_root.PAC_PATH]) != material.PRESERVED_PAC_SHA256):
+            raise ValueError("Native-head material control requires the fixed failed head-root PAC and material")
+        head_native_material_report = native.output_directory(head_native_material_report)
+        candidate, material_payloads, material_snapshot = material.load_candidate(head_native_material_report)
+        rows = candidate["candidateResources"]
+        fixed_row = {"kind": "skinnedMaterial", "virtualPath": path,
+                     "localFile": "resources/" + path, "sha256": material.NATIVE_MATERIAL_SHA256,
+                     "templatePath": material.NATIVE_MATERIAL_PATH,
+                     "templateSha256": material.NATIVE_MATERIAL_SHA256,
+                     "templateArchiveFlags": 50, "archiveFlags": 50,
+                     "payloadSize": 16149, "sourceVirtualPath": material.NATIVE_MATERIAL_PATH}
+        if (len(rows) != 1 or rows[0] != fixed_row or set(material_payloads) != {path}
+                or len(material_payloads[path]) != fixed_row["payloadSize"]
+                or native.sha256(material_payloads[path]) != material.NATIVE_MATERIAL_SHA256):
+            raise ValueError("Native-head material control must override only the fixed original native PAMI")
+        row = rows[0]
+        local_path = native.output_directory(head_native_material_report.parent / row["localFile"])
+        index = resources.index(original[0])
+        resources[index] = dict(row, localFile=str(local_path.relative_to(ROOT)))
+        payloads[path] = material_payloads[path]
+        inputs[str(head_native_material_report.relative_to(ROOT))] = native.file_hash(head_native_material_report)
+        replacement_snapshot.update(material_snapshot)
     if part_table_report is not None:
         from prepare_steve_probe_overlay import audit_part_components
         audit_part_components(payloads)
@@ -419,6 +471,10 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
         if (int(template.compression_type) not in (0, 1, 2) or
                 int(template.flags) >> 4 not in (0, 3)):
             raise ValueError("Candidate template uses unreviewed storage flags")
+        if (head_native_material_report is not None and path == material.MATERIAL_PATH
+                and (int(template.flags) != 50 or resource.get("templateArchiveFlags") != 50
+                     or resource.get("archiveFlags") != 50)):
+            raise ValueError("Native-head material control must preserve the fixed PAMI archive flags")
         if PurePosixPath(path).suffix.casefold() != PurePosixPath(template_path).suffix.casefold():
             raise ValueError("Candidate and template resource types differ")
         if resource["kind"] == "texture":
