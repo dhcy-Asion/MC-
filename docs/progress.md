@@ -4,7 +4,39 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：六刚体离线坐标转换
+## 2026-10-08 最新：原生碰撞控制的有界追踪
+
+在六刚体坐标已通过的基础上核对无碰撞前置，未生成猜测资源或修改创建flags。
+已有资料检索报告`build/steve-collision-loader-anchor-20261008/report.json`核对20来源；
+旧MeshComponent／StaticMeshServer RTTI表没有当前EXE摘要、方法窗口和消费调用绑定，
+generic ResourceLoader只读包字节，当前Skinned声明链也不闭合到static／HKX。该检索结果
+为unavailable。创建源码审查`build/steve-collision-create-contract-20261008/report.json`
+的9来源末回读保持、10静态检查通过：flags默认1,1,0，整体enable／final重建都不是独立
+碰撞开关；host seam替换原生创建，不能用host测试证明物理分离。
+
+主控随后从已有本日2976启动日志定位`createSceneObjectFrom` RVA3b58180，只读当前固定
+EXE并在前后核SHA57da440d…。入口等于unwind起点，5372字节完整解码，3b58b84精确引用
+`SceneObjectManager::createSceneObjectFrom()`。代码窗SHA0b7d6d26…；八次push后的RBP为
+入口RSP−498，因此f1/f2/f3位置为RBP+4D0/+4D8/+4E0。f2的比较位于一个具体分支内，
+不能泛化为全函数的物理开关；f1和f3 XOR1进入descriptor，再由3b588e5传给3b5a620。
+另一描述符由3b59529传给13fadf0，均无碰撞命名依据。
+
+第二次有界读取先逐字核父窗口和两个直接callsite，再仅读3b5a620..3b5ba7b（5211字节）
+及13fadf0..13faf5c（364字节）。前者的f3派生值参与TLS／缓存整数的上下文门禁及后续
+descriptor设置，f1进入另一记录；后者通过R8继续透传描述符。没有找到独立physics注册
+禁用合同。两处记录写入同一候选vfptr常量558af40，+10分别接f2／f1；正式类型、+8的
+完整生产来源及实际执行消费者仍缺，未继续读RTTI或virtual slot，也未调用／改写任何函数。
+
+证据集中在`build/steve-scene-create-flags-20261008/`：`windows.json` SHA408058b8…，
+`consumers.json` SHA2f837f17…，`parameter-review.json` SHAccff3ea0…，最终
+`consumer-review.json` SHAeffeb183…。主控与子代理独立核对参数偏移／直接调用；只证明
+这些窗口内的数据流，不证明线程身份、对象正式类型、碰撞关闭或渲染保留。
+下一项若继续，只核上述已锚定记录的实际类型及+10执行消费者，不扩大为随机函数／资源
+枚举；在物理与显示分离证据闭合前保留创建flags，无可安装的无碰撞候选。
+头部透明帽层收据fc6a85…仍installed／active，游戏关闭，尚待用户手动反馈和新会话采样。
+持续目标仍active；完整Steve、MC实时动作、MC-only装备和实际伤害／击退未验收。
+
+## 2026-10-08 六刚体离线坐标转换
 
 新增`tools/build_steve_rigid_adapter.py`和`tools/check_steve_rigid_adapter.py`，只接已准入的
 真实Player96帧模型回放与固定官方Steve静态几何，不启动MC／JVM／红沙。六组关节各含

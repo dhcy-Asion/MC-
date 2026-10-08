@@ -176,6 +176,15 @@ MeshComponent不可只删碰撞，meshinfo字段仅声明、值／写偏移未�
 `build/steve-collisionless-donor-20261008/report.json`，没有候选。下一步仅核验已锚定的
 StaticMesh／MeshComponent加载合同；缺锚点则停止该路径，不能删HKX或猜字段后安装。
 
+此后已有资料检索未找到当前static／HKX消费者锚点；创建源码及host seam也无已证
+collision-only入口。主控已从本日启动记录定位并在固定EXE核对创建入口3b58180、名称
+引用、5372字节unwind窗口及两个直接callee（5211／364字节）。f1/f3进入描述符，f3
+派生值参与TLS／上下文门禁，不能当物理开关。两处记录的候选vfptr同为558af40，+10
+分别接f2／f1；正式类型、+8来源和执行消费者未证。证据
+`build/steve-scene-create-flags-20261008/consumer-review.json`（effeb183…）；本轮到此
+收束，未调用或改flags。下一项仅考虑此确切记录的类型／+10消费，不枚举未知函数。
+当前无碰撞候选仍不存在；头部待测包、存档、ASI与生产服务未修改。
+
 背部具体组件→prefab/PAC链未定位。14条raw装备记录只为观察；共享apply和表增删局部拒绝
 不等于安全全禁装／恢复。攻击者／敌人类型、owner链和伤害／击退ABI尚缺，不调用候选函数，
 不以移动NPC代替击退。固定EXE有界追踪唯一直接调用0x209a4bb→0x209bdc0，调用者
