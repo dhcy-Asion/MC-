@@ -35,7 +35,8 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 常驻显示、后台刷新与断线恢复已有实机证据；F8 开关／按钮点击仍待验收。全物品官方
 中文图标、悬停、整组领取、按数量添加和 36 格选择／消耗已实现，具体手持及用途未接入。
 
-MC 存档已升级 schema 2，保存完整 properties；原木 x/y/z 状态可放置并重启恢复。
+MC 存档已升级 schema 3，增加四格人体护甲存储并保留完整 properties；原木 x/y/z
+状态可放置并重启恢复。护甲存取及保存已验证，原生穿戴／效果与装备禁用尚未接入。
 1060 种方块的 26684 个合法状态、原版模型选择及面几何已有离线导出，不能据此称全
 方块已进入红沙。Steve 七资源 prefab／原生 palette PAC 仍为离线候选，持续外观、
 骨骼／动画／MC 装备、原装备禁用、MC 攻击、心形血量和工坊均未完成。
@@ -1699,3 +1700,83 @@ knockback／equip，NPC编辑器移动不能替代击退。固定Trinity
 本轮验证：`py -3.12 -X utf8 -B tools/check_character_probe.py` **13/13通过**；七份
 交接文档的56个相对文件链接及本机记录脚本AST通过。没有重跑消耗材料的检查，也
 没有改存档schema、启动／退出游戏或安装插件。Git同步仍按本仓库普通提交／推送流程。
+
+## 2026-10-08 — MC 四格护甲存储与当前后台升级
+
+持续目标保持完整 Steve、仅 MC 装备及 MC 单击攻击／敌人击退。本轮并行交付可独立
+验证的护甲存储，不把它标成原生人物已经穿戴。MC `Authority.java` 使用固定1.21.1的
+`Equipment.fromStack/getSlotType`、`EquipmentSlot.split` 和实际
+`EnchantmentHelper/PREVENT_ARMOR_CHANGE`，提供四个人体槽 head/chest/legs/feet。
+选中格转入一件、更换返还旧件、卸下返还36格，全部沿用原有原子保存／完整回滚；
+动物 BODY、手持和非穿戴物拒绝，武器仍保留在背包，手持用途另接。保留真实
+ItemStack的耐久、名称、附魔、染色及纹饰，不伪造玩家的创造模式豁免或装备属性。
+
+存档schema3新增四槽，0/1/2迁移时保留最新背包、选中格、revision及完整方块属性／
+墓碑，护甲初始化为空。完整快照先用真实 `ItemStack.VALIDATED_CODEC` 和注册表／
+槽位／数量验证，再替换运行状态；坏值、未来schema或旧格式夹带未知equipment停用
+API并保持原始字节。背包聚合不重复计入已存护甲。
+
+新增 `GET /api/equipment`、`POST /api/equip-selected` 和 `POST /api/unequip`；桥接提供
+对应 `/ui/` 路由，查询以JSON保留完整组件，操作严格验证正文／槽名，只提交一次UUID。
+回复丢失不自动重试，MC拒绝不吞掉，旧后端404不伪造为空。运行时应用两个标志始终
+false，状态文本明确没有连接穿戴或效果；尚未增加面板穿戴按钮。
+
+验证按8768/25580共用隔离世界顺序执行，均正常关闭：
+
+- `tools/build_minecraft.ps1` 成功；自身JAR23800字节，SHA256
+  `775004abb805d3324a2aded0912f45f0594100f6d8ca7ea9043f8d7128205ae7`。
+  检查ZIP仅含本原型类／metadata后复制到 tracked artifacts；没有原MC程序。
+- `py -3.12 -X utf8 -B tools/check_equipment.py` **22/22组通过**：三代迁移、24件常规
+  护甲及10种附加穿戴、64/16/1领取、组件／交换／正常重启、操作ID、满包／保存失败
+  回滚、真实绑定限制及九种坏存档拒绝。证据 `runtime/equipment-checks.json`。
+- `check_inventory.py` **15/15组通过**、`check_block_states.py` **7/7组通过**，仅将
+  当前schema预期改为3；对应 `runtime/inventory-checks.json`、`block-state-checks.json`。
+- `check_equipment_bridge.py` **8/8通过**，原 `check_inventory_bridge.py` **27/27通过**。
+  最初导入旧TestCase导致重复发现旧27项，已改模块引用并最终仅计新8项；不把重复
+  执行增加为独立覆盖。同ID不同组件互换／自定义组件删除patch尚未专项检查。
+
+主控备份最新在线状态与正常停止后状态到 ignored
+`backups/equipment-backend-update-20261008`，保存旧自身JAR；正常执行
+`tools/stop_prototype.ps1` 和 `tools/start_prototype.ps1 -NoGame`，两者exit0，游戏
+继续保持原会话／测试包。实际后台schema2→3，revision25不变，四护甲空；停止时
+完整最新状态与迁移后状态只差schema和新增equipment。部署后10项核对全部true：
+原背包／选中格／方块／revision、三接口装备读取一致、四槽为空、不声称应用、同游戏
+实例、原点、同头部收据与ASI保持。阶段证据
+`runtime/equipment-backend-update-20261008-{before,stopped,after}.json`，不覆盖。
+没有在生产背包执行穿脱／消耗。公开摘要见[equipment-validation.json](equipment-validation.json)。
+
+## 2026-10-08 — 原生装备和攻击合同的有界前置检查
+
+新增 `probe_equipment.py` 与独立 `check_equipment_probe.py`。固定EXE版本／SHA、
+六个代码窗口、精确Client装备RTTI与受控actor回链；component+90经descriptor+8数组／
++10计数，最多64条，逐条完整读取D0字节及+C8原始u16槽标签。整条依赖回读及同一
+Reader句柄双采样，数组变化、重复标签、错误owner／类型／身份拒绝，不选回退角色；
+输出只允许ignored runtime新文件。隔离保护检查 **22/22通过**。主控对当前实际实例
+采样exit0，14条稳定且受控表成立，证据
+`runtime/steve-native-head-root-20261008-equipment.json`。不解释物品ID或嵌套所有权；
+nativeFunctionsInvoked／gameMemoryWritten／restorableSnapshot／equipmentBlocked
+均false，不能逐字拷回原始指针记录来“恢复”。
+
+静态装备检查先只覆盖.text导致“找不到批量候选”的判断，后已纠正：当前EXE还在
+可执行.rsrc／.xtls含代码。唯一当前批量候选为0x980A50..0x98126A，旧参考偏移不能
+复用；四参数形状及F0列表不等于清空API。共享apply有8个调用者，其中7个绕过批量
+候选，只hook一处不足以禁止全部装备。原Trinity重建快照仅投影字段，完整D0记录
+仍含未解码嵌套指针／effects状态，恢复与拒绝顺序未验证。ignored研究目录
+`build/steve-equipment-contract-research-20261008` 保留完整报告与固定反汇编。
+下一步定向核对共享apply／七个非批量路径，先验证合同再做装备清除与禁用。
+
+伤害静态报告在 `build/steve-combat-contract-research-20261008`。固定11参数候选的
+既有dispatcher仍传null来源，null不能解释为“不会受伤”。一个非null调用者62B870的
+slot5来自入口上下文+8、slot1来自+18，但同段先取数再用 -1000-current，尚不能证明
+它是常规敌人命中路径。来源／目标类型、敌我关系及击退合同仍未知，未调用任何函数。
+两份报告SHA256分别为
+`f55be30dbcd55af81ad8d1c3093bb6401f58273f9727d96314ae4c1d7ed0081c` 和
+`d49b3ff54eb912039c8789a923b892355fc040a946eae59c26b82770ab2466f5`。
+完整史蒂夫显示、原生装备禁用及攻击闭环保留未完成；当前MC头位置请求仍待用户
+画面结果，实际退出后按最新before-restore保存并恢复测试包。
+
+发布前核对本轮七个变更Python文件AST、七份交接文档60个相对文件链接、公开JSON
+均通过；三份MC隔离报告计数和正常退出标志、实际后台10项核对及自身JAR与成功构建
+逐字一致，`git diff --check`通过。所有个人库存、快照、地址、原游戏记录与备份保持
+ignored。持续目标仍active；原生共享apply调用覆盖和伤害上下文构造分别由独立子代理
+进行只读定向核对，主控保留游戏安装／恢复独占，不因后台完成而宣称完整移植交付。

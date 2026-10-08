@@ -24,7 +24,9 @@ PREFAB = "/object/00_common/system/cd_testfield_grid_box_1m.prefab"
 PROJECT = "CrimsonMCPrototype"
 ALLOWED_BLOCKS = {"minecraft:oak_log", "minecraft:oak_planks", "minecraft:cobblestone",
                   "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table"}
-INVENTORY_ACTIONS = {"/ui/grant", "/ui/add-item", "/ui/select", "/ui/consume"}
+INVENTORY_ACTIONS = {"/ui/grant", "/ui/add-item", "/ui/select", "/ui/consume",
+                     "/ui/equip-selected", "/ui/unequip"}
+ARMOR_SLOTS = ("head", "chest", "legs", "feet")
 PLACEMENT_ACTIONS = {"/ui/place", "/ui/front", "/ui/place-selected", "/ui/front-selected"}
 ACTIONS = INVENTORY_ACTIONS | PLACEMENT_ACTIONS | {
     "/ui/anchor", "/ui/reconnect", "/ui/break", "/ui/break-last"}
@@ -164,6 +166,16 @@ class Bridge:
                 elif path == "/ui/select":
                     mutation["slot"] = strict_integer(body.get("slot"), "slot", 0, 35)
                     verb = f"Selected Minecraft inventory slot {mutation['slot']} (native hand model not connected)"
+                elif path == "/ui/equip-selected":
+                    if body:
+                        raise GameAPIError("equip-selected requires an empty JSON object")
+                    verb = "Saved selected item in Minecraft armor storage; runtime wear and native appearance are not connected"
+                elif path == "/ui/unequip":
+                    slot = body.get("slot")
+                    if set(body) != {"slot"} or not isinstance(slot, str) or slot not in ARMOR_SLOTS:
+                        raise GameAPIError("unequip requires one slot: head, chest, legs or feet")
+                    mutation["slot"] = slot
+                    verb = f"Returned Minecraft {slot} armor to the backpack; native equipment is not connected"
                 else:
                     verb = "Consumed one selected non-block item; special item effects are not connected"
                 # Inventory actions work while Crimson Desert is closed and never move the anchor.
@@ -284,6 +296,36 @@ class Bridge:
                     raise GameAPIError("Invalid Minecraft inventory slot metadata")
             return "\n".join(lines)
 
+    def equipment(self):
+        """Read MC-owned armor stacks without claiming a native wearer or effects."""
+        with self.lock:
+            value = mc("/api/equipment")
+            if (not isinstance(value, dict) or value.get("engine") != "Minecraft Java 1.21.1"
+                    or value.get("nativeApplied") is not False or value.get("runtimeApplied") is not False):
+                raise GameAPIError("Minecraft equipment storage is unavailable or has an unsupported application state")
+            strict_integer(value.get("revision"), "Minecraft revision", 0, 2**63-1)
+            slots = value.get("slots")
+            if not isinstance(slots, dict) or set(slots) != set(ARMOR_SLOTS):
+                raise GameAPIError("Minecraft must return all four armor slots")
+            for name, row in slots.items():
+                if not isinstance(row, dict) or row.get("slot") != name or type(row.get("empty")) is not bool:
+                    raise GameAPIError("Invalid Minecraft armor slot metadata")
+                if row["empty"]:
+                    if set(row) != {"slot", "empty"}:
+                        raise GameAPIError("Empty Minecraft armor slot contains item data")
+                    continue
+                item = row.get("id")
+                if (not isinstance(item, str) or not item.startswith("minecraft:") or len(item) > 256
+                        or not isinstance(row.get("name"), str) or not isinstance(row.get("stack"), dict)):
+                    raise GameAPIError("Invalid Minecraft armor stack metadata")
+                strict_integer(row.get("count"), "Minecraft armor count", 1, 1)
+                strict_integer(row.get("maxCount"), "Minecraft maxCount", 1, 2**31-1)
+                if row["stack"].get("id") != item:
+                    raise GameAPIError("Minecraft armor description differs from its serialized stack")
+                if "count" in row["stack"]:
+                    strict_integer(row["stack"]["count"], "Serialized Minecraft armor count", 1, 1)
+            return value
+
     def summary(self, state=None, check_red=True):
         with self.lock:
             lines = ["Minecraft Java 1.21.1 authority", "Visuals: native blue grid proxies (MC textures pending)"]
@@ -310,10 +352,10 @@ class Bridge:
 class Handler(BaseHTTPRequestHandler):
     bridge = Bridge()
 
-    def reply(self, code, text):
+    def reply(self, code, text, content_type="text/plain"):
         encoded = text.encode("utf-8")
         self.send_response(code)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Type", content_type + "; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
@@ -327,6 +369,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, self.bridge.summary())
             elif parsed.path == "/ui/inventory" and not query:
                 self.reply(200, self.bridge.inventory_text())
+            elif parsed.path == "/ui/equipment" and not query:
+                self.reply(200, json.dumps(self.bridge.equipment(), ensure_ascii=False, allow_nan=False), "application/json")
             elif parsed.path == "/ui/catalog":
                 if set(query) - {"search", "offset", "limit"} or any(len(value) != 1 for value in query.values()):
                     raise GameAPIError("Invalid or repeated catalog query parameter")

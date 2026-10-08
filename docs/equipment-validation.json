@@ -1,0 +1,106 @@
+{
+  "date": "2026-10-08",
+  "milestone": "M4a MC humanoid armor storage foundation",
+  "minecraftVersion": "1.21.1",
+  "stateSchema": 3,
+  "scope": "Four armor storage slots and complete ItemStack transfer/persistence; no runtime wearer or combat effects",
+  "applicationStatus": {
+    "nativeApplied": false,
+    "runtimeApplied": false,
+    "nativeEquipmentBanImplemented": false,
+    "steveAppearanceCompleted": false,
+    "mcAttackImplemented": false
+  },
+  "checks": {
+    "minecraftBuild": {
+      "result": "passed",
+      "artifact": "artifacts/minecraft/crimsonmc-authority-0.1.0.jar",
+      "sha256": "775004abb805d3324a2aded0912f45f0594100f6d8ca7ea9043f8d7128205ae7",
+      "bytes": 23800,
+      "containsOnlyPrototypeClassesAndMetadata": true
+    },
+    "isolatedMinecraftEquipment": {
+      "result": "passed",
+      "groups": 22,
+      "command": "py -3.12 -X utf8 -B tools/check_equipment.py",
+      "coverage": [
+        "Schemas 0, 1 and 2 migrate with original state intact",
+        "Vanilla 64, 16 and 1 item grants remain intact",
+        "Damage, name, enchantments, dye and trim survive transfers",
+        "24 armor pieces and 10 additional wearable types use actual Minecraft slots",
+        "Animal BODY armor, hand slots and non-wearables reject",
+        "Swaps conserve items; equipped items are excluded from backpack totals",
+        "Operation IDs are idempotent and reject conflicting reuse",
+        "Save failures and full backpack failures roll back complete state",
+        "Normal restart preserves equipped ItemStacks",
+        "Actual PREVENT_ARMOR_CHANGE effect blocks armor removal and replacement",
+        "Nine invalid saved-state cases disable the API without rewriting original bytes"
+      ],
+      "productionInventoryUsed": false,
+      "forcedOwnTestProcessStop": false
+    },
+    "isolatedInventoryRegression": {
+      "result": "passed",
+      "groups": 15,
+      "command": "py -3.12 -X utf8 -B tools/check_inventory.py"
+    },
+    "isolatedBlockStateRegression": {
+      "result": "passed",
+      "groups": 7,
+      "command": "py -3.12 -X utf8 -B tools/check_block_states.py"
+    },
+    "equipmentBridge": {
+      "result": "passed",
+      "checks": 8,
+      "command": "py -3.12 -X utf8 -B tools/check_equipment_bridge.py",
+      "coverage": "JSON components, exact routes and slots, single forwarding, lost replies without retry, MC rejection, malformed responses and unavailable backend",
+      "nativeCalls": false
+    },
+    "inventoryBridgeRegression": {
+      "result": "passed",
+      "checks": 27,
+      "command": "py -3.12 -X utf8 -B tools/check_inventory_bridge.py"
+    },
+    "equipmentProbeGuards": {
+      "result": "passed",
+      "checks": 22,
+      "command": "py -3.12 -X utf8 -B tools/check_equipment_probe.py",
+      "scope": "Isolated fake-reader guards; no live process or native calls"
+    },
+    "liveEquipmentObservation": {
+      "result": "observed",
+      "gameVersion": "1.0.0.2976",
+      "stableTwoSamples": true,
+      "controlledEquipmentTableObserved": true,
+      "recordCount": 14,
+      "itemIdentityVerified": false,
+      "restorableSnapshotVerified": false,
+      "nativeFunctionsInvoked": false,
+      "gameMemoryWritten": false,
+      "nativeEquipmentBlocked": false
+    },
+    "backendDeployment": {
+      "result": "passed",
+      "checks": 10,
+      "latestSavedStatePreserved": true,
+      "inventorySelectionBlocksRevisionPreserved": true,
+      "fourEmptyArmorSlots": true,
+      "equipmentReadsAgree": true,
+      "sameGameSession": true,
+      "originUnchanged": true,
+      "sameHeadReceipt": true,
+      "asiUnchanged": true,
+      "productionItemsConsumed": false,
+      "productionEquipUnequipExercised": false
+    }
+  },
+  "remaining": [
+    "Full Steve assembly, animation and persistent appearance",
+    "Native ban covering all original equipment and reload paths",
+    "Visible MC hand/armor models and runtime equipment effects",
+    "Control-panel equip/unequip UI and in-game click acceptance",
+    "MC single-click attack and actual enemy knockback",
+    "Dedicated same-ID/different-component swap and custom component-patch combinations"
+  ],
+  "privacy": "Public summary only; no personal inventory, saves, process addresses, raw game records or original game binaries"
+}

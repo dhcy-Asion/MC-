@@ -15,8 +15,9 @@
 NPC TransformSync编辑移动也不是战斗击退。现有窗口输入路由和线程排队可复用，
 但没有验证一次点击到原生敌人的完整攻击合同。
 
-MC权威当前是36格SimpleInventory，没有真实玩家实体、护甲槽或攻击端点。
-添加装备必须保存真实ItemStack／组件，并保留已有槽位和建筑；不能从物品ID
+MC权威使用36格SimpleInventory，新增独立四格人体护甲存储，没有真实玩家实体或攻击端点。
+护甲转移使用固定MC的Equipment／EquipmentSlot规则及完整ItemStack组件；仍没有
+属性效果或原生穿戴。不能从物品ID
 直接编造伤害或把通用消耗端点视为物品用途。禁止红沙装备需要覆盖已有装备、
 换装、快捷切换及重载／任务应用，单独屏蔽菜单或隐藏Armor不能完成此要求。
 
@@ -37,7 +38,7 @@ flowchart LR
 
 | 路径 | 职责 | 边界 |
 | --- | --- | --- |
-| `minecraft/src/main/java/local/crimsonmc/Authority.java` | Fabric 服务端初始化、实验库存、中文名称、方块、掉落和保存 | 使用真实 MC；当前是 36 格 `SimpleInventory`，原型合成已移除，没有 MC 玩家实体或生存战斗 |
+| `minecraft/src/main/java/local/crimsonmc/Authority.java` | Fabric 服务端初始化、实验库存、四格护甲存储、中文名称、方块、掉落和保存 | 使用真实 MC；36 格 `SimpleInventory` 与人体护甲存取，保留完整 ItemStack；原型合成已移除，没有 MC 玩家实体、装备属性或生存战斗 |
 | `bridge/service.py` | 接收面板操作，转换坐标，调用 MC，并同步红沙代理实体 | 不计算配方／掉落；只维护 `CrimsonMCPrototype` 项目的对象 |
 | `bridge/red_side.py` | 原生 JSON HTTP 客户端、地面探针轮询 | 请求超时或未命中时报错，不猜测地面高度 |
 | `bridge/native_identity.py` | 查询实际游戏 PID、创建时间、映像路径与固定 EXE SHA；生成原生会话条件 | 仅申请 `PROCESS_QUERY_LIMITED_INFORMATION`，只缓存文件摘要，进程身份每次重新查询 |
@@ -49,6 +50,8 @@ flowchart LR
 | `tools/` | 准备、构建、启动、安装／更新／卸载、检查和上传 | 构建不等于安装；安装记录及备份留在本机 |
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断；保留状态记录原始标量 | `health_candidate.plausible` 仅表示数值有界；不推断最大 HP 或时间投影值，`hud_ready=false`；只读权限，不调用游戏函数 |
 | `tools/probe_health.py`、`check_health_probe.py` | 精确受控角色、ClientStatus 回链和三种元数据表映射的单条 Hp 只读观测；完整依赖回读、双采样及同句柄进程身份 | schema 2 区分 serialized key 与表索引，精确 stringKey=Hp；21 项检查及实机双采样通过，投影值、最大值、单位和 `hudReady` 保持 false |
+| `tools/probe_equipment.py`、`check_equipment_probe.py` | 精确受控Client装备组件、owner回链与有界完整D0记录只读观测 | 6个代码窗口、22项保护检查；实采14条稳定，不解码物品身份或嵌套指针，不是可恢复快照或装备禁用 |
+| `tools/check_equipment.py`、`check_equipment_bridge.py` | 真实MC隔离世界验证护甲存取、组件、迁移／回滚；桥接故障与路由检查 | 22组真实MC、8项桥接；nativeApplied／runtimeApplied=false，未接人物穿戴或战斗 |
 | `tools/probe_part_catalog.py`、`check_part_catalog.py` | 四个固定原名／私有名称在两张 PAPPT 目录的外部只读查询；构造身份、桶、节点、完整字符串及双采样 | 84 个固定窗口、21 项检查；v2 实读两私有名在两目录均存在且稳定，模型加载／渲染／应用标记保持 false |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
 | `tools/probe_appearance_controller.py`、`check_appearance_controller.py` | 当前身体→外观控制器→owner、选项及 CharacterScene／参数资源／渲染选择器的两次有界只读采样 | 默认 schema 4；三个互斥 opt-in 分别读取 primary RTTI、schema 5 的 +68 引用头或 schema 7 的 Skinned PAC/PAB 与初始 Appearance 输入；不调用刷新或写选择 |
@@ -99,7 +102,8 @@ MC 自身游戏端口为 `25579`，不是面板 HTTP 接口。当前验证的红
 
 ## 面板 → 桥接：8767
 
-读取返回 UTF-8 **纯文本**，不是 JSON；操作请求是 JSON，成功响应也是纯文本状态摘要。
+目录／背包读取返回 UTF-8 TSV，状态读取返回纯文本；新增 `/ui/equipment` 成功读取为
+JSON，完整保留 MC 装备描述及序列化组件。操作请求是 JSON，成功响应为纯文本状态摘要。
 `Content-Type` 为 `application/json` 的操作请求正文最多 65536 字节。失败通常返回
 HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 400 当作尚未消费材料。
 
@@ -114,10 +118,13 @@ HTTP 400 和错误文本，未知读取端点返回 404。不能把所有 HTTP 4
 | `POST /ui/break-last` | `{}` | 拆除当前 MC 记录的最后一个非空气方块 |
 | `GET /ui/catalog` | query `search,offset,limit` | MC 物品目录搜索／分页；TSV，limit 为 1～100、offset 不超出过滤后总数 |
 | `GET /ui/inventory` | 无 | TSV 格子快照，固定 36 格及服务端 selectedSlot |
+| `GET /ui/equipment` | 无 | JSON 四格 MC 护甲存储；nativeApplied／runtimeApplied=false，未接原生穿戴；失败仍为纯文本错误 |
 | `POST /ui/grant` | `item` | 免费领取该物品原版最大一组，整组放不下则回滚 |
 | `POST /ui/add-item` | `item,count,player?` | 按 ID／中文或英文名称直接添加 1～6400 件，按原版堆叠分格；全部放不下则回滚；player 默认为 console，只接受此实验背包 |
 | `POST /ui/select` | `slot` | 选择 0～35，可选空槽，不替代可见手持 |
 | `POST /ui/consume` | `{}` | 明确消耗当前非方块物品 1 件；未执行弓／桶／食物用途 |
+| `POST /ui/equip-selected` | `{}` | 把服务端当前选中物品存入其 MC 人体护甲位，只做存取；更换时返还旧物，失败回滚；不产生原生穿戴或效果 |
+| `POST /ui/unequip` | `slot:head/chest/legs/feet` | 将指定 MC 护甲存储返还36格背包；满包／绑定诅咒拒绝，未接原装备变更 |
 | `POST /ui/place-selected` | `x,y,z,properties?` | 由 MC 从所选格放置；兼容现有六种方块，仍是指定坐标 |
 | `POST /ui/front-selected` | `properties?` | 所选格放置到旧前方列算法；仍不是鼠标准星命中面 |
 | `POST /ui/shutdown` | `{}` | 停止桥接 HTTP 服务；不停止 MC 或拆除原生实体 |
@@ -169,12 +176,15 @@ HTTP 线程把工作提交到 **MC 服务端线程**，等待最多五秒。参�
 
 | 方法／路径 | 输入 | 输出／规则 |
 | --- | --- | --- |
-| `GET /api/state` | 无 | `engine,revision,inventory,blocks,schemaVersion,slots,selectedSlot,selectedItem`；保留 ID 总数，新增 36 格；没有装备栏或玩家快捷栏 |
+| `GET /api/state` | 无 | `engine,revision,inventory,blocks,schemaVersion,slots,selectedSlot,selectedItem,equipment`；inventory总数只算36格背包，equipment独立；没有真实玩家快捷栏 |
 | `GET /api/catalog` | 无 | `items:[{id,name,translationKey,maxCount,isBlock,placeSupported}]`；真实 Registries.ITEM 的所有非 AIR 物品类型，每个 ID 独立一项，默认 ItemStack 的官方中文名称 |
+| `GET /api/equipment` | 无 | `engine,revision,nativeApplied:false,runtimeApplied:false,ruleScope,slots`；四个key为head/chest/legs/feet，非空行带完整stack的原版CODEC结果 |
 | `POST /api/grant` | `operationId,item` | MC getMaxCount 整组插入；部分插入后放不下亦完整回滚 |
 | `POST /api/add-item` | `operationId,item,count,player?` | item 可为完整／裸 ID 或精确中文／英文名；名称有歧义时拒绝并列出 ID；count 为整数 1～6400 且受 36 格实际容量限制；默认唯一目标 console；部分添加、写盘失败均回滚 |
 | `POST /api/select` | `operationId,slot` | 服务端保存选中格 0～35，允许空格 |
 | `POST /api/consume` | `operationId` | 仅扣所选非 BlockItem 1 个；空格／方块拒绝，不跨格替补 |
+| `POST /api/equip-selected` | `operationId` | 固定 MC `Equipment.fromStack` 决定人体护甲位，`EquipmentSlot.split` 取1件，旧装备返还背包；动物BODY、手持及非装备不在此端点范围 |
+| `POST /api/unequip` | `operationId,slot` | 精确四槽名，返还完整组件；绑定诅咒使用真实PREVENT_ARMOR_CHANGE效果判定，没有虚构玩家的创造模式豁免 |
 | `POST /api/place-selected` | `operationId,x,y,z,properties?` | 只扣所选格，兼容六种方块；不按 ID 自动找别的格 |
 | `POST /api/place` | `operationId,block,x,y,z,properties?` | MC 校验属性并接受后扣一个材料、增加 revision、保存并返回状态与 operationId |
 | `POST /api/break` | `operationId,x,y,z` | MC 掉落表计算，当前固定钻石镐；掉落进入库存，方块变空气 |
@@ -278,7 +288,7 @@ MC 方块／属性变化会停止旧计划，独立库存 revision 变化不改�
 
 | 状态 | 保存位置／格式 |
 | --- | --- |
-| MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`schemaVersion:2,selectedSlot,revision,slots,touched`；36 格 ItemStack.CODEC，每个 touched 保存 block 与完整 properties，包含空气墓碑 |
+| MC 库存／修复记录 | `runtime/minecraft-server/crimsonmc-lab/crimsonmc-state.json`：`schemaVersion:3,selectedSlot,revision,slots,equipment,touched`；36 格与四护甲位保存完整ItemStack.CODEC，每个touched保存block与完整properties，包含空气墓碑 |
 | MC 实际区块 | 同目录中的原版世界文件；正常停止时保存 |
 | 红沙锚点 | `runtime/bridge-origin.json`：红沙世界坐标 `x,y,z` |
 | 原生同步日志 | `runtime/bridge-native-operations.json`：schema 1、MC 未决意图及带游戏实例的计划；历史计划保存在相邻 `bridge-native-operations-history/`，原子替换前 flush/fsync，拒绝坏格式 |
@@ -286,13 +296,16 @@ MC 方块／属性变化会停止旧计划，独立库存 revision 变化不改�
 | 诊断输出 | `runtime/character-*.json`：原始指针／本机路径，只留本机 |
 
 MC 状态写临时文件后替换，优先原子移动，不支持时回退替换。重启按 `touched` 修复实验
-坐标及完整朝向，正常加载不重新发初始材料。锚点不能与已有建筑分离删除。旧无
-schemaVersion（版本 0）及版本 1 完整校验后迁移为版本 2：旧 block ID 使用 MC 默认
-状态，版本 0 默认选择槽 0，版本 1 保留选择槽；原有 revision／材料／建筑不变。
-版本 2 强制完整合法 properties（空气及无属性方块为 `{}`），不保存原始 stateId。
-36 格、合法选中格与实验坐标检查仍保留；无效属性或未知未来版本禁用权威 API，
-不覆盖其文件。版本 2 文件不能直接交给旧版插件；升级前备份留在本机 backups。
-仍未引入真实 PlayerInventory／装备，引入时要新增迁移；`/api/equip` 和伤害接口不存在。
+坐标及完整朝向，正常加载不重新发初始材料。锚点不能与已有建筑分离删除。
+当前schema3从完整校验的版本0／1／2迁移，四护甲位初始化为空，保留36格组件、
+选中格及revision。无schemaVersion为版本0，默认选择槽0；版本1保留选择槽。
+版本0／1的旧block ID使用MC默认状态，版本2保留完整properties／墓碑。
+版本2及以后强制完整合法properties（空气及无属性方块为`{}`），不保存原始stateId。
+版本3的equipment必须恰有四key，非空装备仅1件且与实际MC槽匹配；旧版本带未知
+equipment、非MC物品、损坏组件或未来版本拒绝，不覆写存档。36格、合法选中格与
+实验坐标检查仍保留。schema3不能直接交给旧插件，降级前须保留新存档及装备数据；
+升级前备份留在本机backups，不能通过删equipment字段来丢弃已存入的物品。
+真实PlayerInventory、装备属性、原生穿戴及伤害接口仍不存在；没有`/api/equip`通用端点。
 
 ## 构建与可重建来源
 
@@ -396,5 +409,6 @@ serialized key 单独保留，不能与表索引相等比较。再经 CharacterI
 - 2026-10-04：MC 规则继续为权威；新增生命／装备接口需要真实 MC 玩家及原生事件证据。
 - 2026-10-06：用户改为启用 mod 期间持续 Steve、禁用恢复，兼容两套装备；心形条使用红沙真实 HP，保留红沙战斗。前述独立 MC 生命规则不再作为当前要求。
 - 2026-10-08：用户覆盖装备与攻击约定，只允许 MC 装备，禁止全部红沙装备；左键一次执行 MC 攻击并击退实际敌人。目录领取继续使用 MC `/api/grant` 与原版一组数量，快捷栏仍为选择。装备限制和攻击不以隐藏模型、扣库存或编辑器移动 NPC 替代；原生调用、目标及输入抑制须单独验证。
+- 2026-10-08：先交付MC四格护甲的真实组件存取／持久化（schema3），明确未运行时应用；原生装备表只读观测用于后续接口验证，原始指针记录不能逐字复制恢复。升级后台保留最新存档，当前头部测试包及游戏实例保持。
 - 2026-10-06：九格与 36 格共享一份受确认／超时保护的库存；每帧 Tick 在 F8 关闭时继续异步读库存，目录只在菜单打开时请求。关闭时 NoInputs，不增加数字键／滚轮拦截；操作必须等待 MC 回读后才显示已确认选择。
 - 2026-10-04：仅修改结束后按授权提交上传；不使用定时上传。详见 [../AGENTS.md](../AGENTS.md)。

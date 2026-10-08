@@ -37,6 +37,8 @@ the earlier copy under Desktop/Git.
    所有红沙装备，只能使用 MC 装备；点击控制栏物品目录加入 MC 背包；左键单击执行
    MC 风格攻击并击退敌人，不再保留红沙战斗方式。最新验收见 docs/steve-character.md。
    当前可独立完成真实库存九格 HUD；角色、生命／饥饿、装备和工坊资格分别保留未完成。
+   MC 四格人体护甲存储已接入 schema3 与桥接，只提供真实 ItemStack 转移／保存；
+   nativeApplied／runtimeApplied=false，不等于人物穿戴、原装备禁用或攻击已经实现。
 3. 完成后运行相关检查，在进度文件写明日期、命令、结果、证据及未验证项，再标记完成。
    只读探针运行成功不等于第四角色创建成功；构建成功不等于游戏内行为验证成功。
 4. 未达到验收标准时保留在进行中，记录具体障碍和下一项可执行检查，不能为了收尾
@@ -80,6 +82,8 @@ the earlier copy under Desktop/Git.
 | MC 规则 | `tools/build_minecraft.ps1` 构建；按变更运行 `tools/check_authority.py` 或新增有意义的规则检查 |
 | 方块属性／存档迁移 | `py -3.12 -B tools/check_block_states.py` 使用独立世界；与 `check_inventory.py` 顺序运行（共用 8768／25580）；桥接转发运行 `check_inventory_bridge.py`；原生实际显示仍须另验收 |
 | 背包 | MC 构建；`python tools/check_inventory.py` 使用独立测试世界；`python tools/check_inventory_bridge.py`；`python tools/check_inventory_ui.py`；原生构建和游戏内面板检查 |
+| MC 护甲存储／schema3 | MC 构建；`py -3.12 -B tools/check_equipment.py`、`check_inventory.py`、`check_block_states.py`顺序使用独立8768/25580世界；`check_equipment_bridge.py`及旧桥接检查；原生穿戴／属性／装备禁用另验 |
+| 原生装备表只读观测 | `py -3.12 -B tools/check_equipment_probe.py`；固定当前版本SHA、6个代码窗口、精确Client类型与owner回链、完整D0记录回读及双采样；实采仅主控，不能据此写回、禁止装备或声称恢复 |
 | 跨游戏方块同步 | `tools/check_bridge.py`；保存／重启改动再运行 `tools/check_restart.py` |
 | 持久同步／原生条件 | `py -3.12 -B tools/check_native_identity.py`、`check_native_reconcile.py`、`check_inventory_bridge.py`；原生条件运行 `check_native_session.py`、`check_native_objects.py` 并回建 ASI，相关实机往返见上一项；隔离检查不修改用户世界 |
 | 独立方块模型选择层 | `py -3.12 -B tools/check_native_block_models.py`；当前仅纯状态／证据范围匹配，未接默认桥接，不能替代实际安装、加载和显示验证 |

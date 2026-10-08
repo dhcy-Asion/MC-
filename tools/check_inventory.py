@@ -193,7 +193,8 @@ def main():
     try:
         initial = server.start()
         migrated = json.loads(server.state_file.read_text(encoding="utf-8"))
-        check(migrated["schemaVersion"] == 2 and migrated["selectedSlot"] == 0, "Legacy snapshot was not migrated")
+        check(migrated["schemaVersion"] == 3 and migrated["selectedSlot"] == 0, "Legacy snapshot was not migrated")
+        check(migrated["equipment"] == dict.fromkeys(("head", "chest", "legs", "feet")), "Legacy equipment must start empty")
         check(migrated["slots"] == old_slots and migrated["touched"] == [{**b, "properties": {}} for b in legacy["touched"]], "Legacy migration lost existing materials/blocks")
         check(initial["slots"][2]["name"] == "用户命名的剑", "Custom item name lost during localization")
         check(initial["revision"] == 23 and initial["inventory"] == {"minecraft:oak_planks": 6, "minecraft:iron_sword": 1}, "Legacy state changed")
@@ -371,10 +372,10 @@ def main():
         server.stop()
 
         future = json.loads(server.state_file.read_text(encoding="utf-8"))
-        future["schemaVersion"] = 3
+        future["schemaVersion"] = 4
         server.write_snapshot(future)
         expected_hash = hashlib.sha256(server.state_file.read_bytes()).hexdigest()
-        server.start(expected_failure="unsupported future inventory schema 3")
+        server.start(expected_failure="unsupported future inventory schema 4")
         check(hashlib.sha256(server.state_file.read_bytes()).hexdigest() == expected_hash, "Unknown future format was overwritten")
         server.stop(authority=False)
         evidence["checks"].append("Unknown future schema disables authority without truncating or overwriting its file")

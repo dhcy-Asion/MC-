@@ -31,7 +31,7 @@ def main():
     directory = Path(tempfile.mkdtemp(prefix="block-state-check-", dir=ROOT / "runtime"))
     server = IsolatedServer(directory)
     evidence = {"engine": "Minecraft Java 1.21.1", "port": PORT, "world": str(directory),
-                "schemaVersion": 2, "registrySha256": BLOCKS_SHA256, "checks": []}
+                "schemaVersion": 3, "registrySha256": BLOCKS_SHA256, "checks": []}
     slots = [None] * 36
     slots[0] = {"id": "minecraft:oak_log", "count": 8}
     slots[1] = {"id": "minecraft:oak_planks", "count": 4}
@@ -44,7 +44,7 @@ def main():
     try:
         initial = server.start()
         saved = json.loads(server.state_file.read_text(encoding="utf-8"))
-        check(saved["schemaVersion"] == 2 and saved["selectedSlot"] == 2 and saved["revision"] == 71,
+        check(saved["schemaVersion"] == 3 and saved["selectedSlot"] == 2 and saved["revision"] == 71,
               "Schema 1 migration lost selection/revision")
         check(saved["slots"] == slots, "Migration changed inventory/components")
         check(saved["touched"] == [{**legacy["touched"][0], "properties": {"axis": "y"}},

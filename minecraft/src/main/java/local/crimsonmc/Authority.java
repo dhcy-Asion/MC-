@@ -11,6 +11,10 @@ import net.minecraft.block.Blocks;
 import net.minecraft.block.BlockState;
 import net.minecraft.state.property.Property;
 import net.minecraft.inventory.SimpleInventory;
+import net.minecraft.component.EnchantmentEffectComponentTypes;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.entity.EquipmentSlot;
+import net.minecraft.item.Equipment;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -42,12 +46,15 @@ public final class Authority implements ModInitializer {
     private static final Gson JSON = new GsonBuilder().setPrettyPrinting().serializeNulls().create();
     private static final Set<String> BLOCK_IDS = Set.of("minecraft:oak_log", "minecraft:oak_planks",
             "minecraft:cobblestone", "minecraft:dirt", "minecraft:stone", "minecraft:crafting_table");
-    private static final int SCHEMA_VERSION = 2;
+    private static final int SCHEMA_VERSION = 3;
+    private static final List<EquipmentSlot> ARMOR_SLOTS = List.of(
+            EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
     // One console target for this slice; the prototype has no real MC player entity yet.
     private static final String CONSOLE_PLAYER = "console";
     private final Map<Item, String> englishNames = new HashMap<>();
     private Language originalLanguage, chineseLanguage;
     private final SimpleInventory inventory = new SimpleInventory(36);
+    private final Map<EquipmentSlot, ItemStack> equipment = new EnumMap<>(EquipmentSlot.class);
     // Tombstones are retained so a restart repairs stale chunk saves after a crash.
     private final Map<BlockPos, BlockState> touched = new LinkedHashMap<>();
     private record Receipt(String path, JsonObject request, JsonObject result) { }
@@ -129,6 +136,7 @@ public final class Authority implements ModInitializer {
     private JsonObject handle(String method, String path, JsonObject req) {
         if (method.equals("GET") && path.equals("/api/state")) return state();
         if (method.equals("GET") && path.equals("/api/catalog")) return catalog();
+        if (method.equals("GET") && path.equals("/api/equipment")) return equipmentState();
         if (!method.equals("POST")) throw new BadRequest("unknown read endpoint");
         if (path.equals("/api/shutdown")) {
             // Stop from a separate thread after the HTTP response; normal MC shutdown saves chunks.
@@ -141,7 +149,7 @@ public final class Authority implements ModInitializer {
             JsonObject response = new JsonObject(); response.addProperty("stopping", true); return response;
         }
         if (!Set.of("/api/place", "/api/break", "/api/grant", "/api/add-item", "/api/select",
-                "/api/consume", "/api/place-selected").contains(path)) throw new BadRequest("unknown action");
+                "/api/consume", "/api/place-selected", "/api/equip-selected", "/api/unequip").contains(path)) throw new BadRequest("unknown action");
         String operation = required(req, "operationId");
         if (operation.isBlank()) throw new BadRequest("operation ID is empty");
         if (operation.length() > 128) throw new BadRequest("operation ID too long");
@@ -162,6 +170,8 @@ public final class Authority implements ModInitializer {
                 case "/api/select" -> selectedSlot = integer(req, "slot", 0, inventory.size() - 1);
                 case "/api/consume" -> consume();
                 case "/api/place-selected" -> placeSelected(req);
+                case "/api/equip-selected" -> equipSelected();
+                case "/api/unequip" -> unequip(req);
             }
             revision++;
             save();
@@ -258,7 +268,7 @@ public final class Authority implements ModInitializer {
     private void grant(JsonObject req) {
         String id = required(req, "item");
         Identifier key = Identifier.tryParse(id);
-        if (key == null || !Registries.ITEM.containsId(key)) throw new BadRequest("unknown Minecraft item");
+        if (key == null || !key.getNamespace().equals("minecraft") || !Registries.ITEM.containsId(key)) throw new BadRequest("unknown Minecraft item");
         Item item = Registries.ITEM.get(key);
         if (item == Items.AIR) throw new BadRequest("air is not an inventory item");
         ItemStack stack = item.getDefaultStack();
@@ -272,6 +282,83 @@ public final class Authority implements ModInitializer {
         if (stack.getItem() instanceof BlockItem) throw new BadRequest("use placement to consume a block");
         // This is explicit inventory consumption, not a simulated bow, bucket or food use action.
         decrementSlot(selectedSlot);
+    }
+
+    /** Inventory-slot compatibility from the fixed MC 1.21.1 Equipment contract.
+     * PlayerEntity.canUseSlot rejects BODY; ArmorSlot admits exactly one item in
+     * HEAD/CHEST/LEGS/FEET. No player is created and no use/attribute/damage hook runs.
+     */
+    private static EquipmentSlot armorSlot(ItemStack stack) {
+        if (stack.isEmpty() || !Registries.ITEM.getId(stack.getItem()).getNamespace().equals("minecraft"))
+            throw new BadRequest("equipment requires a Minecraft item");
+        Equipment wearable = Equipment.fromStack(stack);
+        if (wearable == null || !ARMOR_SLOTS.contains(wearable.getSlotType()))
+            throw new BadRequest("item has no supported humanoid armor slot");
+        return wearable.getSlotType();
+    }
+
+    private ItemStack equipped(EquipmentSlot slot) {
+        return equipment.getOrDefault(slot, ItemStack.EMPTY);
+    }
+
+    private static void requireRemovable(ItemStack stack) {
+        // ArmorSlot / Equipment.equipAndSwap use this actual enchantment effect.
+        // Without a real player there is no verified creative-mode exemption.
+        if (EnchantmentHelper.hasAnyEnchantmentsWith(stack, EnchantmentEffectComponentTypes.PREVENT_ARMOR_CHANGE))
+            throw new BadRequest("Minecraft enchantment prevents armor change; no player exemption is available");
+    }
+
+    private void equipSelected() {
+        ItemStack source = inventory.getStack(selectedSlot);
+        EquipmentSlot slot = armorSlot(source);
+        ItemStack previous = equipped(slot);
+        requireRemovable(previous);
+        ItemStack incoming = slot.split(source); // The native humanoid slot limit is one.
+        if (source.isEmpty()) inventory.setStack(selectedSlot, ItemStack.EMPTY);
+        if (!previous.isEmpty() && !inventory.addStack(previous.copy()).isEmpty())
+            throw new BadRequest("not enough inventory space to return previous equipment");
+        equipment.put(slot, incoming);
+        inventory.markDirty();
+    }
+
+    private void unequip(JsonObject req) {
+        String name = required(req, "slot");
+        EquipmentSlot slot = ARMOR_SLOTS.stream().filter(value -> value.getName().equals(name)).findFirst()
+                .orElseThrow(() -> new BadRequest("slot must be head, chest, legs or feet"));
+        ItemStack previous = equipped(slot);
+        if (previous.isEmpty()) throw new BadRequest("equipment slot is empty");
+        requireRemovable(previous);
+        if (!inventory.addStack(previous.copy()).isEmpty())
+            throw new BadRequest("not enough inventory space to unequip");
+        equipment.put(slot, ItemStack.EMPTY);
+    }
+
+    private JsonElement encodeStack(ItemStack stack) {
+        return stack.isEmpty() ? JsonNull.INSTANCE : ItemStack.CODEC.encodeStart(
+                RegistryOps.of(JsonOps.INSTANCE, server.getRegistryManager()), stack).getOrThrow();
+    }
+
+    private JsonObject equipmentState() {
+        JsonObject result = new JsonObject();
+        result.addProperty("engine", "Minecraft Java 1.21.1");
+        result.addProperty("revision", revision);
+        result.addProperty("nativeApplied", false);
+        result.addProperty("runtimeApplied", false);
+        result.addProperty("ruleScope", "humanoid inventory slots and binding restriction; no player use, attributes or damage");
+        JsonObject slots = new JsonObject();
+        for (EquipmentSlot slot : ARMOR_SLOTS) {
+            ItemStack stack = equipped(slot);
+            JsonObject row = stack.isEmpty() ? new JsonObject() : itemDescription(stack);
+            row.addProperty("slot", slot.getName());
+            row.addProperty("empty", stack.isEmpty());
+            if (!stack.isEmpty()) {
+                row.addProperty("count", stack.getCount());
+                row.add("stack", encodeStack(stack));
+            }
+            slots.add(slot.getName(), row);
+        }
+        result.add("slots", slots);
+        return result;
     }
 
     private void decrementSlot(int slot) {
@@ -339,6 +426,7 @@ public final class Authority implements ModInitializer {
         if (!player.equals(CONSOLE_PLAYER))
             throw new BadRequest("unknown player " + player + "; this prototype owns one console inventory (" + CONSOLE_PLAYER + ")");
         Item item = resolveItem(requested);
+        if (!Registries.ITEM.getId(item).getNamespace().equals("minecraft")) throw new BadRequest("only Minecraft items are supported");
         String id = Registries.ITEM.getId(item).toString();
         int maxCount = item.getDefaultStack().getMaxCount();
         if (count > 36L * maxCount)
@@ -436,6 +524,7 @@ public final class Authority implements ModInitializer {
             counts.addProperty(id, stack.getCount() + (counts.has(id) ? counts.get(id).getAsInt() : 0));
         }
         result.add("inventory", counts);
+        result.add("equipment", equipmentState());
         JsonArray blocks = new JsonArray();
         for (var entry : touched.entrySet()) {
             // Read actual world state so the response also verifies restart reconciliation.
@@ -455,6 +544,9 @@ public final class Authority implements ModInitializer {
         for (int i = 0; i < inventory.size(); i++) slots.add(inventory.getStack(i).isEmpty() ? JsonNull.INSTANCE :
                 ItemStack.CODEC.encodeStart(ops, inventory.getStack(i)).getOrThrow());
         result.add("slots", slots);
+        JsonObject armor = new JsonObject();
+        for (EquipmentSlot slot : ARMOR_SLOTS) armor.add(slot.getName(), encodeStack(equipped(slot)));
+        result.add("equipment", armor);
         JsonArray cells = new JsonArray();
         touched.forEach((pos,block) -> cells.add(blockDescription(pos, block, false)));
         result.add("touched", cells);
@@ -465,17 +557,28 @@ public final class Authority implements ModInitializer {
         int version = data.has("schemaVersion") ? integer(data, "schemaVersion", 0, Integer.MAX_VALUE) : 0;
         if (version > SCHEMA_VERSION) throw new BadRequest("unsupported future inventory schema " + version);
         int selection = version == 0 ? 0 : integer(data, "selectedSlot", 0, inventory.size() - 1);
+        if (!data.has("revision") || !data.get("revision").isJsonPrimitive() || !data.getAsJsonPrimitive("revision").isNumber())
+            throw new BadRequest("invalid saved revision");
         long savedRevision = data.get("revision").getAsBigDecimal().longValueExact();
         if (savedRevision < 0) throw new BadRequest("invalid saved revision");
-        var ops = RegistryOps.of(JsonOps.INSTANCE, server.getRegistryManager());
         JsonArray slots = data.getAsJsonArray("slots");
         if (slots == null || slots.size() != inventory.size()) throw new BadRequest("saved inventory must contain exactly 36 slots");
         List<ItemStack> stacks = new ArrayList<>();
         for (JsonElement value : slots) {
-            ItemStack stack = value.isJsonNull() ? ItemStack.EMPTY : ItemStack.CODEC.parse(ops, value).getOrThrow();
-            if (!value.isJsonNull() && (stack.isEmpty() || stack.getCount() < 1 || stack.getCount() > stack.getMaxCount()))
-                throw new BadRequest("saved inventory stack exceeds its Minecraft maximum");
-            stacks.add(stack);
+            stacks.add(decodeStack(value));
+        }
+        Map<EquipmentSlot, ItemStack> armor = new EnumMap<>(EquipmentSlot.class);
+        if (version < 3 && data.has("equipment")) throw new BadRequest("legacy snapshot unexpectedly contains equipment");
+        if (version == 3) {
+            if (!data.has("equipment") || !data.get("equipment").isJsonObject() ||
+                    !data.getAsJsonObject("equipment").keySet().equals(Set.of("head", "chest", "legs", "feet")))
+                throw new BadRequest("saved equipment must contain exactly head, chest, legs and feet");
+            for (EquipmentSlot slot : ARMOR_SLOTS) {
+                ItemStack stack = decodeStack(data.getAsJsonObject("equipment").get(slot.getName()));
+                if (!stack.isEmpty() && (stack.getCount() != 1 || armorSlot(stack) != slot))
+                    throw new BadRequest("saved equipment has an incorrect slot or count");
+                armor.put(slot, stack);
+            }
         }
         Map<BlockPos, BlockState> cells = new LinkedHashMap<>();
         JsonArray savedCells = data.getAsJsonArray("touched");
@@ -490,11 +593,28 @@ public final class Authority implements ModInitializer {
             if (cells.put(pos, state) != null) throw new BadRequest("duplicate saved cell");
         }
         // Parse and validate the complete snapshot before replacing any live state.
-        inventory.clear(); touched.clear();
+        inventory.clear(); touched.clear(); equipment.clear();
         for (int i = 0; i < stacks.size(); i++) inventory.setStack(i, stacks.get(i));
         touched.putAll(cells);
+        equipment.putAll(armor);
         revision = savedRevision;
         selectedSlot = selection;
+    }
+
+    private ItemStack decodeStack(JsonElement value) {
+        if (value.isJsonNull()) return ItemStack.EMPTY;
+        if (!value.isJsonObject()) throw new BadRequest("saved stack must be an object or null");
+        JsonObject raw = value.getAsJsonObject();
+        if (!Set.of("id", "count", "components").containsAll(raw.keySet()))
+            throw new BadRequest("unknown saved stack fields");
+        Identifier id = Identifier.tryParse(required(raw, "id"));
+        if (id == null || !id.getNamespace().equals("minecraft") || !Registries.ITEM.containsId(id))
+            throw new BadRequest("saved stack requires a registered Minecraft item");
+        int count = raw.has("count") ? integer(raw, "count", 1, Integer.MAX_VALUE) : 1;
+        ItemStack stack = ItemStack.VALIDATED_CODEC.parse(RegistryOps.of(JsonOps.INSTANCE, server.getRegistryManager()), value).getOrThrow();
+        if (stack.isEmpty() || stack.getCount() != count || count > stack.getMaxCount())
+            throw new BadRequest("saved inventory stack exceeds its Minecraft maximum");
+        return stack;
     }
 
     private void save() throws IOException {
