@@ -51,6 +51,7 @@ flowchart LR
 | `tools/probe_characters.py` | 外部只读角色／血量链诊断；保留状态记录原始标量 | `health_candidate.plausible` 仅表示数值有界；不推断最大 HP 或时间投影值，`hud_ready=false`；只读权限，不调用游戏函数 |
 | `tools/probe_health.py`、`check_health_probe.py` | 精确受控角色、ClientStatus 回链和三种元数据表映射的单条 Hp 只读观测；完整依赖回读、双采样及同句柄进程身份 | schema 2 区分 serialized key 与表索引，精确 stringKey=Hp；21 项检查及实机双采样通过，投影值、最大值、单位和 `hudReady` 保持 false |
 | `tools/probe_equipment.py`、`check_equipment_probe.py` | 精确受控Client装备组件、owner回链与有界完整D0记录只读观测 | 6个代码窗口、22项保护检查；实采14条稳定，不解码物品身份或嵌套指针，不是可恢复快照或装备禁用 |
+| `tools/probe_owner_components.py`、`check_owner_components.py` | 独立只读受控owner完整有序组件目录及每槽primary RTTI身份 | 完整目录／成员字节与所有成功依赖双采样，匿名槽保留unavailable；登记成员不证明逐项owner回链、背部资源或装备禁止，实采由主控另行执行 |
 | `tools/check_equipment.py`、`check_equipment_bridge.py` | 真实MC隔离世界验证护甲存取、组件、迁移／回滚；桥接故障与路由检查 | 22组真实MC、8项桥接；nativeApplied／runtimeApplied=false，未接人物穿戴或战斗 |
 | `tools/probe_part_catalog.py`、`check_part_catalog.py` | 四个固定原名／私有名称在两张 PAPPT 目录的外部只读查询；构造身份、桶、节点、完整字符串及双采样 | 84 个固定窗口、21 项检查；v2 实读两私有名在两目录均存在且稳定，模型加载／渲染／应用标记保持 false |
 | `tools/probe_character_roster.py` | 固定 SHA／版本的只读 CharacterInfo／MercenaryInfo 及 owned 关联探针 | 行号、角色 key、佣兵 No、Actor handle 分别记录；目录观测不等于控制／注册验证 |
@@ -62,7 +63,8 @@ flowchart LR
 | `tools/prepare_steve_head_mesh_control.py`、`check_steve_head_mesh_control.py` | 将固定私有 CD_Head 的 PAC 引用改回原生头，保留单组件其余语义；独立固定字节生成与 CDMW 正逆向核对 | 1921 字节、flags 0，与原生 donor 首组件逐字一致；只作定位对照，不是 Steve 外观修复 |
 | `tools/prepare_steve_native_head_root.py`、`check_steve_native_head_root.py` | 原生头三 LOD 模板重建 Steve 48 点／24 面，固定 slot0 改为公共父骨 B_face_com122，真实 Head PABC 中立逆补偿及材质映射 | 其余191骨项与未知数据保持；生成时只读固定0009，纯准入只读包内五份来源；十三包仅覆盖头 PAC／材质，不代表实际位置或动画验收 |
 | `tools/prepare_steve_head_native_material.py`、`check_steve_head_native_material.py` | 单 PAMI 位置对照：在固定 head-root PAC／PAMI 基线上，只把私有头材质换为原生头 16149 字节原件 | 保留真实 MC 头几何及原生 3 变体×2 draw 完整合同；用户已确认头位置正常并退出恢复，最终 MC 皮肤、身体和动画仍未验收 |
-| `tools/prepare_steve_clothing_control.py`、`check_steve_clothing_control.py` | 固定 Macduff 00000 app 仅删除 Armor 内 12 行默认／预览 Prefab，保留空 Armor 和外部 XML；纯 loader 重构报告及单旧路径替换 | 1117→523 字节、flags 48、逐字可逆；十四资源保持已通过头位置的十三项；共享渲染对照，默认服装实际抑制与动态装备禁止另验 |
+| `tools/prepare_steve_clothing_control.py`、`check_steve_clothing_control.py` | 固定 Macduff 00000 app 仅删除 Armor 内 12 行默认／预览 Prefab，保留空 Armor 和外部 XML；纯 loader 重构报告及单旧路径替换 | 1117→523 字节、flags 48、逐字可逆；用户已确认原服装消失并退出恢复，左手缺失、背部重叠和头比例仍未解决；动态装备禁止另验 |
+| `tools/prepare_steve_body_native_material.py`、`check_steve_body_native_material.py` | 在完整空 Armor 十四资源上，仅把私有身体 PAMI 换为固定原生 50017 字节原件；纯 loader 重构整报告与单资源 | 原生 6 变体×3 draw 的 Skin shader／参数／纹理逐字保持；其余 13 项（含当前身体补偿 PAC）保持，暂用原生纹理，左手／身体／动画实机未验 |
 | `tools/prepare_steve_part_table.py`、`check_steve_part_table.py` | 固定 PAPPT 原表两段分别追加私有身体／头部登记，保留所有旧行；独立解析与固定 CDMW 交叉检查 | v2 新 part 行仅声明实际 CD_Nude／CD_Head，封装及安装核对真实 prefab；全局资源表，不代替显示或 actor-local 应用 |
 | `tools/prepare_steve_app.py`、`check_steve_app.py` | 显式选择一份固定 Macduff app，只改 Nude/Head 两个 Name，逐字可逆 | 00000／00002 是独立候选；BOM、换行、scale、customization、发须和装备不变；离线选择不证明当前实例使用它 |
 | `tools/prepare_steve_current_rig.py`、`check_steve_current_rig.py` | 直接提取固定当前 01_0002 PABC／descriptor，按实际 byte 权重逆补偿中立姿态 | 独立 combined 候选；保留原 scale，量化后回放不是原生 shader／动画验收；后续 assembly 只复用已核对的身体补偿 |
@@ -79,7 +81,7 @@ flowchart LR
 | `tools/prepare_native_block.py`、`check_native_block.py` | 原木三轴静态 PAM/PAMLOD、Standard PAMI、HKX/meshinfo/prefab 候选，使用真实模板与 MC UV | 去声明 Y 轴对照已显示纹理并通过碰撞/清理；三轴完整验收、原生光照/采样仍未完成；单位立方碰撞不适用于特殊形状 |
 | `tools/prepare_asset_overlay.py`、`check_asset_overlay.py` | 只读预演独立 PAMT/PAZ 与 PAPGT/PATHC，保留原索引记录并逐项解包比对 | 默认 CLI/loader 只接收 crimsonmc 新 basename；程序内部 replacement_report 仅接受固定 Kliff meshparam；只写 ignored build |
 | `tools/install_asset_probe.py`、`check_asset_probe.py` | 默认 CLI 临时安装/恢复 21 项原木 overlay；共享关闭游戏、索引、备份、所有权和并发事务 | 默认 kind=oak-log；拒绝 Steve 收据与外部修改；恢复不覆盖后来存档，不接通正式 MC 模型映射 |
-| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 默认十一资源；十二资源加头描述文件，十三加部件注册表，十四再加一份显式初始 app；十三资源另支持 head-root／单原生头 PAMI，对应十四资源支持仅清空默认 Armor；分别输出，使用共享事务 | kind=steve-mesh-parameters，按完整计划区分 probeVariant，同一 owner／锁／active receipt；必须用本入口恢复，完整检查及实测状态见进度 |
+| `tools/prepare_steve_probe_overlay.py`、`install_steve_probe.py`、`check_steve_probe.py` | 默认十一资源；十二加头描述文件，十三加注册表，十四加显式初始 app；十三另支持 head-root／原生头 PAMI，十四另支持空 Armor 及其上的原生身体 PAMI；分别输出，使用共享事务 | kind=steve-mesh-parameters，按完整计划区分 probeVariant，同一 owner／锁／active receipt；必须用本入口恢复，完整检查及实测状态见进度 |
 | `tools/probe_native_block.py`、`check_native_block_probe.py` | 先探测最多七个近处平坦点，再于同一游戏实例生成/清理一块诊断原木；`--side-view` 优先现有侧方候选以减少遮挡 | 默认取点不变、不移动角色／相机；画面须另验，只清理自有 UID／变换，不消费 MC 材料 |
 | `red-side-patches/mc_resource_probe.*`、`tools/probe_native_resources.py` | 对固定蓝方块/原木资源异步读取，比较实际引擎返回的长度、头部与 FNV-1a64 摘要 | 只允许固定资源枚举和每项 16KiB，结果留本机；读取成功不表示模型渲染或碰撞成功 |
 | `tools/prepare_native_block_control.py`、`check_native_block_control.py` | 在独立 build 目录准备三种单资源对照：原蓝 prefab、原蓝 PAMI、仅去除原木 Y PAMI 的 XML 声明 | 每种对照的其余 20 项资源逐字保持；身份贯穿资源报告、安装收据与实体日志，不能视为原木显示验收 |
@@ -455,14 +457,76 @@ PAPPT v2 四个控制报告。安装准入恰为已有六份报告加
 `6703890ac16748566f54b5dfd81ff95ca68ead3d2ba41e2b59602704cc0dc319`。
 完整隔离事务／重建检查 28/28 通过。主控在安装前重新核实上轮已退出、无 active
 receipt 和 38 项原文件保持，随后实际安装；收据
-`2feb0ddf41b3488fba9eb226cf8fb672` 为 installed，当前有 active receipt／0041。
-before-install／installed 两阶段均 exit 0，41 项文件匹配，36 个存档、完整 MC
-schema3/revision25、原点和 ASI 保持。已交用户手动进入确认原服装与 MC 位置，
-尚无本轮显示反馈；空 Armor 的引擎加载与服装抑制未验收，也尚未恢复。
+`2feb0ddf41b3488fba9eb226cf8fb672` 已 restored，该服装会话恢复时无 active receipt／0041；
+当前已安装下方身体材质对照。
+五阶段均 exit 0，41 项安装文件／38 项恢复原文件匹配，退出时 36 个最新存档、
+完整 MC schema3/revision25、原点和 ASI 保持。用户原话为“原服装消失，左手没有了。
+后背背着的装备依旧存在并和身体重叠。头部过大”。默认服装抑制人工通过，完整
+人物未通过；只读 appearance 双采样仍因原 PAC 声明空为稳定 notReady，不能提升
+为模型／遮罩解码成功。头大小尚无实机尺寸证据，本轮不猜测缩放值。
 此 app 是共享资源，所有使用者可能受到默认 Armor 的影响；动态装备可能由独立
 选择层再应用。该候选不删除库存／存档装备、不禁止全部红沙装备、不隐藏发须，
 也不证明完整人物去重、actor-local 或跨重载持续 Steve。MC 头皮肤只保留后续设计，
 本轮没有同时修改皮肤。
+
+当前下一对照保持空 Armor 十四资源，只替换私有身体
+`character/modelproperty/1_pc/1_phm/nude/crimsonmc_steve_body_1_21_1.pac_xml`。
+覆盖前 PAMI 必须为 `01f17ad65bf24e4d8ce59bec0de2c9d3cf570992101a67ac2e0ac94ce52d0538`；
+覆盖后为固定原生
+`character/modelproperty/1_pc/1_phm/nude/cd_phm_00_nude_00_0001.pac_xml` 的 50017 字节原件，
+SHA256 `65b217b938346cc47c1207263507eaef38a24ad605f2890a4b0845c9005fc7a4`，flags 50。
+其余 13 项 payload／资源行保持，包括 SHA256 为
+`8f26d6ceb38768be8b933067a53cb3a5cb1170a13b8f287cc4159f865b1e4537` 的当前补偿身体
+PAC、空 Armor 和已通过头位置的 PAC／原生头 PAMI。原生身体材质
+完整保留 6 变体×3 draw 的 `SkinnedMeshSkin`、全部参数、wrapper、纹理和 wrinkle
+引用；暂用原生身体纹理诊断左手／身体，不同时修改 MC 皮肤或头比例，不断言 shader
+为唯一根因。
+
+`prepare_steve_body_native_material.load_candidate(report_path)` 只读包内固定原生 PAMI、
+旧 PAMI、保留 PAC 与 assembly 报告四份来源，重构完整报告和精确原字节资源，返回
+报告、单私有 PAMI 虚拟路径→bytes 及绝对 `Path`→bytes 快照；无游戏／CDMW／进程读取。
+生成入口核对固定 EXE／0009 索引、PAMI 路径、SHA／真实 flags，并有界确认 22 个
+原生纹理与 1 个 wrinkle 条目的路径、flags 和原归档边界，只提取 PAMI，不解码这些
+依赖载荷。原 `nonetexture0xffffffff.dds` sentinel 保留，不要求其归档条目；不声称全部
+外部依赖或运行时回退已验收。新资源行固定 `payloadSize=50017`、双 flags 50 和精确
+原件 provenance；未知字段、路径越界、输出覆盖、来源／报告／payload 篡改拒绝。
+
+封装参数为 `body_native_material_path`／overlay 的 `body_native_material_report`，CLI 为
+`--body-native-material-report`；必须带完整空 Armor 七报告控制，与原 app／head-mesh
+对照互斥。安装只接受该七份报告加 `steve-body-native-material-report.json` 的八报告
+集合，资源仍 14 项；先准入 head-root、原生头 PAMI 和空 Armor，再只覆盖身体 PAMI。
+准入在覆盖前核对旧 PAMI 与当前 PAC 的实际 SHA，覆盖后核对固定新行／载荷，封装
+与安装再核对真实原件／成包 flags 50；覆盖前 assembly 行没有 `archiveFlags`，不能
+要求尚未产生的封装字段作为准入条件。快照和输出来源目录保护沿用原流程。
+
+候选默认输出 `build/steve-body-native-material/steve-body-native-material-report.json`；
+封装默认输出 `build/steve-body-native-material-probe-overlay`，variant 为
+`steve-kliff-original-head-body-material-empty-armor-part-table-v2`，完整检查选择
+`check_steve_probe.py --body-native-material --rebuild`。恢复沿用 Steve kind 的共享锁、
+所有权／备份／收据，不覆盖后来存档。2026-10-08 独立检查含真实固定重建 10/10
+通过，候选报告 SHA256 为
+`485e0b529cf096b3c2568bdbfdf8a66aedeffae626f2fe031d65aff1741ce55c`；
+完整封装／隔离事务／真实重建 28/28 通过；仍 14 项，PAZ 770800 字节，计划报告
+SHA256 为 `fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341`。
+主控核实游戏实际关闭、无 active receipt、38 项原件保持后已安装；收据
+`069425c3a6a0430fa9c576e3afe8f20b` 为 installed，当前有 active receipt／0041。
+before-install／installed 两阶段均 exit 0，41 项安装文件、36 个存档、完整 MC
+schema3/revision25、原点和 ASI 保持。等待用户手动进入反馈，尚无本轮实机结果，
+之后仍须退出恢复。左手、身体、动画、装备与最终 MC 皮肤均未验收，不能据头部
+材质的历史结果推定身体对照成功。
+
+独立 `probe_owner_components.py` 复用已核对的受控角色／controller／SceneObjectClient
+回链及固定代码门禁，但不改变旧appearance探针。只读owner+210的完整16字节目录、
+count×8有序成员，以及每槽标准primary MSVC RTTI；COL要求sig1、thisOffset0、
+constructorDisplacement0、自RVA与主模块范围，名字192字节内NUL／ASCII。无primary
+身份的槽保存unavailable并继续，不能用名字推断布局或读取任意成员+8作为owner。
+完整目录／成员／成功及失败依赖末尾回读，间隔后重读全链；同一只读handle的PID、
+creationTime、存活及模块在前／中／最终核对。登记成员与primary身份分别设成功标志，
+失败清除成功；snapshotAtomic、逐项owner回链、背部资源、原装备禁止保持未验证。
+独立报告支持最多256成员，不能截掉完整双样本依赖以适应旧探针512KiB限制；本工具
+使用独立4MiB／xb输出，超界返回失败并清成功标志，完整原始证据不截断。
+23项隔离合成检查通过，包括256槽／最长RTTI完整CLI持久化、超界拒绝与逐槽catch
+不能隐藏依赖变化；尚未实际采样。实采只由主控在新会话执行，不能复用衣服会话PID／地址。
 
 角色诊断的 `health_candidate` 仅解码首 int32 为零的完整 0x38 字节记录。
 `current_stored_raw/base_raw/norm_raw/floor_raw/field_30_raw` 保留原始值，

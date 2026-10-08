@@ -886,14 +886,98 @@ py -3.12 -B tools/install_steve_probe.py --restore
 ```
 
 随后主控重新核实上轮游戏已退出、无 active receipt、38 项原文件保持，完成
-before-install 基线记录后实际安装。收据 `2feb0ddf41b3488fba9eb226cf8fb672` 当前为
-installed，存在 active receipt／0041；before-install／installed 两阶段均 exit 0，
-41 项文件匹配，36 个存档、完整 MC schema3/revision25、原点及 ASI 保持。已交用户
-手动进入反馈原服装与 MC 位置；本轮显示尚未验收，当前尚未恢复。
+before-install 基线记录后实际安装。用户实测原话为“原服装消失，左手没有了。后背
+背着的装备依旧存在并和身体重叠。头部过大”。默认服装抑制人工通过，完整人物
+未通过。用户退出后核实会话结束并恢复；收据 `2feb0ddf41b3488fba9eb226cf8fb672`
+为 restored，该服装会话恢复时无 active receipt／0041；当前已安装下方身体材质对照。
+五阶段均 exit 0，41 项安装文件／38 项
+恢复原文件匹配，退出时 36 个最新存档、完整 MC schema3/revision25、原点及 ASI
+保持；只读 appearance 双采样仍因原 PAC 声明空为稳定 notReady，不能当作完整模型
+或遮罩解码成功。头部过大仍缺实际比例证据，本轮没有猜测缩头。
 
-该 app 是共享初始外观资源，其全部消费者可能受影响；空 Armor 的引擎加载和默认
-服装实际抑制必须单独实测。动态穿戴部件可能由其他选择层再次应用，静态删除 12 行
+该 app 是共享初始外观资源，其全部消费者可能受影响。默认服装消失的人工反馈
+不证明全部装备选择链已被抑制；动态穿戴部件可能由其他选择层再次应用，静态删除 12 行
 不等于禁止全部红沙装备，也不删除装备库存／存档。发须、完整身体去重、动画和
 跨重载持续 Steve 均未验收。MC 头贴图后续只计划替换三个主 draw 的 baseColor
 路径，当前没有生成／封装皮肤候选；不与本轮服装变换混合。实际测试／收据及恢复
 状态以 [current-state.md](current-state.md) 与 [progress.md](progress.md) 为准。
+
+## 保留身体补偿 PAC 的原生身体 PAMI 单变量对照
+
+服装实测留下左手缺失、背部装备重叠和头部比例问题。已有身体材质从原生
+`SkinnedMeshSkin` 改成 `SkinnedMeshStandard`，这是一个已改变而未证明运行时语义
+一致的变量。下一对照只把私有身体 PAMI 换成固定原件；保留其余 13 项资源，包括
+空 Armor 和身体 PAC，暂用原生身体纹理诊断左手／身体，不混入头缩放或 MC 皮肤变换。
+头材质的历史人工位置结果不能直接证明身体 shader 是唯一根因。
+
+```powershell
+py -3.12 -B tools/prepare_steve_body_native_material.py
+py -3.12 -B tools/check_steve_body_native_material.py --rebuild
+py -3.12 -B tools/prepare_steve_probe_overlay.py --head-descriptor-report build/steve-head-descriptor/steve-head-descriptor-report.json --part-table-report build/steve-part-table-v2/steve-part-table-report.json --head-root-report build/steve-native-head-root/steve-native-head-root-report.json --head-native-material-report build/steve-head-native-material/steve-head-native-material-report.json --clothing-report build/steve-clothing-control/steve-clothing-control-report.json --body-native-material-report build/steve-body-native-material/steve-body-native-material-report.json
+py -3.12 -B tools/check_steve_probe.py --body-native-material --rebuild
+```
+
+候选默认输出 `build/steve-body-native-material/steve-body-native-material-report.json`，
+variant 为 `steve-body-native-material-only-v1`；已有输出拒绝覆盖，另选新 `--output`。
+只替换私有路径
+`character/modelproperty/1_pc/1_phm/nude/crimsonmc_steve_body_1_21_1.pac_xml`，原件来自
+固定 0009 中 `character/modelproperty/1_pc/1_phm/nude/cd_phm_00_nude_00_0001.pac_xml`。
+
+| 固定身份 | SHA256 |
+| --- | --- |
+| 覆盖前身体 PAMI | `01f17ad65bf24e4d8ce59bec0de2c9d3cf570992101a67ac2e0ac94ce52d0538` |
+| 原生身体 PAMI，50017 字节／flags 50 | `65b217b938346cc47c1207263507eaef38a24ad605f2890a4b0845c9005fc7a4` |
+| 保留的补偿身体 PAC | `8f26d6ceb38768be8b933067a53cb3a5cb1170a13b8f287cc4159f865b1e4537` |
+
+原 PAMI 为 6 变体×3 draw，三个名称为 `cd_phm_00_head_0001_01`、
+`cd_phm_00_nude_0001_hand`、`cd_phm_00_nude_0001`，各 wrapper 均使用
+`SkinnedMeshSkin`。候选逐字复制完整原件；保留所有参数及其顺序、wrapper、纹理、
+damage／wrinkle 引用、BOM 与换行，不重序列化或删去没有几何的 wrapper。
+实际 PAC 的 draw／蒙皮语义、左手可见性与身体显示仍需实机验证。
+
+生成入口读取前后固定 EXE／0009 索引，提取并核验精确 PAMI 的 SHA／长度／flags。
+同一原索引内有界确认 22 个真实纹理条目（flags 1）和 1 个 wrinkle 条目（flags 50），
+连同 PAMI 共 24 个唯一条目；只核对依赖路径、真实 flags、PAZ 存在和原归档边界，
+不提取／解码依赖载荷、不导出它们，也不声称引擎已经解析。原
+`texture/nonetexture0xffffffff.dds` sentinel 保留，不要求归档条目，运行时回退未知。
+报告没有动态 PAZ／offset，不重复打包原生纹理。
+
+报告仅一项 `candidateResources`，kind 为 `skinnedMaterial`、`payloadSize=50017`，
+`templateArchiveFlags=archiveFlags=50`；`sourceVirtualPath`／`templatePath` 和模板 SHA
+均指向原生 PAMI。包内四份固定来源是原 PAMI、覆盖前 PAMI、保留 PAC 与 assembly
+报告。纯 `load_candidate` 只用这些字节重构整份报告及原件载荷，返回报告、单私有
+PAMI 字典与绝对 `Path` key 的六项快照；不读取游戏／进程／CDMW，不信成功标记。
+路径越界、未知字段、覆盖已有输出、报告／来源／载荷篡改和失效快照均拒绝。
+
+封装接口为 `body_native_material_path`／overlay 的 `body_native_material_report`，CLI 为
+`--body-native-material-report`。必须具备前节完整空 Armor 七份报告，再增加唯一
+`steve-body-native-material-report.json`；严格八报告、仍十四资源，与此前 app／
+head-mesh 对照互斥，缺依赖或混入未知报告拒绝。覆盖顺序是 head-root、原生头 PAMI、
+空 Armor，最后仅身体 PAMI；其余 13 项 payload／资源行保持，包括当前身体 PAC、
+空 Armor 和头 PAC／材质；纹理注册不变。新增材质双 flags 为 50，封装核对真实模板 flags，
+安装独立核对精确载荷及 PAMT 实际 flags，不放开通用重复路径规则。
+
+默认封装输出 `build/steve-body-native-material-probe-overlay`，安装 variant 为
+`steve-kliff-original-head-body-material-empty-armor-part-table-v2`，沿用 Steve kind 的
+所有权／备份／共享锁／收据；恢复不覆盖后来存档，不能与其他临时包并存。
+2026-10-08 独立检查含真实固定重建 **10/10** 通过，候选报告 SHA256 为
+`485e0b529cf096b3c2568bdbfdf8a66aedeffae626f2fe031d65aff1741ce55c`。
+完整封装／隔离事务／真实重建 **28/28** 通过；仍 14 项，PAZ 770800 字节，计划
+报告 SHA256 为 `fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341`。
+专用安装／恢复入口为：
+
+```powershell
+py -3.12 -B tools/install_steve_probe.py --install --plan build/steve-body-native-material-probe-overlay
+# 实测后正常退出，再恢复；保留退出时最新存档
+py -3.12 -B tools/install_steve_probe.py --restore
+```
+
+主控核实游戏实际关闭、无 active receipt、38 项原件保持后，已实际安装此身体材质包。
+收据 `069425c3a6a0430fa9c576e3afe8f20b` 为 installed，variant 为上述身体原件对照，
+当前有 active receipt／0041；before-install／installed 两阶段均 exit 0，41 项安装文件、
+36 个存档、完整 MC schema3/revision25、原点及 ASI 保持。等待用户手动进入反馈，
+尚无本轮实机结果，之后仍须退出恢复。左手、身体、动画、动态装备禁止、头比例与
+最终 MC 皮肤均未验收。
+
+当前状态以 [current-state.md](current-state.md) 与 [progress.md](progress.md) 为准；
+生成器成功与历史头位置反馈不能替代这次身体材质的实机验收。

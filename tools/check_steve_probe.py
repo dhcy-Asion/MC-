@@ -732,6 +732,142 @@ class SteveClothingProbeChecks(StevePartTableProbeChecks):
             steve.steve.overlay.load_resources([steve.steve.CLOTHING_REPORT])
 
 
+class SteveBodyNativeMaterialProbeChecks(StevePartTableProbeChecks):
+    plan = steve.steve.BODY_NATIVE_MATERIAL_OUTPUT
+    baseline_plan = steve.steve.CLOTHING_OUTPUT
+    resource_count = 14
+    expected_variant = "steve-kliff-original-head-body-material-empty-armor-part-table-v2"
+    control_reports = (*SteveClothingProbeChecks.control_reports, "steve-body-native-material-report.json")
+    expected_replacements = SteveClothingProbeChecks.expected_replacements
+    rebuild_args = (*SteveClothingProbeChecks.rebuild_args, "--body-native-material-report",
+                    str(steve.steve.BODY_NATIVE_MATERIAL_REPORT))
+
+    def test_22_control_adds_exactly_one_reviewed_resource(self):
+        import prepare_steve_body_native_material as body
+        old = steve.load_plan(self.baseline_plan)
+        target = body.MATERIAL_PATH
+        self.assertEqual(set(self.reviewed["payloads"]), set(old["payloads"]))
+        self.assertEqual({path for path in old["payloads"]
+                          if old["payloads"][path] != self.reviewed["payloads"][path]}, {target})
+        self.assertEqual(steve.native.sha256(old["payloads"][target]), body.OLD_MATERIAL_SHA256)
+        self.assertEqual(steve.native.sha256(self.reviewed["payloads"][target]), body.NATIVE_MATERIAL_SHA256)
+        self.assertEqual(len(self.reviewed["payloads"][target]), 50017)
+        old_rows = {row["virtualPath"]: row for row in old["report"]["resources"]}
+        new_rows = {row["virtualPath"]: row for row in self.reviewed["report"]["resources"]}
+        self.assertEqual({path: new_rows[path] for path in old_rows if path != target},
+                         {path: row for path, row in old_rows.items() if path != target})
+        self.assertEqual(self.reviewed["before"], old["before"])
+        self.assertEqual(self.reviewed["after"]["meta/0.pathc"], old["after"]["meta/0.pathc"])
+        inputs = dict(old["report"]["candidateReports"])
+        control = steve.steve.BODY_NATIVE_MATERIAL_REPORT
+        inputs[str(control.relative_to(steve.ROOT))] = steve.native.file_hash(control)
+        self.assertEqual(self.reviewed["report"]["candidateReports"], inputs)
+        candidate, payloads, _ = body.load_candidate(control)
+        row, = candidate["candidateResources"]
+        self.assertEqual(self.reviewed["payloads"][target], payloads[target])
+        for key in ("kind", "virtualPath", "templatePath", "templateSha256", "archiveFlags"):
+            self.assertEqual(new_rows[target][key], row[key])
+        self.assertEqual(new_rows[target]["archiveFlags"], 50)
+        self.assertEqual(self.reviewed["probeVariant"], self.expected_variant)
+        receipt = self.install()
+        self.assertEqual(receipt["probeVariant"], self.expected_variant)
+        self.assertEqual(receipt["planSha256"], self.reviewed["reportSha256"])
+        self.restore()
+        self.assert_original()
+
+    def test_26_body_requires_all_dependencies_and_excludes_other_modes_before_io(self):
+        helper = steve.steve
+        for changes in ({"head_descriptor_path": None}, {"part_table_path": None}, {"head_root_path": None},
+                        {"head_native_material_path": None}, {"clothing_path": None},
+                        {"app_path": self.test_root / "unused-app-report.json"},
+                        {"head_mesh_control_path": helper.HEAD_MESH_CONTROL_REPORT}):
+            options = {"head_descriptor_path": helper.HEAD_DESCRIPTOR_REPORT,
+                       "part_table_path": helper.PART_TABLE_REPORT, "head_root_path": helper.HEAD_ROOT_REPORT,
+                       "head_native_material_path": helper.HEAD_NATIVE_MATERIAL_REPORT,
+                       "clothing_path": helper.CLOTHING_REPORT,
+                       "body_native_material_path": helper.BODY_NATIVE_MATERIAL_REPORT, **changes}
+            with self.subTest(changes=changes), mock.patch.object(helper.assembly, "load_candidate") as opened:
+                with self.assertRaisesRegex(ValueError, "Body material control"):
+                    helper.candidates(helper.DEFAULT_ASSEMBLY, helper.DEFAULT_APPEARANCE, **options)
+                opened.assert_not_called()
+        for changes in ({"replacement_report": None}, {"part_table_report": None}, {"head_root_report": None},
+                        {"head_native_material_report": None}, {"clothing_report": None},
+                        {"initial_appearance_report": self.test_root / "unused-app-report.json"},
+                        {"head_mesh_control_report": helper.HEAD_MESH_CONTROL_REPORT},
+                        {"body_native_material_report": self.test_root / "unknown-report.json"}):
+            options = {"replacement_report": helper.DEFAULT_APPEARANCE, "part_table_report": helper.PART_TABLE_REPORT,
+                       "head_root_report": helper.HEAD_ROOT_REPORT,
+                       "head_native_material_report": helper.HEAD_NATIVE_MATERIAL_REPORT,
+                       "clothing_report": helper.CLOTHING_REPORT,
+                       "body_native_material_report": helper.BODY_NATIVE_MATERIAL_REPORT, **changes}
+            with self.subTest(changes=changes), mock.patch.object(steve.native, "load_cdmw") as opened:
+                with self.assertRaisesRegex(ValueError, "Body material control"):
+                    helper.overlay.prepare(self.game, [helper.DEFAULT_ASSEMBLY, helper.HEAD_DESCRIPTOR_REPORT],
+                                           self.test_root / "unused-body", steve.ROOT / "build/cdmw-fixed-source",
+                                           steve.ROOT / "build/cdmw-deps", **options)
+                opened.assert_not_called()
+
+    def test_27_body_exact_report_set_rejects_missing_or_mixed_modes_before_hash(self):
+        plan, path, original = self.altered_plan()
+        # Removing the last body report leaves the valid seven-report baseline;
+        # test 23 rejects the changed material against that baseline's bytes.
+        for name in (*self.control_reports[:-1], "steve-assembly-report.json", "steve-appearance-report.json",
+                     "steve-app-report.json", "steve-head-mesh-control-report.json", "unknown-report.json"):
+            report = json.loads(json.dumps(original))
+            if name in (*self.control_reports[:-1], "steve-assembly-report.json", "steve-appearance-report.json"):
+                key = next(key for key in report["candidateReports"] if key.endswith(name))
+                del report["candidateReports"][key]
+            else:
+                report["candidateReports"]["build/unused/" + name] = "0" * 64
+            path.write_text(json.dumps(report), encoding="utf-8")
+            with self.subTest(name=name), mock.patch.object(steve.native, "file_hash") as hashed:
+                with self.assertRaises(ValueError):
+                    steve.load_plan(plan)
+                hashed.assert_not_called()
+        self.assert_original()
+
+    def test_28_body_pins_prior_body_pac_and_pami_and_preserves_generic_duplicate_rejection(self):
+        helper = steve.steve
+        import prepare_steve_body_native_material as body
+        candidate, payloads, snapshot = helper.assembly.load_candidate(helper.DEFAULT_ASSEMBLY)
+        for target in (body.PAC_PATH, body.MATERIAL_PATH):
+            altered = json.loads(json.dumps(candidate))
+            changed = dict(payloads)
+            local = "resources/" + target
+            changed[local] += b"changed"
+            next(row for row in altered["candidateResources"] if row["virtualPath"] == target)["sha256"] = steve.native.sha256(changed[local])
+            with self.subTest(target=target), mock.patch.object(helper.assembly, "load_candidate", return_value=(altered, changed, snapshot)):
+                with self.assertRaisesRegex(ValueError, "fixed prior body"):
+                    helper.candidates(helper.DEFAULT_ASSEMBLY, helper.DEFAULT_APPEARANCE,
+                                      helper.HEAD_DESCRIPTOR_REPORT, part_table_path=helper.PART_TABLE_REPORT,
+                                      head_root_path=helper.HEAD_ROOT_REPORT,
+                                      head_native_material_path=helper.HEAD_NATIVE_MATERIAL_REPORT,
+                                      clothing_path=helper.CLOTHING_REPORT,
+                                      body_native_material_path=helper.BODY_NATIVE_MATERIAL_REPORT)
+        with self.assertRaisesRegex(ValueError, "Duplicate overlay resource"):
+            helper.overlay.load_resources([helper.DEFAULT_ASSEMBLY, helper.BODY_NATIVE_MATERIAL_REPORT])
+
+    def test_29_body_payload_tamper_rejects_updated_inner_and_outer_hashes(self):
+        plan, path, original = self.altered_plan()
+        key = next(key for key in original["candidateReports"] if key.endswith("steve-body-native-material-report.json"))
+        copied = self.test_root / "tampered-body-material"
+        shutil.copytree(steve.steve.BODY_NATIVE_MATERIAL_REPORT.parent, copied)
+        candidate_path = copied / steve.steve.BODY_NATIVE_MATERIAL_REPORT.name
+        candidate = json.loads(candidate_path.read_bytes())
+        row, = candidate["candidateResources"]
+        payload_path = copied / row["localFile"]
+        payload_path.write_bytes(payload_path.read_bytes() + b"tampered")
+        row["sha256"] = steve.native.file_hash(payload_path)
+        candidate["files"][row["localFile"]] = row["sha256"]
+        candidate_path.write_text(json.dumps(candidate), encoding="utf-8")
+        del original["candidateReports"][key]
+        original["candidateReports"][str(candidate_path.relative_to(steve.ROOT))] = steve.native.file_hash(candidate_path)
+        path.write_text(json.dumps(original), encoding="utf-8")
+        with self.assertRaises(ValueError):
+            steve.load_plan(plan)
+        self.assert_original()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path)
@@ -742,6 +878,7 @@ def main():
     mode.add_argument("--native-head-root", action="store_true")
     mode.add_argument("--head-native-material", action="store_true")
     mode.add_argument("--clothing", action="store_true")
+    mode.add_argument("--body-native-material", action="store_true")
     mode.add_argument("--app-variant", choices=("macduff-00000", "macduff-00002"))
     parser.add_argument("--rebuild", action="store_true")
     args = parser.parse_args()
@@ -749,7 +886,8 @@ def main():
         case = SteveInitialAppProbeChecks
         case.select_variant(args.app_variant)
     else:
-        case = (SteveClothingProbeChecks if args.clothing else SteveHeadNativeMaterialProbeChecks if args.head_native_material else
+        case = (SteveBodyNativeMaterialProbeChecks if args.body_native_material else
+                SteveClothingProbeChecks if args.clothing else SteveHeadNativeMaterialProbeChecks if args.head_native_material else
                 SteveNativeHeadRootProbeChecks if args.native_head_root else SteveNativeHeadProbeChecks if args.native_head else
                 StevePartTableProbeChecks if args.part_table else SteveHeadDescriptorProbeChecks if args.head_descriptor else SteveProbeChecks)
     case.plan, case.rebuild = args.plan or case.plan, args.rebuild

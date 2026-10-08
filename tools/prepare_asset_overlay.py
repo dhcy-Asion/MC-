@@ -209,7 +209,15 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
             part_table_report: Path | None = None, head_mesh_control_report: Path | None = None,
             head_root_report: Path | None = None,
             head_native_material_report: Path | None = None,
-            clothing_report: Path | None = None) -> dict:
+            clothing_report: Path | None = None,
+            body_native_material_report: Path | None = None) -> dict:
+    if body_native_material_report is not None:
+        if clothing_report is None or head_native_material_report is None or head_root_report is None or part_table_report is None or replacement_report is None:
+            raise ValueError("Body material control requires the complete empty-Armor v2 controls")
+        if initial_appearance_report is not None or head_mesh_control_report is not None:
+            raise ValueError("Body material control excludes app and head-mesh controls")
+        if body_native_material_report.name != "steve-body-native-material-report.json":
+            raise ValueError("Body material control requires its exact eighth report")
     if clothing_report is not None:
         if head_native_material_report is None or head_root_report is None or part_table_report is None or replacement_report is None:
             raise ValueError("Clothing control requires the complete original-head-material v2 controls")
@@ -417,6 +425,35 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
         replacement_paths.add(path)
         replacement_snapshot.update(clothing_snapshot)
         inputs[str(clothing_report.relative_to(ROOT))] = native.file_hash(clothing_report)
+    if body_native_material_report is not None:
+        import prepare_steve_body_native_material as body_material
+        path = body_material.MATERIAL_PATH
+        original = [row for row in resources if row["virtualPath"] == path]
+        pac = [row for row in resources if row["virtualPath"] == body_material.PAC_PATH]
+        if (len(resources) != 14 or len(inputs) != 7 or len(original) != 1 or len(pac) != 1
+                or original[0]["kind"] != "skinnedMaterial"
+                or original[0]["sha256"] != body_material.OLD_MATERIAL_SHA256
+                or native.sha256(payloads[path]) != body_material.OLD_MATERIAL_SHA256
+                or pac[0]["kind"] != "skinnedMesh" or pac[0]["sha256"] != body_material.PRESERVED_PAC_SHA256
+                or native.sha256(payloads[body_material.PAC_PATH]) != body_material.PRESERVED_PAC_SHA256):
+            raise ValueError("Body material control requires the fixed prior body PAC and PAMI")
+        body_native_material_report = native.output_directory(body_native_material_report)
+        candidate, body_payloads, body_snapshot = body_material.load_candidate(body_native_material_report)
+        rows = candidate["candidateResources"]
+        fixed_row = {"kind": "skinnedMaterial", "virtualPath": path, "localFile": "resources/" + path,
+                     "sha256": body_material.NATIVE_MATERIAL_SHA256, "payloadSize": 50017,
+                     "sourceVirtualPath": body_material.NATIVE_MATERIAL_PATH,
+                     "templatePath": body_material.NATIVE_MATERIAL_PATH,
+                     "templateSha256": body_material.NATIVE_MATERIAL_SHA256,
+                     "templateArchiveFlags": 50, "archiveFlags": 50}
+        if (rows != [fixed_row] or set(body_payloads) != {path} or len(body_payloads[path]) != 50017
+                or native.sha256(body_payloads[path]) != body_material.NATIVE_MATERIAL_SHA256):
+            raise ValueError("Body material control must override only the fixed original body PAMI")
+        local = native.output_directory(body_native_material_report.parent / rows[0]["localFile"])
+        resources[resources.index(original[0])] = dict(rows[0], localFile=str(local.relative_to(ROOT)))
+        payloads[path] = body_payloads[path]
+        replacement_snapshot.update(body_snapshot)
+        inputs[str(body_native_material_report.relative_to(ROOT))] = native.file_hash(body_native_material_report)
     if part_table_report is not None:
         from prepare_steve_probe_overlay import audit_part_components
         audit_part_components(payloads)
@@ -509,6 +546,10 @@ def prepare(game: Path, reports: list[Path], output: Path, source: Path, deps: P
                 and (int(template.flags) != 48 or resource.get("templateArchiveFlags") != 48
                      or resource.get("archiveFlags") != 48)):
             raise ValueError("Clothing control must preserve the fixed app archive flags")
+        if (body_native_material_report is not None and path == body_material.MATERIAL_PATH
+                and (int(template.flags) != 50 or resource.get("templateArchiveFlags") != 50
+                     or resource.get("archiveFlags") != 50)):
+            raise ValueError("Body material control must preserve the fixed PAMI archive flags")
         if PurePosixPath(path).suffix.casefold() != PurePosixPath(template_path).suffix.casefold():
             raise ValueError("Candidate and template resource types differ")
         if resource["kind"] == "texture":

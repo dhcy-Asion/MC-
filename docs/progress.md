@@ -21,8 +21,10 @@ v2 已修复并通过候选／事务检查；实际正常进入，MC 块体已�
 `5249d2f2339844f3a5b27b77d1353a66` 已 restored，无active receipt／0041，退出时
 最新存档／完整schema3 MC／原点／ASI保持。用户要求优先去除原服装模块；仅清空固定
 00000 app默认Armor引用的可逆对照已完成并通过完整检查、实际安装；当前收据
-`2feb0ddf41b3488fba9eb226cf8fb672` 为installed，有active receipt／0041，等待手动进入反馈。
-完整人物仍未完成。
+`2feb0ddf41b3488fba9eb226cf8fb672` 已实际退出恢复，无active receipt／0041。
+用户确认原服装消失，但左手缺失、背部装备仍重叠、头部过大，完整人物仍未通过。
+身体原字节材质单变量14资源／8报告包已构建、28/28完整检查通过并安装，当前收据
+`069425c3a6a0430fa9c576e3afe8f20b`，有active receipt／0041，等待手动进入反馈及退出恢复。
 当前交接见 [current-state.md](current-state.md)。
 用户手动启动／退出的选择保持，自动接管停止。
 
@@ -133,7 +135,7 @@ M4a 与 M6a 保持进行中，完整移植目标仍为 active。
 | M2 原生角色接口验证 | 实际受控身份、F1 名单、原生请求和创建生命周期 | 区分角色 ID／Actor UID／佣兵 No；确认 F1 实际路径；确认新增身份需要的名单、创建、状态及保存接口和调用约定 | 进行中，未完成 |
 | M3 独立第四角色 | 创建与注册、F1 选择、控制、生命周期 | 原版三人保留，第四独立身份可切入／切出；重载、死亡、骑乘及任务强制回切不串状态；有游戏内证据 | 未开始，依赖 M2 |
 | M4 Steve 模型和装备（旧独立身份方案） | 原独立第四角色及装备隔离设计 | 旧方案只保留研究，当前按 M4a 的 MC 装备及原装备禁用验收 | 旧方案未开始，不作为当前门槛 |
-| M4a 持续史蒂夫模式（最新优先） | 复用当前角色控制，启用完整持续 Steve、仅 MC 装备、禁用恢复及方块 | 身体／动画／MC 装备正确，无原部件混叠；所有红沙装备使用入口被禁用；重载保持，停用恢复 | 进行中；九格常驻/刷新/断线实测通过，F8 点击待验收；MC 块体已显示但旧包装配错位，新头包等待画面；装备限制未实现 |
+| M4a 持续史蒂夫模式（最新优先） | 复用当前角色控制，启用完整持续 Steve、仅 MC 装备、禁用恢复及方块 | 身体／动画／MC 装备正确，无原部件混叠；所有红沙装备使用入口被禁用；重载保持，停用恢复 | 进行中；九格常驻/刷新/断线实测通过，F8 点击待验收；方块头位置和默认服装消失已人工通过，左手／背部重叠／头比例未通过；装备限制未实现 |
 | M5 真实心形血量 | 将真实 HP／最大 HP 显示为心形 | 与真实受伤、治疗、最大 HP 变化一致，切人物不串读数；不显示虚构饥饿／经验 | 未实现，须验证读取链和行为事件 |
 | M5a MC 攻击／击退（2026-10-08 新要求） | 原攻击抑制、MC 单击输入、实际敌人命中／伤害／击退、MC 装备规则 | 一次点击一次攻击，菜单不攻击；实际目标、遮挡／距离／间隔与击退方向正确；MC 装备效果及耐久一致，停用恢复 | 未实现；当前无原生目标／伤害／击退调用合同 |
 | M6a 独立背包 | 全物品目录、整组领取、36 格选择、消耗与现有方块放置 | 原版64/16/1、满背包与未知物品回滚、只扣所选格、耗尽不跨格替补、保存迁移、面板实测 | 保留进行中，本轮优先 M4a／HUD |
@@ -2010,17 +2012,90 @@ row／localPath／payload保持，仅新增固定00000 app覆盖，Body／Head�
   QA没有重跑整套、安装、访问游戏内存或提交Git。
 
 完整事务通过后重新核实实际游戏关闭、无active receipt／0041及38项原文件匹配，
-实际安装新包。收据 `2feb0ddf41b3488fba9eb226cf8fb672` 为installed，kind为
+实际安装新包。收据 `2feb0ddf41b3488fba9eb226cf8fb672` 现为restored，kind为
 `steve-mesh-parameters`；新记录器 `build/record-steve-clothing-control-20261008.py`
 绑定新variant／计划SHA与前一已restored收据，证据前缀同名runtime路径。
 before-install／installed均exit0：41文件匹配、36存档、完整MC schema3/revision25、
-原点和ASI保持。当前有临时包／active receipt／0041，已请求用户手动进入观察原服装
-是否消失及MC身体／四肢是否错位，正常进入后暂时保持运行。实机结果尚未得到，
-之后须用户正常退出并核实实际进程结束再恢复，保持退出时最新状态。
+原点和ASI保持。用户反馈“原服装消失，左手没有了。后背背着的装备依旧存在并和身体
+重叠。头部过大”。默认服装抑制人工通过，完整Steve未通过。原话与收据／计划／会话
+绑定保存在 `runtime/steve-clothing-control-20261008-visual-result.json`。只读appearance
+双采样稳定但原PAC声明空，仍为notReady，不能当渲染或遮罩证明。
+用户正常退出后核实实例 `95052:134359107220587726` 已结束，再取退出时最新基线并恢复。
+五阶段均exit0，38项原文件、36个最新存档、完整MC schema3/revision25、原点和ASI保持。
+当前无active receipt／0041，不能复用旧PID／地址。
 MC皮肤暂缓，以便单独判断服装重叠；人物全装配与原装备禁用仍未完成。
 
 发布前八份相关Python源码与两份ignored记录器共10份AST、七文档69个相对链接／围栏、
 七份候选／计划／阶段／人工结果JSON核对通过，`git diff --check`通过。七种已支持安全
 计划纯准入通过，历史v1 app包仍被旧组件合同拒绝。代码与文档正常同步GitHub；
 本轮未修改ASI／JAR、MC规则或消费材料，原件／build／runtime／备份保持忽略。
-持续目标active，当前等待衣服单变量实机反馈及随后退出恢复，没有标记完整项目完成。
+持续目标active，衣服单变量实机与恢复已完成，继续左手／身体材质和动态背部装备定位，
+没有标记完整项目完成。
+
+
+## 2026-10-08 身体原字节材质单变量与背部组件身份诊断
+
+左手有界复核保留四LOD各1008顶点／504面，左臂240顶点／120面；LeftHand348仍有
+56个专属顶点／20面，实际byte权重、中立量化误差与右手相近，PABC含所需左右骨。
+官方皮肤两侧基础手臂均224个不透明texel，袖层透明数量对称。以上排除离线缺失／
+仅左手alpha洞，不能排除实际动态遮罩。保留Nude shrink tag及maskDistance0.05，不改骨骼。
+离线头外层0.52734375m／肩宽0.966796875m符合固定MC几何，约0.54545；共同父骨
+中立basis近单位，没有确定2倍缩放。待身体显示正确后再对照实际比例，不盲目缩头。
+
+新增 `tools/prepare_steve_body_native_material.py`、`tools/check_steve_body_native_material.py`。
+仅私有身体PAMI换成固定原生50017字节，SHA
+`65b217b938346cc47c1207263507eaef38a24ad605f2890a4b0845c9005fc7a4`；完整6变体×3draw
+SkinnedMeshSkin与参数／原生纹理／wrinkle原字节保持。旧23893字节Standard PAMI SHA
+`01f17ad65bf24e4d8ce59bec0de2c9d3cf570992101a67ac2e0ac94ce52d0538`，身体PAC SHA
+`8f26d6ceb38768be8b933067a53cb3a5cb1170a13b8f287cc4159f865b1e4537`保持。
+四固定来源完全重构canonical报告与payload，纯loader返回6项绝对Path快照，不加载CDMW／游戏。
+默认报告 `build/steve-body-native-material/steve-body-native-material-report.json` SHA
+`485e0b529cf096b3c2568bdbfdf8a66aedeffae626f2fe031d65aff1741ce55c`。
+生成仅检查22原生纹理和1个wrinkle的固定索引入口／flags／PAZ存在范围，不提取或解码
+依赖；原件nonetexture0xffffffff占位引用保持、运行时解析未验，不声称依赖完全闭合。
+
+独立 `py -3.12 -X utf8 -B tools/check_steve_body_native_material.py --rebuild`
+**10/10通过，23.598秒**；来源／payload／报告重算hash篡改、路径／flags／duplicate／
+类型、快照／输出保护、真实隔离重建与旧输入保持已覆盖。
+完整封装新增 `--body-native-material-report`、严格8报告／14资源；必须含emptyArmor与
+全部原字节头材质控制，与旧app／原生头引用互斥。新原PAMI双flags50和真实模板flags50
+保持，覆盖前旧行不要求不存在的archiveFlags字段；两个既有基线投影按原合同保留。
+独立QA发现并修正该旧行断言及新增反例的resources/键，其他早拒绝／快照边界一致。
+新包保持其余13行及payload，PAZ770800字节、逐项解包／PAMT往返／边界校验通过，计划
+`build/steve-body-native-material-probe-overlay` SHA
+`fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341`。
+完整 `py -3.12 -X utf8 -B tools/check_steve_probe.py --body-native-material --rebuild`
+**28/28通过，102.269秒**，真实新输出重建、其他13资源保持、固定前置PAC/PAMI、严格8报告、
+非法组合／重算hash篡改、隔离安装／恢复／故障与最新存档保护全部通过。
+重新核实实际游戏关闭、无active receipt／0041及38原文件匹配后安装。收据
+`069425c3a6a0430fa9c576e3afe8f20b` 为installed，variant
+`steve-kliff-original-head-body-material-empty-armor-part-table-v2`；新的不可覆盖记录器
+`build/record-steve-body-native-material-20261008.py` 绑定新plan／variant与前衣服restored收据。
+before-install／installed均exit0，41安装文件、36存档、完整MC schema3/revision25、原点／ASI保持。
+当前有active receipt／0041，已请求用户手动进入反馈左手／身体位置，正常进入后供只读采样。
+本轮尚无实机结果，之后须用户退出并核实实际进程结束，再以退出时最新状态恢复。
+暂用原生头／身体贴图，完整MC皮肤、动画、全部原装备禁用与MC攻击仍待完成。
+
+
+新增独立 `tools/probe_owner_components.py`、`tools/check_owner_components.py`，只读取受控
+SceneObjectClient完整16字节目录与count×8有序成员、每槽primary MSVC RTTI，不更改
+旧appearance默认。精确受控chain／strong和weak owner回链／controller恰一次，完整
+目录及身份读依赖末尾回读与间隔双采样，PID／creationTime／活性／模块前中最终保持。
+匿名／无primary COL槽保存unavailable并继续；COL sig1/offset0/ctor0/selfRVA/imagebounds
+和192字节NUL ASCII门禁，不追资源、反射对象、任意成员owner或heap。
+IdentityWatch防止逐槽catch吞掉已观察依赖改变，以及原不可读跨度变为可读；失败清成功。
+独立QA发现最大256槽超过旧writer512KiB；改为独立4MiB有界／xb输出，保留所有raw
+证据，超界返回1/outputWritten=false并清成功，无裁剪。最大256槽／191字符RTTI完整
+CLI持久化和极端错误转义仍在界内。
+`py -3.12 -B tools/check_owner_components.py` **23/23隔离合成检查通过，0.658秒**，
+实际Reader／process_identity禁调用；尚未实采，不等于背部资源定位或全部原装备禁止。
+下一新会话主控可用 `probe_owner_components.py --pid <当前PID> --output
+runtime/steve-body-native-material-20261008-owner-components.json`，不能复用衣服PID／地址。
+
+发布前八种已支持安全计划纯准入通过，旧十一／十二／v2注册／原生头／共同父骨／
+原字节头PAMI／空Armor及新身体包均保持各自范围；未修改ASI／JAR、MC规则或消费材料。
+
+发布前9份相关Python／记录器AST、7文档71相对链接／围栏、6份候选／计划／阶段／人工结果JSON
+核对通过，git diff --check通过；原件、build、runtime、记录器与备份保持忽略。代码／文档
+按授权正常同步GitHub。当前身体临时包已安装，待手动进入反馈、只读实采及随后退出恢复；
+持续目标active，完整Steve和装备／攻击仍未完成。

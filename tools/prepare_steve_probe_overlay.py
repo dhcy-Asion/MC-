@@ -34,6 +34,8 @@ HEAD_NATIVE_MATERIAL_REPORT = ROOT / "build/steve-head-native-material/steve-hea
 HEAD_NATIVE_MATERIAL_OUTPUT = ROOT / "build/steve-head-native-material-probe-overlay"
 CLOTHING_REPORT = ROOT / "build/steve-clothing-control/steve-clothing-control-report.json"
 CLOTHING_OUTPUT = ROOT / "build/steve-clothing-control-probe-overlay"
+BODY_NATIVE_MATERIAL_REPORT = ROOT / "build/steve-body-native-material/steve-body-native-material-report.json"
+BODY_NATIVE_MATERIAL_OUTPUT = ROOT / "build/steve-body-native-material-probe-overlay"
 HEAD_ROOT_RESOURCES = {
     "character/model/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac":
         ("e75f7a7989137756c4744a16c001bce8f91a6f0b6caabb84214f5d42b710d9b9", "skinnedMesh", 1),
@@ -77,7 +79,12 @@ def replacement_paths(resources):
 
 def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_path=None, part_table_path=None,
                head_mesh_control_path=None, head_root_path=None, head_native_material_path=None,
-               clothing_path=None):
+               clothing_path=None, body_native_material_path=None):
+    if body_native_material_path is not None:
+        if clothing_path is None or head_native_material_path is None or head_root_path is None or head_descriptor_path is None or part_table_path is None:
+            raise ValueError("Body material control requires the complete empty-Armor v2 controls")
+        if app_path is not None or head_mesh_control_path is not None:
+            raise ValueError("Body material control excludes app and head-mesh controls")
     if clothing_path is not None:
         if head_native_material_path is None or head_root_path is None or head_descriptor_path is None or part_table_path is None:
             raise ValueError("Clothing control requires the complete original-head-material v2 controls")
@@ -252,6 +259,35 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
                            "payload": clothing_payloads[path]}
         reports[str(clothing_path.relative_to(ROOT))] = native.file_hash(clothing_path)
         snapshot.update(clothing_snapshot)
+    if body_native_material_path is not None:
+        import prepare_steve_body_native_material as body_material
+        path = body_material.MATERIAL_PATH
+        original, pac = resources.get(path), resources.get(body_material.PAC_PATH)
+        if (len(resources) != 14 or len(reports) != 7 or original is None or pac is None
+                or original["row"].get("kind") != "skinnedMaterial"
+                or original["row"].get("sha256") != body_material.OLD_MATERIAL_SHA256
+                or native.sha256(original["payload"]) != body_material.OLD_MATERIAL_SHA256
+                or pac["row"].get("kind") != "skinnedMesh"
+                or pac["row"].get("sha256") != body_material.PRESERVED_PAC_SHA256
+                or native.sha256(pac["payload"]) != body_material.PRESERVED_PAC_SHA256):
+            raise ValueError("Body material control requires the fixed prior body PAC and PAMI")
+        body_native_material_path = native.output_directory(body_native_material_path)
+        candidate, body_payloads, body_snapshot = body_material.load_candidate(body_native_material_path)
+        rows = candidate["candidateResources"]
+        fixed_row = {"kind": "skinnedMaterial", "virtualPath": path, "localFile": "resources/" + path,
+                     "sha256": body_material.NATIVE_MATERIAL_SHA256, "payloadSize": 50017,
+                     "sourceVirtualPath": body_material.NATIVE_MATERIAL_PATH,
+                     "templatePath": body_material.NATIVE_MATERIAL_PATH,
+                     "templateSha256": body_material.NATIVE_MATERIAL_SHA256,
+                     "templateArchiveFlags": 50, "archiveFlags": 50}
+        if (rows != [fixed_row] or set(body_payloads) != {path} or len(body_payloads[path]) != 50017
+                or native.sha256(body_payloads[path]) != body_material.NATIVE_MATERIAL_SHA256):
+            raise ValueError("Body material control must override only the fixed original body PAMI")
+        row = rows[0]
+        resources[path] = {"row": row, "localPath": body_native_material_path.parent / row["localFile"],
+                           "payload": body_payloads[path]}
+        reports[str(body_native_material_path.relative_to(ROOT))] = native.file_hash(body_native_material_path)
+        snapshot.update(body_snapshot)
     if app_path is not None:
         import prepare_steve_app as app
         app_path = native.output_directory(app_path)
@@ -273,7 +309,7 @@ def candidates(assembly_path, appearance_path, head_descriptor_path=None, app_pa
 
 def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_descriptor_path=None,
             app_path=None, part_table_path=None, head_mesh_control_path=None, head_root_path=None,
-            head_native_material_path=None, clothing_path=None):
+            head_native_material_path=None, clothing_path=None, body_native_material_path=None):
     assembly_path, appearance_path = native.output_directory(assembly_path), native.output_directory(appearance_path)
     protected = [assembly_path.parent, appearance_path.parent, source, deps, game]
     private_reports = [assembly_path]
@@ -299,13 +335,18 @@ def prepare(game, assembly_path, appearance_path, output, source, deps, *, head_
     if clothing_path is not None:
         clothing_path = native.output_directory(clothing_path)
         protected.append(clothing_path.parent)
+    if body_native_material_path is not None:
+        body_native_material_path = native.output_directory(body_native_material_path)
+        protected.append(body_native_material_path.parent)
     output = orientation.preflight(output, protected)
     expected, _, snapshot = candidates(assembly_path, appearance_path, head_descriptor_path, app_path, part_table_path,
-                                       head_mesh_control_path, head_root_path, head_native_material_path, clothing_path)
+                                       head_mesh_control_path, head_root_path, head_native_material_path, clothing_path,
+                                       body_native_material_path)
     result = overlay.prepare(game, private_reports, output, source, deps, replacement_report=appearance_path,
                              initial_appearance_report=app_path, part_table_report=part_table_path,
                              head_mesh_control_report=head_mesh_control_path, head_root_report=head_root_path,
-                             head_native_material_report=head_native_material_path, clothing_report=clothing_path)
+                             head_native_material_report=head_native_material_path, clothing_report=clothing_path,
+                             body_native_material_report=body_native_material_path)
     orientation.verify_snapshot(snapshot)
     if result["replacementPaths"] != replacement_paths(expected) or len(result["resources"]) != len(expected):
         raise ValueError("Prepared Steve package differs from its reviewed resource set")
@@ -331,10 +372,14 @@ def main():
                         help="Replace only the failed head-root PAMI with fixed original head material; requires --head-root-report and its descriptor/table controls")
     parser.add_argument("--clothing-report", type=Path,
                         help="Clear only the fixed initial app Armor prefabs; requires the complete original-head-material controls")
+    parser.add_argument("--body-native-material-report", type=Path,
+                        help="Replace only the body PAMI with its fixed original material; requires the complete empty-Armor controls")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cdmw-source", type=Path, default=ROOT / "build/cdmw-fixed-source")
     parser.add_argument("--deps", type=Path, default=ROOT / "build/cdmw-deps")
     args = parser.parse_args()
+    if args.body_native_material_report and not args.clothing_report:
+        parser.error("--body-native-material-report requires --clothing-report and all of its controls")
     if args.clothing_report and not args.head_native_material_report:
         parser.error("--clothing-report requires --head-native-material-report and all of its controls")
     if args.head_native_material_report:
@@ -357,7 +402,8 @@ def main():
         if not args.head_descriptor_report or not args.part_table_report:
             parser.error("--head-mesh-control-report requires --head-descriptor-report and --part-table-report")
     game = args.game_root or Path(json.loads((ROOT / "runtime/installation.json").read_text(encoding="utf-8-sig"))["gameRoot"])
-    output = args.output or (CLOTHING_OUTPUT if args.clothing_report else
+    output = args.output or (BODY_NATIVE_MATERIAL_OUTPUT if args.body_native_material_report else
+                            CLOTHING_OUTPUT if args.clothing_report else
                             HEAD_NATIVE_MATERIAL_OUTPUT if args.head_native_material_report else
                             NATIVE_HEAD_ROOT_OUTPUT if args.head_root_report else
                             NATIVE_HEAD_OUTPUT if args.head_mesh_control_report else
@@ -368,7 +414,7 @@ def main():
                      head_descriptor_path=args.head_descriptor_report, app_path=args.app_report,
                      part_table_path=args.part_table_report, head_mesh_control_path=args.head_mesh_control_report,
                      head_root_path=args.head_root_report, head_native_material_path=args.head_native_material_report,
-                     clothing_path=args.clothing_report)
+                     clothing_path=args.clothing_report, body_native_material_path=args.body_native_material_report)
     print(json.dumps({key: result[key] for key in ("directoryName", "replacementPaths", "packageAudit", "integration")}, indent=2))
 
 

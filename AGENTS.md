@@ -39,6 +39,12 @@ the earlier copy under Desktop/Git.
    当前可独立完成真实库存九格 HUD；角色、生命／饥饿、装备和工坊资格分别保留未完成。
    MC 四格人体护甲存储已接入 schema3 与桥接，只提供真实 ItemStack 转移／保存；
    nativeApplied／runtimeApplied=false，不等于人物穿戴、原装备禁用或攻击已经实现。
+   默认服装空Armor对照已实测：用户反馈原服装消失，但左手缺失、背部装备仍重叠、
+   头部过大；退出后已恢复，最新存档与完整MC保持。当前优先单独验证身体原字节
+   PAMI合同，沿用空Armor和其余资源，不同时猜测缩头、改皮肤或写装备存档。
+   身体原PAMI独立10项、完整包隔离事务28项检查通过，现已实际安装，当前有active
+   receipt／0041，等待用户手动进入反馈，之后仍须退出恢复；尚无身体实机结果。
+   人工服装反馈不能替代完整人物、动态装备禁止或动画验收。
 3. 完成后运行相关检查，在进度文件写明日期、命令、结果、证据及未验证项，再标记完成。
    只读探针运行成功不等于第四角色创建成功；构建成功不等于游戏内行为验证成功。
 4. 未达到验收标准时保留在进行中，记录具体障碍和下一项可执行检查，不能为了收尾
@@ -84,6 +90,7 @@ the earlier copy under Desktop/Git.
 | 背包 | MC 构建；`python tools/check_inventory.py` 使用独立测试世界；`python tools/check_inventory_bridge.py`；`python tools/check_inventory_ui.py`；原生构建和游戏内面板检查 |
 | MC 护甲存储／schema3 | MC 构建；`py -3.12 -B tools/check_equipment.py`、`check_inventory.py`、`check_block_states.py`顺序使用独立8768/25580世界；`check_equipment_bridge.py`及旧桥接检查；原生穿戴／属性／装备禁用另验 |
 | 原生装备表只读观测 | `py -3.12 -B tools/check_equipment_probe.py`；固定当前版本SHA、6个代码窗口、精确Client类型与owner回链、完整D0记录回读及双采样；实采仅主控，不能据此写回、禁止装备或声称恢复 |
+| 受控owner组件身份目录 | `py -3.12 -B tools/check_owner_components.py`；独立只读完整16字节目录及count×8有序成员、primary RTTI、双采样／同句柄进程身份；匿名槽不猜布局，登记成员不证明背部资源／owner回链／装备禁用；实采仅主控 |
 | 跨游戏方块同步 | `tools/check_bridge.py`；保存／重启改动再运行 `tools/check_restart.py` |
 | 持久同步／原生条件 | `py -3.12 -B tools/check_native_identity.py`、`check_native_reconcile.py`、`check_inventory_bridge.py`；原生条件运行 `check_native_session.py`、`check_native_objects.py` 并回建 ASI，相关实机往返见上一项；隔离检查不修改用户世界 |
 | 独立方块模型选择层 | `py -3.12 -B tools/check_native_block_models.py`；当前仅纯状态／证据范围匹配，未接默认桥接，不能替代实际安装、加载和显示验证 |
@@ -101,6 +108,7 @@ the earlier copy under Desktop/Git.
 | Steve 原生头共同父骨候选 | `py -3.12 -B tools/check_steve_native_head_root.py --rebuild`，封装后 `check_steve_probe.py --native-head-root --rebuild`；固定原生三 LOD 布局、仅 palette slot0→B_face_com122、完整 UV／权重／中立回放；仅覆盖私有头 PAC／材质，其他十一项保持，动画和实际位置须另验 |
 | Steve 原生头原字节材质对照 | `py -3.12 -B tools/check_steve_head_native_material.py --rebuild`；封装后 `check_steve_probe.py --head-native-material --rebuild`；严格六报告，保持失败共同父骨 PAC 及其余十二资源，仅换固定原生头 PAMI 的三变体／两draw完整字节；暂用原生纹理验证位置，不等于最终MC皮肤或装配修复 |
 | Steve 默认服装渲染对照 | `py -3.12 -B tools/check_steve_clothing_control.py --rebuild`；封装后 `check_steve_probe.py --clothing --rebuild`；严格七报告、14资源，在已通过头位置的13资源上仅增加固定00000 app的空Armor；保留Body/Head/Hair等外部XML及12行逆恢复，不等于全部动态装备禁止 |
+| Steve 原生身体原字节材质对照 | `py -3.12 -B tools/check_steve_body_native_material.py --rebuild`；封装后 `check_steve_probe.py --body-native-material --rebuild`；严格八报告、14资源，须完整空Armor控制，只换身体PAMI为50017字节原件；其余13项（含当前补偿PAC）保持，暂用原生纹理，左手／身体／动画另验 |
 | Steve 初始 app 引用 | `py -3.12 -B tools/check_steve_app.py --rebuild`；00000／00002 必须显式二选一，每报告仅改一份 app 的 Nude/Head Name；不得猜受控实例实际 app，不同时改两份 app |
 | 原生方块／皮肤候选 | Python 3.12 运行相应 prepare/check_native_block 或 prepare/check_steve_material；真实模板往返、几何／UV、独立纹理解码；资源留 ignored build |
 | Steve prefab 候选 | `py -3.12 -B tools/check_steve_prefab.py --rebuild`；真实模板单路径替换/逆向往返、其它对象与骨骼依赖保持；不是受控身体切换 |

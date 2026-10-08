@@ -38,7 +38,7 @@ MC 后台已部署 schema3、四格人体护甲存储与桥接，完整 ItemStac
 ## 最新实测与恢复：原生头材质对照
 
 新原字节头材质对照已实测，用户正常退出后核实实际进程结束并恢复；
-该次恢复时无active receipt／0041；现在已安装下方衣服对照。用户启动、进入和退出均手动完成，主控独占安装、采样
+该次恢复时无active receipt／0041；随后下方衣服对照也已实测恢复。用户启动、进入和退出均手动完成，主控独占安装、采样
 和恢复。该会话实例 `69188:134359096823476439` 已结束，不能复用旧PID／地址。
 
 - plan：`build/steve-head-native-material-probe-overlay`，13资源／严格6报告。
@@ -60,17 +60,42 @@ MC 后台已部署 schema3、四格人体护甲存储与桥接，完整 ItemStac
 用户要求先去除原服装模块，并确认“原本服装和mc的建模一直在重叠”。固定Macduff00000
 app仅清空Armor内12个默认／预览Prefab的可逆对照已经完成，保留外部XML及通过头位置
 的13资源。生成器10/10、完整14资源封装／事务28/28通过，并已核实实际游戏关闭后安装。
-**当前有active receipt／0041，衣服隐藏效果尚待用户手动进入反馈，之后须退出恢复。**
+实机反馈已取得，用户退出后实际恢复；该次恢复无active receipt／0041，现已安装下方身体对照。
 仅处理默认服装渲染，不删除装备存档、不冒称全部原游戏装备禁止。
 
 - plan：`build/steve-clothing-control-probe-overlay`，14资源／严格7报告。
 - plan SHA256：`6703890ac16748566f54b5dfd81ff95ca68ead3d2ba41e2b59602704cc0dc319`。
 - variant：`steve-kliff-original-material-empty-armor-part-table-v2`。
-- 收据：`2feb0ddf41b3488fba9eb226cf8fb672`，kind=`steve-mesh-parameters`，status=installed。
+- 收据：`2feb0ddf41b3488fba9eb226cf8fb672`，kind=`steve-mesh-parameters`，status=restored。
 - recorder：`build/record-steve-clothing-control-20261008.py`；同名runtime前缀。
-  before-install／installed各exit0，41安装文件、36存档／完整MC schema3/revision25／
-  原点／ASI保持。现已请求用户手动进入反馈原服装是否消失及MC身体／四肢位置。
-  当前不复用旧实例，收到进入后重新核实会话；退出恢复比较最新状态，阶段记录不可覆写。
+  五阶段各exit0，41安装文件／38恢复原文件、退出时36个最新存档、完整MC
+  schema3/revision25、原点／ASI保持。实例`95052:134359107220587726`已经结束。
+  用户反馈“原服装消失，左手没有了。后背背着的装备依旧存在并和身体重叠。头部过大”。
+  默认服装抑制人工通过，完整人物未通过；`...-visual-result.json`保存原话和证据绑定。
+  只读appearance双采样稳定，仍因原PAC声明空为notReady，不提升为模型／遮罩解码成功。
+
+当前有界复核左手实际几何／权重及身体材质合同、背部部件选择来源、头身真实比例。
+身体PAMI也从原生SkinnedMeshSkin改成Standard。新原字节身体材质候选10/10独立检查
+通过，严格8报告／14资源包已封装，完整事务28/28通过，已核实游戏关闭后实际安装。
+仅换完整原生身体PAMI，暂用原生贴图；PAC、骨骼、scale、shrink字段及其他13项保持。
+左手四LOD的几何／byte权重仍存在，官方皮肤没有仅左手透明的差异，故先检查材质。
+离线MC头／肩比例保持；待身体正常显示后再判断头部缩放，不按主观观感盲目减半。
+保留原字段／最新存档，不能把14条raw装备记录猜成已知物品或直接复制写回。
+
+当前身体材质对照：
+
+- plan：`build/steve-body-native-material-probe-overlay`，14资源／严格8报告，PAZ770800字节。
+- plan SHA：`fa1f38ec686644fdebeddd53ad09429aab87083495da12155b5b6f3248b8e341`。
+- variant：`steve-kliff-original-head-body-material-empty-armor-part-table-v2`。
+- 收据：`069425c3a6a0430fa9c576e3afe8f20b`，kind=`steve-mesh-parameters`，status=installed。
+- recorder：`build/record-steve-body-native-material-20261008.py`；同名runtime证据前缀。
+  before-install／installed均exit0，41安装文件、36存档、完整MC schema3/revision25、
+  原点和ASI保持。当前有active receipt／0041，已请求用户手动进入反馈左手／身体位置，
+  进入后保持运行供只读采样；尚无本轮实机结果，之后须实际退出再恢复。
+- 身体原PAMI50017字节、6变体×3draw完整SkinnedMeshSkin；其余13资源逐字保持。
+  新组件身份探针只读有序owner成员与primary RTTI，23项隔离检查通过，尚未实采，
+  不解释背部模型或禁装。进入后使用新PID及
+  `probe_owner_components.py --pid <当前PID> --output runtime/steve-body-native-material-20261008-owner-components.json`。
 
 服装优先之后再接回MC头贴图；已固定三个baseColor路径span及包内Steve DDS，对应
 官方64×64 PNG和原编码，纯内存逆替换通过；尚未写皮肤候选或实测。原生装备
