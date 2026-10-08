@@ -4,6 +4,57 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
+## 2026-10-08 最新：头UV对照安装与动作入口排查
+
+上一头baseColor包已恢复。本轮严格10报告／14资源UV封装完成，固定九报告本地包为基线，
+仅头PAC翻144个主V字段；其他13资源完整编码、PAMI、DDS与几何／骨骼保持，原metadata和
+PATHC保持，新PAMT／PAPGT按实际CRC重建。计划SHA为
+`b27484b952059015920635a23cf489a2881d23ba86e554b0b80f7157a03e7c10`。
+`check_steve_head_uv_overlay.py --rebuild` 32/32通过（552.366秒），含真实本地重建、完整
+隔离安装／恢复／中断回滚、最新存档保留及篡改拒绝；九个旧canonical计划准入通过。
+`check_steve_head_material_probe.py`扩展至分别固定两计划SHA／variant，46/46通过
+（82.870秒）；原生别名、16KiB上限与ASI不变。
+
+主控核实游戏退出、无旧active后实际安装，收据`f4541cd031434b238e22b637efe64de2`现为restored。
+`record-steve-head-uv-20261008.py`五阶段均exit0，41项安装文件／38恢复原文件、退出最新36存档、
+完整MC schema3/revision25／选择格1、原点与ASI保持。用户反馈“五官仍不正确，头的位置正常”，
+翻V未解决五官。本次固定头PAMI读取首次实采成功，16134字节、flags50、stored1694、
+FNV 3a4d0e960a22bdf3及head16匹配；ticket1，一次提交／一次读取，handler释放，同实例与MC保持。
+仅证明引擎文件解析可读，不证明renderer选材质或DDS采样。用户正常退出后已实际恢复，
+无active／0041；同名runtime的visual-result/material-read和五阶段记录保留，旧会话不可复用。
+当前现场以[current-state.md](current-state.md)为准，下文历史收据状态不代表当前安装。
+
+动作接口有界磁盘审计固定EXE、13个代码窗口和5个历史窗口字节核对；排除旧coop的两个
+指令内部RVA，未调用／写入。下一身份候选为Skinned+1C0的未命名owner-keyed对象：静态
+vtable／弱owner／原owner回链可约束，palette、单位、ABI及线程未证明。只读工具已实现，
+`check_owner_skinned_object.py`主控复跑23/23通过（1.089秒），真实完整fixture走受控链／RTTI、
+11固定代码窗口和双采样末回读，不mock核心采样。每样本新增语义读取最多97字节，64字节
+对象头只解释0/15/30/38，其余仅保存原始字节；同handle中末身份和EXE复核失败清成功标志。
+尚未实采，无原生调用／写入，
+不能将该对象命名为动作控制器或宣称MC动作应用。忽略证据
+`build/mc-pose-native-audit-20261008/native-pose-prerequisite-report.json` SHA为
+`7c4b451b95b2dd67e383dfb59b3cb2d76ecb6e500dc038f9299a5d5a6ca07b2e`。
+后续只跟进两个直接callee窗口，确认常量8属于新回调wrapper+0x20指针容器的reserve容量，
+按requested×8分配／逐指针搬移，不是骨骼数或线程编号；不扩大只读工具范围。
+`pose-layout-followup.json` SHA `e03c8cd4021847a8bbea3d7d41f14deca9ce53bf6240330848e3a6501464d08f`。
+
+头材质离线审计确认每LOD的同一main draw为48顶点／72索引：前36索引只引用base0..23，
+后36只引用hat24..47；EyeCover计数为0。当前DDS六个hat区域共6144texel全RGBA0，六个base
+区域各1024texel全alpha255，含眼鼻嘴。原生SkinWrinkle是否discard透明alpha未知，故“帽层
+遮脸”只是假设；下一个单变量候选会去掉透明hat索引，保留base／所有顶点记录／UV／材质。
+离线审计`build/steve-head-render-audit-20261008/report.json` SHA为
+`92c48be6d63799f969829596062a6fcae3b58d0ec90fa75cc6631be8654b82c2`，14固定输入回读通过。
+新增`prepare_steve_head_visible_layer.py`与checker，唯一改动为每LOD删36个hat索引／72字节，
+计数72→36、section2064→1992及位置镜像更新，所有48顶点记录／内头索引／UV／皮肤／PAMI／DDS
+保持，保守bbox保留，插回固定216字节及逆字段逐字恢复原PAC。真实三LOD CDMW读回、固定官方
+MC head／hat UV和独立BC3确认，`check_steve_head_visible_layer.py --rebuild`12/12通过（10.781秒）。
+产物为ignored `build/steve-head-visible-layer`，报告34472字节SHA
+`6d68aa3eff9428fe9f7c63838fdbed10097a4c17ef0da940648b24ea972e6501`，PAC96505字节SHA
+`7c222d1cb2d475d7e487c8cad87967afc63d27a1fa14b99d35c62a24f762d9ca`；单PAC／flags1，全部实机
+integration字段false。未封装／安装，下一步严格11报告／14资源完整事务检查与新计划材质绑定。
+
+## 此前现场记录
+
 本轮现场状态：2026-10-08 十三资源注册 v1 包进入游戏后闪退，收据
 `90cdf0fca1ce4095aedc43d3515a1525` 已实际恢复；38 项原始哈希匹配，无 0041／active
 receipt，36 个最新存档、完整 MC 状态、原点及 ASI 保持。用户随后确认恢复后同一

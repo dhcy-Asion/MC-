@@ -22,6 +22,27 @@ MC 来源比对，再验证在红沙中的实时控制。旧中立补偿、原�
 无World／tick。独立JVM重建9/9通过，nativeApplied和animationSystemComplete仍为false；
 完整玩家状态、挥击／蹲伏／持物和红沙受控姿态应用另验。
 
+头UV对照新增严格10报告／14资源封装：从固定九报告本地包只换一个头PAC，保留其他
+13项编码、PAMI和DDS，元数据按实际归档CRC重建；安装仍走相同所有权／关闭游戏／
+源索引／恢复事务。头材质只读客户端分别绑定两版完整计划SHA与variant，同一个固定
+别名读取16134字节PAMI，拒绝跨计划收据。文件可读不证明渲染器实际选材质或五官正确。
+
+固定EXE的下一只读候选收敛为受控Scene→精确Skinned→`+0x1C0`未命名owner-keyed对象。
+磁盘构造／查找证据显示候选vtable RVA `0x5B4D168`、`+0x30`弱owner、`+0x38`原owner；
+这些仅用于回链身份核验，不是动画类型或姿态数组证明。骨骼palette边界、单位、ABI和
+线程仍未知。旧coop记录的`0x2712090`及`0x2712330`在本版本位于已解码指令内部，
+已排除为函数入口；不能沿用或用全局evaluator替代受控owner身份。
+
+`probe_owner_skinned_object.py`已实现上述只读身份范围：复用完整fresh受控链，固定11个
+代码窗口及vtable首槽，新增六个语义跨度合计最多97字节；只解释64字节对象头的
+0／15／30／38偏移。整个依赖集含RTTI、参数头和完整成员表末回读，两次全链采样及
+同handle PID／创建时间／module／存活门禁；出现变化清除两次采样成功标志。外部只读
+不是原子快照，未保持对象生命周期。23/23离线检查通过，尚未实采；不遍历palette、
+不调用／写入，nativeApplied和animationSystemComplete始终为false。
+后续固定直接callee审计表明`+0x110`参与回调wrapper的父关联；常量8进入新wrapper+0x20
+指针容器的requested capacity，按8字节指针搬移并维护引用计数，不将逻辑count设为8。
+不能把该分支解释为骨骼数、线程ID或pose数组；也不能据此排除整个对象与动画间接相关。
+
 原生资源只读诊断新增固定steve_head_pami别名；独立客户端绑定已准入的完整九报告计划、
 active收据、实际41文件及同EXE实例／完整MC，16KiB／flags50、队列／TTL／handler门禁保持。
 成功只表示固定文件可解析且字节匹配，不能证明renderer选择材质或DDS采样。

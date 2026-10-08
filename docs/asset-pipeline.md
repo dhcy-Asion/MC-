@@ -1148,14 +1148,36 @@ PAC96721字节、flags1、新SHA `c0df7b6e6fbe90038b8e277839ef59b26aa4cbba560f30
 独立重建11/11通过；独立MC accessor／PAR／half映射、BC3脸部特征区域、逆恢复、非V／
 改hash篡改和输出保护覆盖。直接DDS行序采样旧脸区域全透明，翻V后的区域有眼鼻嘴；
 CDMW本身也翻V，该约定不能排除shader内部再反V。integration全false，主UV选择、
-shader／alpha／normalframe、最终MC五官未验。只有一个PAC候选，未接14资源／严格10报告
-封装，不可单独安装；整包其他13项保持仍须封装检查证明。
+shader／alpha／normalframe、最终MC五官未验。孤立PAC不可单独安装；其14资源／严格10报告
+封装见下节，实际五官仍需人工验证。
+
+## 头UV十报告可逆封装（2026-10-08）
+
+`prepare_steve_head_uv_overlay.py` 从固定九报告本地计划29b813…组合，不读取游戏元数据。
+只有头PAC从182fc…替换为c0df7…；另外13项完整资源行、编码payload、flags、orig_size保持。
+metadata-before与已注册纹理PATHC逐字保持，PAMT与PAPGT按实际CRC重建；全归档逐字重建
+排除额外条目及尾部数据。候选固定56790…，新`headUvComposition`保存基线及当前变更范围。
+
+```powershell
+py -3.12 -X utf8 -B tools/prepare_steve_head_uv_overlay.py
+py -3.12 -X utf8 -B tools/check_steve_head_uv_overlay.py --rebuild
+# 仅主控完成检查、核实游戏退出及原资源基线后安装
+py -3.12 -X utf8 -B tools/install_steve_probe.py --install --plan build/steve-head-uv-probe-overlay
+```
+
+默认输出拒绝覆写，为`build/steve-head-uv-probe-overlay`，14资源／严格10报告，PAZ770800字节。
+计划SHA为`b27484b952059015920635a23cf489a2881d23ba86e554b0b80f7157a03e7c10`；variant为
+`steve-kliff-original-head-body-material-empty-armor-head-basecolor-head-uv-part-table-v2`。
+安装器对10报告启用独立完整重建校验，原九报告及其他历史模式保留。源34索引、关闭游戏、
+active收据互斥、所有权、存档备份及恢复门禁不变。实际检查与安装终态见
+[current-state.md](current-state.md)；封装成功不证明MC五官、shader采样或头比例。
 
 ## 固定头PAMI文件读取诊断（2026-10-08）
 
-新增 `tools/probe_steve_head_material.py` 与独立checker；在已准入九报告包实际安装、游戏
+新增 `tools/probe_steve_head_material.py` 与独立checker；在已准入九报告或十报告包实际安装、游戏
 运行且固定EXE／实例成立时，读取唯一别名steve_head_pami，物理路径含两层head/head。
 完整固定plan／14资源/PAMI及active收据／marker／41实际安装与原索引文件必须匹配。
+两计划分别固定完整SHA、variant和报告集合，不允许串用收据；十报告通过完整新封装校验。
 保留16KiB双native尺寸、flags50、队列／TTL／handler释放，POST持久化且不重发，完整MC
 状态前后核对；不提供任意路径、DDS／PAC读取或外观刷新。
 
@@ -1163,8 +1185,45 @@ shader／alpha／normalframe、最终MC五官未验。只有一个PAC候选，�
 py -3.12 -B tools/check_steve_head_material_probe.py
 # 仅主控在新的真实安装／运行会话中执行，证据必须用新路径
 py -3.12 -B tools/probe_steve_head_material.py --output runtime/steve-head-material-read-new-session.json
+# 十报告UV对照必须显式指定其计划
+py -3.12 -B tools/probe_steve_head_material.py --plan build/steve-head-uv-probe-overlay --output runtime/steve-head-uv-material-read-new-session.json
 ```
 
-隔离客户端21/21、原生23/23、旧客户端27/27通过，ASI已构建并更新实际安装及发布artifact。
-此诊断尚未实采；fileResolvableReadMatched只能证明引擎文件解析读取字节匹配，不能证明
-renderer实际选择该PAMI或采样DDS，MC皮肤和原生shader语义仍须实测。
+最初九报告隔离客户端21/21、原生23/23、旧客户端27/27通过，ASI已构建并更新实际安装及发布artifact。
+本次扩展九／十报告客户端后46/46通过，82.870秒，覆盖跨计划／variant／收据拒绝及未提交保证；
+两计划PAMI相同，原生别名与已安装ASI未变。
+此诊断已在十报告UV对照中首次实采成功：16134字节、flags50、stored1694、head16及
+FNV `3a4d0e960a22bdf3`匹配，ticket1一次提交／读取，handler释放，前后同实例和完整MC保持。
+用户仍反馈五官不正确、头位置正常；之后正常退出并恢复，五阶段exit0，无active／0041。
+fileResolvableReadMatched只能证明引擎文件解析读取字节匹配，不能证明renderer实际选择
+该PAMI或采样DDS，MC皮肤和原生shader语义仍须实测。
+
+## 固定透明帽层的单变量几何候选（2026-10-08）
+
+当前头main draw每LOD同时包含base24顶点与hat24顶点，各36索引；EyeCover没有几何。
+独立BC3核对得到六个hat区域共6144texel全RGBA0，六个base区域各1024texel全alpha255，
+原生SkinWrinkle的alpha／混合规则没有实机证据。因此下一控制只移除固定Steve透明帽面，
+不把遮挡假设记录为根因，也不改变材质参数。
+
+```powershell
+py -3.12 -X utf8 -B tools/prepare_steve_head_visible_layer.py
+py -3.12 -X utf8 -B tools/check_steve_head_visible_layer.py --rebuild
+```
+
+候选基于固定UV头PAC c0df…、PAMI cc86…、DDS653…及56790…报告。每LOD删除末36个
+hat索引（72字节），main计数72→36、PAR section2064→1992，同步三LOD的绝对位置镜像；
+全部48×40字节顶点记录、前36个base索引、palette、UV、皮肤权重、法线、切线、边界及材质
+保持。总长度96721→96505，恢复时插回固定216字节索引尾并逆转字段，逐字回到c0df…。
+保留原边界为保守包围盒；没有通过退化三角形模拟删除，也没有留下未说明的section间隙。
+
+默认输出`build/steve-head-visible-layer`，报告`steve-head-visible-layer-report.json`；
+variant为`steve-head-fixed-transparent-hat-triangles-removed-v1`，单一PAC／flags1，新SHA为
+`7c222d1cb2d475d7e487c8cad87967afc63d27a1fa14b99d35c62a24f762d9ca`。
+生成时核对固定官方glTF的head／hat UV及各自canonical quad索引，并用固定CDMW读回三LOD；
+不声称PAC索引直接等于glTF顶点重排后的三角映射。pureloader从四份固定复制来源完整重建
+报告／候选，返回绝对Path快照，不读游戏或调用CDMW。实测、材质采样与安装字段全false。
+尚需接入严格11报告／14资源封装，证明其他13资源保持并检查安装／恢复后才能安装。
+canonical报告34472字节，SHA `6d68aa3eff9428fe9f7c63838fdbed10097a4c17ef0da940648b24ea972e6501`。
+独立重建12/12通过（10.781秒），覆盖全部12元数据字段（其中2项位置未变）、三LOD原始
+记录及索引边界、独立BC3／MC accessor、真实CDMW及保守bbox、完整逆恢复、来源／manifest
+篡改、输出保护和源变化拒绝；纯准入返回六个绝对Path快照。

@@ -1,6 +1,6 @@
 """Read only the fixed Steve head material through the native file resolver.
 
-Requires the canonical nine-report plan and its currently installed receipt.
+Requires an explicitly pinned plan and its currently installed receipt.
 This diagnoses resolvable bytes, never renderer selection or texture sampling.
 No install, appearance apply, inventory mutation or arbitrary resource is exposed.
 """
@@ -26,6 +26,7 @@ ROOT = base.ROOT
 RESOURCE = "steve_head_pami"
 VIRTUAL_PATH = "character/modelproperty/1_pc/1_phm/head/head/crimsonmc_steve_head_1_21_1.pac_xml"
 PLAN_SHA256 = "29b813224b362f8d2e751a8ae31968846a55d96410f290ffd10deb00322078e5"
+UV_PLAN_SHA256 = "b27484b952059015920635a23cf489a2881d23ba86e554b0b80f7157a03e7c10"
 PAYLOAD_SHA256 = "cc86b387583430d7e2d8ef136db965dd39d3e5754501626b7c82fa606b2abf3f"
 PAYLOAD_SIZE = 16134
 VARIANT = composition.VARIANT
@@ -37,6 +38,16 @@ UNTOUCHED_FILES = {
 }
 
 
+def plan_contract(digest: str):
+    """Only individually reviewed complete plans may reach the same alias."""
+    if digest == PLAN_SHA256:
+        return VARIANT, composition.COMPOSITION_REPORT_NAMES
+    if digest == UV_PLAN_SHA256:
+        import prepare_steve_head_uv_overlay as uv_composition
+        return uv_composition.VARIANT, uv_composition.COMPOSITION_REPORT_NAMES
+    raise ProbeError("Expected a pinned complete Steve head material probe plan")
+
+
 def fixed_read(path: Path, maximum: int) -> bytes:
     return base.read_file(path, maximum)
 
@@ -46,10 +57,10 @@ def load_assets(plan: Path = composition.DEFAULT_OUTPUT) -> dict:
     plan = base.build_path(plan)
     report_path = installer.transaction.target(plan, composition.REPORT_NAME)
     raw = fixed_read(report_path, base.MAX_RESPONSE)
-    if hashlib.sha256(raw).hexdigest() != PLAN_SHA256:
-        raise ProbeError("Expected the canonical nine-report Steve head base-color plan")
+    plan_sha = hashlib.sha256(raw).hexdigest()
+    variant, report_names = plan_contract(plan_sha)
     report = base.strict_json(raw)
-    names = composition.admitted_report_paths(report.get("candidateReports"), composition.COMPOSITION_REPORT_NAMES)
+    composition.admitted_report_paths(report.get("candidateReports"), report_names)
     rows = report.get("resources")
     if (not isinstance(rows, list) or len(rows) != 14
             or len({row.get("virtualPath") for row in rows if isinstance(row, dict)}) != 14):
@@ -61,15 +72,16 @@ def load_assets(plan: Path = composition.DEFAULT_OUTPUT) -> dict:
     composition.fixed_cdmw(ROOT / "build/cdmw-fixed-source", ROOT / "build/cdmw-deps")
     admitted = installer.load_plan(plan)
     payload = admitted["payloads"][VIRTUAL_PATH]
-    if (admitted["reportSha256"] != PLAN_SHA256 or admitted["probeVariant"] != VARIANT
+    if (admitted["reportSha256"] != plan_sha or admitted["probeVariant"] != variant
             or admitted["name"] != "0041" or len(payload) != PAYLOAD_SIZE
             or hashlib.sha256(payload).hexdigest() != PAYLOAD_SHA256):
         raise ProbeError("Admitted head plan identity or exact material bytes differ")
-    paths = {report_path: PLAN_SHA256}
+    paths = {report_path: plan_sha}
     paths.update({installer.build_path(path): digest for path, digest in report["candidateReports"].items()})
     paths.update({installer.transaction.target(plan, path): digest for path, digest in report["files"].items()})
     paths.update({installer.build_path(row["localFile"]): row["sha256"] for row in rows})
     assets = {"plan": plan, "report": report, "sourceHashes": paths,
+              "planSha256": plan_sha, "probeVariant": variant,
               "resource": {"resource": RESOURCE, "path": VIRTUAL_PATH,
                            "sha256": PAYLOAD_SHA256, **base.summary(payload)}}
     verify_assets(assets)
@@ -77,6 +89,16 @@ def load_assets(plan: Path = composition.DEFAULT_OUTPUT) -> dict:
 
 
 def verify_assets(assets: dict) -> None:
+    variant, names = plan_contract(assets["planSha256"])
+    if variant != assets["probeVariant"]:
+        raise ProbeError("Pinned plan and probe variant do not belong together")
+    composition.admitted_report_paths(assets["report"].get("candidateReports"), names)
+    manifest = installer.transaction.target(assets["plan"], composition.REPORT_NAME)
+    raw = fixed_read(manifest, base.MAX_RESPONSE)
+    if (hashlib.sha256(raw).hexdigest() != assets["planSha256"]
+            or base.strict_json(raw) != assets["report"]
+            or assets["sourceHashes"].get(manifest) != assets["planSha256"]):
+        raise ProbeError("Admitted plan identity or parsed manifest changed")
     for path, digest in assets["sourceHashes"].items():
         base.native.check_links(path)
         if not path.is_file() or base.native.file_hash(path) != digest:
@@ -85,6 +107,9 @@ def verify_assets(assets: dict) -> None:
 
 def read_receipt(assets: dict, state_root: Path = ROOT) -> dict:
     """Read and bind current installation ownership; never restore or lock it."""
+    variant, _ = plan_contract(assets["planSha256"])
+    if assets["probeVariant"] != variant:
+        raise ProbeError("Active scope has an inconsistent plan and variant")
     installation_path = installer.transaction.target(state_root, "runtime/installation.json")
     receipt_path = installer.transaction.target(state_root, installer.transaction.RECEIPT)
     installation_raw = fixed_read(installation_path, base.MAX_RESPONSE)
@@ -95,11 +120,11 @@ def read_receipt(assets: dict, state_root: Path = ROOT) -> dict:
     base.native.check_links(game)
     if (not game.is_absolute() or not game.is_dir() or receipt.get("format") != "crimsonmc_asset_probe_v1"
             or receipt.get("owner") != installer.transaction.STEVE_OWNER or receipt.get("probeKind") != installer.KIND
-            or receipt.get("status") != "installed" or receipt.get("probeVariant") != VARIANT
+            or receipt.get("status") != "installed" or receipt.get("probeVariant") != assets["probeVariant"]
             or not isinstance(receipt.get("id"), str) or not re.fullmatch(r"[0-9a-f]{32}", receipt["id"])
             or Path(receipt.get("gameRoot", "")).resolve() != game.resolve()
             or Path(receipt.get("plan", "")).resolve() != assets["plan"].resolve()
-            or receipt.get("planSha256") != PLAN_SHA256 or receipt.get("directoryName") != "0041"
+            or receipt.get("planSha256") != assets["planSha256"] or receipt.get("directoryName") != "0041"
             or receipt.get("sourceIndexes") != assets["report"]["sourceIndexes"]
             or receipt.get("untouchedGameFiles") != UNTOUCHED_FILES
             or receipt.get("absentOptionalMountedDirectories") != assets["report"]["absentOptionalMountedDirectories"]):
@@ -107,7 +132,7 @@ def read_receipt(assets: dict, state_root: Path = ROOT) -> dict:
     expected_files = {"0041/0.pamt": assets["report"]["files"]["package/0041/0.pamt"],
                       "0041/0.paz": assets["report"]["files"]["package/0041/0.paz"]}
     marker_relative = "0041/" + installer.transaction.MARKER
-    marker = {"owner": installer.transaction.STEVE_OWNER, "id": receipt["id"], "planSha256": PLAN_SHA256}
+    marker = {"owner": installer.transaction.STEVE_OWNER, "id": receipt["id"], "planSha256": assets["planSha256"]}
     marker_path = installer.transaction.target(game, marker_relative)
     marker_raw = fixed_read(marker_path, base.MAX_RESPONSE)
     if base.strict_json(marker_raw) != marker:
@@ -128,8 +153,8 @@ def read_receipt(assets: dict, state_root: Path = ROOT) -> dict:
             raise ProbeError("Active installed file bytes differ: " + path)
     if (game / ".cdmw").exists():
         raise ProbeError("An external resource override is active")
-    return {"id": receipt["id"], "kind": installer.KIND, "variant": VARIANT,
-            "planSha256": PLAN_SHA256, "gameRoot": str(game.resolve()),
+    return {"id": receipt["id"], "kind": installer.KIND, "variant": assets["probeVariant"],
+            "planSha256": assets["planSha256"], "gameRoot": str(game.resolve()),
             "receiptSha256": hashlib.sha256(receipt_raw).hexdigest(),
             "installationSha256": hashlib.sha256(installation_raw).hexdigest(),
             "checkedInstalledFileHashes": checks}
@@ -202,7 +227,7 @@ class HeadProbe(base.ResourceProbe):
         expected = assets["resource"]
         report = {"schemaVersion": 1, "project": PROJECT, "runId": uuid.uuid4().hex,
                   "startedUtc": dt.datetime.now(dt.timezone.utc).isoformat(), "phase": "preflight",
-                  "sourcePlan": str(assets["plan"]), "sourcePlanSha256": PLAN_SHA256, "probeVariant": VARIANT,
+                  "sourcePlan": str(assets["plan"]), "sourcePlanSha256": assets["planSha256"], "probeVariant": assets["probeVariant"],
                   "expectedResource": expected, "result": None, "fileResolvableReadMatched": False,
                   "gameInstanceUnchanged": False, "mcStateUnchanged": False, "installedContextUnchanged": False,
                   "success": False, "rendererMaterialSelected": False, "textureSamplingVerified": False,

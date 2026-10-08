@@ -124,9 +124,11 @@ class FakeHTTP:
 
 
 class HeadMaterialChecks(unittest.TestCase):
+    plan = probe.composition.DEFAULT_OUTPUT
+
     @classmethod
     def setUpClass(cls):
-        cls.assets = probe.load_assets()
+        cls.assets = probe.load_assets(cls.plan)
         row = next(row for row in cls.assets["report"]["resources"] if row["virtualPath"] == probe.VIRTUAL_PATH)
         cls.payload = probe.installer.build_path(row["localFile"]).read_bytes()
         cls.root = tempfile.TemporaryDirectory(prefix="steve-head-material-check-", dir=probe.ROOT / "runtime")
@@ -168,7 +170,7 @@ class HeadMaterialChecks(unittest.TestCase):
         self.identity = {"pid": 42123, "creationTime100ns": "134051756000000000",
                          "imagePath": str(self.game / "bin64/CrimsonDesert.exe"),
                          "imageSha256": probe.base.native.EXE_SHA256, "access": "PROCESS_QUERY_LIMITED_INFORMATION"}
-        marker = {"owner": probe.installer.transaction.STEVE_OWNER, "id": "a" * 32, "planSha256": probe.PLAN_SHA256}
+        marker = {"owner": probe.installer.transaction.STEVE_OWNER, "id": "a" * 32, "planSha256": self.assets["planSha256"]}
         marker_raw = encoded(marker)
         (self.game / "0041/.crimsonmc-asset-probe-owner.json").write_bytes(marker_raw)
         for name in ("0.pamt", "0.paz"):
@@ -179,8 +181,8 @@ class HeadMaterialChecks(unittest.TestCase):
                  "0041/0.paz": self.assets["report"]["files"]["package/0041/0.paz"],
                  "0041/.crimsonmc-asset-probe-owner.json": probe.base.native.sha256(marker_raw)}
         self.receipt = {"format": "crimsonmc_asset_probe_v1", "owner": marker["owner"], "id": marker["id"],
-                        "probeKind": probe.installer.KIND, "probeVariant": probe.VARIANT, "status": "installed",
-                        "gameRoot": str(self.game), "plan": str(self.assets["plan"]), "planSha256": probe.PLAN_SHA256,
+                        "probeKind": probe.installer.KIND, "probeVariant": self.assets["probeVariant"], "status": "installed",
+                        "gameRoot": str(self.game), "plan": str(self.assets["plan"]), "planSha256": self.assets["planSha256"],
                         "directoryName": "0041", "installedFiles": files,
                         "metadataAfter": {"meta/" + name: self.assets["report"]["files"]["metadata-after/" + name]
                                           for name in ("0.pathc", "0.papgt")},
@@ -215,6 +217,8 @@ class HeadMaterialChecks(unittest.TestCase):
         self.assertEqual(report["expectedResource"], {"resource": probe.RESOURCE, "path": probe.VIRTUAL_PATH,
                                                     "sha256": probe.PAYLOAD_SHA256, **digest(self.payload)})
         self.assertEqual(self.fake.posts, 1)
+        self.assertEqual(report["sourcePlanSha256"], self.assets["planSha256"])
+        self.assertEqual(report["probeVariant"], self.assets["probeVariant"])
 
     def test_02_exact_api_allowlist_no_arbitrary_paths_or_mc_writes(self):
         api, mc = probe.HeadAPI(), probe.HeadAPI("mc")
@@ -391,6 +395,33 @@ class HeadMaterialChecks(unittest.TestCase):
         self.receipt_path.write_bytes(encoded(receipt))
         with self.assertRaises(probe.ProbeError):
             probe.read_receipt(self.assets, self.folder)
+
+    def test_22_two_pinned_plans_cannot_cross_receipts_or_variants(self):
+        other_sha = (probe.UV_PLAN_SHA256 if self.assets["planSha256"] == probe.PLAN_SHA256
+                     else probe.PLAN_SHA256)
+        other_variant, _ = probe.plan_contract(other_sha)
+        for mutation in ({"planSha256": other_sha}, {"probeVariant": other_variant},
+                         {"planSha256": other_sha, "probeVariant": other_variant}):
+            with self.subTest(fields=mutation):
+                self.receipt_path.write_bytes(encoded({**self.receipt, **mutation}))
+                with self.assertRaises(probe.ProbeError):
+                    probe.read_receipt(self.assets, self.folder)
+        with self.assertRaises(probe.ProbeError):
+            probe.verify_assets({**self.assets, "probeVariant": other_variant})
+        with self.assertRaises(probe.ProbeError):
+            probe.plan_contract("0" * 64)
+
+    def test_23_swapped_plan_manifest_blocks_post(self):
+        other_sha = (probe.UV_PLAN_SHA256 if self.assets["planSha256"] == probe.PLAN_SHA256
+                     else probe.PLAN_SHA256)
+        other_variant, _ = probe.plan_contract(other_sha)
+        assets = {**self.assets, "planSha256": other_sha, "probeVariant": other_variant}
+        self.assertFalse(self.run_probe(assets=assets)["success"])
+        self.assertEqual(self.fake.posts, 0)
+
+
+class HeadUvMaterialChecks(HeadMaterialChecks):
+    plan = probe.ROOT / "build/steve-head-uv-probe-overlay"
 
 
 if __name__ == "__main__":

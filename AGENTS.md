@@ -58,6 +58,11 @@ the earlier copy under Desktop/Git.
    正确Steve五官，MC头皮肤未通过；同会话in-world文件核对通过，render-input双采样
    稳定但notReady，不能证明材质／DDS实际读取。正常退出后已核实进程结束并恢复，
    38项原文件、退出最新36存档／完整MC／原点／ASI保持，终态见current-state。
+   下一头UV十报告包已完成32/32隔离重建／事务检查并实测，f4541c…现为restored；
+   用户确认五官仍不正确、头位置正常。相对九报告只改144个主V字段，其他13项保持；
+   双计划材质读取客户端46/46通过，首次引擎PAMI读取16134字节／flags50及摘要匹配，
+   不证明renderer选择。五阶段exit0，38原文件、退出最新36存档／MC保持，无active／0041；
+   后续检查渲染材质和通道，不重复相同UV对照，详见current-state。
    已有active、关闭游戏、原始元数据与索引门禁均不得绕过。
    人工服装和身体姿势反馈不能替代完整人物、头比例、MC皮肤、动态装备禁止或MC动作验收。
 3. 完成后运行相关检查，在进度文件写明日期、命令、结果、证据及未验证项，再标记完成。
@@ -109,6 +114,7 @@ the earlier copy under Desktop/Git.
 | MC 护甲存储／schema3 | MC 构建；`py -3.12 -B tools/check_equipment.py`、`check_inventory.py`、`check_block_states.py`顺序使用独立8768/25580世界；`check_equipment_bridge.py`及旧桥接检查；原生穿戴／属性／装备禁用另验 |
 | 原生装备表只读观测 | `py -3.12 -B tools/check_equipment_probe.py`；固定当前版本SHA、6个代码窗口、精确Client类型与owner回链、完整D0记录回读及双采样；实采仅主控，不能据此写回、禁止装备或声称恢复 |
 | 受控owner组件身份目录 | `py -3.12 -B tools/check_owner_components.py`；独立只读完整16字节目录及count×8有序成员、primary RTTI、双采样／同句柄进程身份；匿名槽不猜布局，登记成员不证明背部资源／owner回链／装备禁用；实采仅主控 |
+| 受控Skinned未命名对象身份 | `py -3.12 -B tools/check_owner_skinned_object.py`；精确受控Scene／Skinned、11固定代码窗口及owner回链，每样本最多新增97字节语义读取、统一依赖末回读／双采样／同handle身份；23/23离线通过，未实采，不解释pose／palette，不调用／写入 |
 | 跨游戏方块同步 | `tools/check_bridge.py`；保存／重启改动再运行 `tools/check_restart.py` |
 | 持久同步／原生条件 | `py -3.12 -B tools/check_native_identity.py`、`check_native_reconcile.py`、`check_inventory_bridge.py`；原生条件运行 `check_native_session.py`、`check_native_objects.py` 并回建 ASI，相关实机往返见上一项；隔离检查不修改用户世界 |
 | 独立方块模型选择层 | `py -3.12 -B tools/check_native_block_models.py`；当前仅纯状态／证据范围匹配，未接默认桥接，不能替代实际安装、加载和显示验证 |
@@ -116,8 +122,10 @@ the earlier copy under Desktop/Git.
 | 九格 HUD | `python tools/check_hotbar_ui.py`；原生库存解码、桥接检查；原生构建／可重建源码及游戏内关闭／打开 F8、断线恢复验证 |
 | Steve 离线资产 | `python tools/build_steve_asset.py`；`python tools/check_steve_asset.py`；产物留 ignored build，不安装为原生角色 |
 | MC离线动作姿态基准 | `py -3.12 -B tools/check_steve_pose.py --rebuild`；固定官方client／21类／46外部依赖与Java工具，真实PlayerEntityModel求值站立／转头／行走，各40tick＋endpoint；明确ArmorStandEntity夹具，非Player、无World／tick，nativeApplied=false；未知动作和原生控制另验 |
-| 固定Steve头材质读取诊断 | `py -3.12 -B tools/check_steve_head_material_probe.py`、`check_native_resources.py`；仅steve_head_pami固定别名／16KiB／flags50，完整九报告计划、active收据、实际41文件、EXE实例与MC状态门禁；读取匹配不证明renderer选择或MC皮肤；实采仅主控 |
-| Steve头主UV方向单变量候选 | `py -3.12 -B tools/check_steve_head_uv_control.py --rebuild`；固定当前头PAC／PAMI／DDS／报告，只翻三LOD共144个主UV V half字段，逐字逆恢复，独立MC accessor／BC3区域核对；未封装／安装，shader反V与实机皮肤另验 |
+| 固定Steve头材质读取诊断 | `py -3.12 -B tools/check_steve_head_material_probe.py`、原生变化时`check_native_resources.py`；仅steve_head_pami固定别名／16KiB／flags50，分别固定九／十报告计划SHA和variant、active收据、实际41文件、EXE实例与MC状态门禁；客户端46/46通过，读取匹配不证明renderer选择或MC皮肤；实采仅主控 |
+| Steve头主UV方向单变量候选 | `py -3.12 -B tools/check_steve_head_uv_control.py --rebuild`；固定当前头PAC／PAMI／DDS／报告，只翻三LOD共144个主UV V half字段，逐字逆恢复，独立MC accessor／BC3区域核对；shader反V与实机皮肤另验 |
+| Steve头UV十报告封装 | `py -3.12 -B tools/check_steve_head_uv_overlay.py --rebuild`；固定九报告本地计划，仅头PAC改变，其他13项编码／flags／orig_size保持；原始metadata／PATHC保持，PAMT及PAPGT按实际CRC重建，严格10报告完整准入；实际安装／恢复与皮肤结果见current-state |
+| Steve固定透明帽层候选 | `py -3.12 -B tools/check_steve_head_visible_layer.py --rebuild`；固定UV PAC／PAMI／DDS／报告，每LOD只删36个hat索引及必要计数／位置更新，48records／base索引保持，216字节精确逆恢复；真实MC／BC3／CDMW与重建12/12通过，未接11报告整包／实机 |
 | Steve 分段蒙皮候选 | `py -3.12 -B tools/check_steve_segmented.py --rebuild`；真实 palette、四 LOD 表面／UV、原始 byte 权重、inverse bind 与合成弯曲；仍使用旧模板 PABC，不代表当前角色描述符、装备或实机动画验收 |
 | Steve 头身分件／私有 prefab | `py -3.12 -B tools/check_steve_parts.py --rebuild` 和 `check_steve_parts_prefab.py --rebuild`；四 LOD 完整记录并集、逐模型材质依赖、原生部件名与严格 footer／路径往返；旧分件 rig 与当前 descriptor 未共同验收，不能直接安装为完整人物 |
 | Steve 当前 neutral 补偿 | `py -3.12 -B tools/check_steve_current_rig.py --rebuild`；固定当前 PABC／descriptor、实际 byte 权重及量化后中立回放，UV／skin／拓扑保持；独立 combined 候选，不代表原生 shader／动画或私有分件已应用 |
