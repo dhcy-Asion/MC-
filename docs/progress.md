@@ -2194,3 +2194,27 @@ receipt不变、41安装文件全部匹配、36存档、完整MC schema3/revisio
 4份候选／计划／收据／发布证据JSON及git diff --check通过；所有游戏资产、runtime、
 owned测试目录、存档及记录器保持忽略。代码和文档按授权正常同步GitHub；没有改变
 MC规则／JAR／ASI或消耗材料，不把包构建与事务检查当作人物显示完成。
+
+## 2026-10-08 当前身体实测连续三轮未开始，持续目标受阻
+
+上一功能goal turn实际完成头baseColor九报告封装、31项完整检查及GitHub同步，属于
+progress，提交 `e2fca22ca850bdb401535f358515cb3e70866d6d`。之后连续三个goal turn
+均fresh核实没有CrimsonDesert进程，尚无身体人工反馈、in-world阶段记录或新owner组件
+样本；这些轮次均为no progress，不能把没有live进程的意图或收据当作verified wait。
+第三轮再次确认body069425仍installed／active0041、41文件全部匹配、36存档及完整MC
+schema3/revision25保持；代码仓库在交接更新前干净，没有实际安装／恢复或材料操作。
+
+有界协作审计确认当前头皮肤候选、14／9封装与完整事务已备齐，MC护甲接口仍只存储，
+没有安全的原生禁装或攻击／敌人命中入口。无live身份／owner回链及身体显示证据时，
+再猜材质／模型、重复测试或制作假调用接口不会推进所需人物和战斗行为。
+满足同阻碍三轮阈值后，`update_goal(status="blocked")` 实际返回blocked，完整目标
+保持未完成；内部审计 `runtime/goal-body-probe-wait.json` 留在ignored runtime。
+本次仅保存状态交接，不创建功能完成声明。
+
+恢复条件：用户手动进入同一存档，反馈左手是否恢复、身体／四肢位置和背部重叠，
+并保持游戏运行；主控重新取得PID／创建时间、验证实际包及MC状态，执行已准备的
+in-world recorder与owner组件只读采样，随后按正常退出／最新存档保持流程恢复。
+新头皮肤包仍未安装，body包继续保留供该次测试；恢复目标后重新开始受阻审计。
+
+状态交接检查：7文档74相对链接／围栏、runtime受阻审计JSON及git diff --check通过。
+仅三份文档更新，代码与实际资源保持；交接记录按既有授权同步GitHub，runtime仍忽略。
