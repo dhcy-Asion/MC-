@@ -4,7 +4,40 @@
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
 
-## 2026-10-08 最新：六组原生几何及布尔值记录身份
+## 2026-10-08 最新：六组静态材质绑定候选
+
+新增`tools/prepare_steve_rigid_material.py`和`tools/check_steve_rigid_material.py`。
+固定几何报告40407ce6…及其24文件与固定Steve材质报告8c27cada…／3DDS组合，输出
+`build/steve-rigid-material-1.21.1`，39文件＝24网格＋12PAMI＋3DDS。报告412621字节，
+SHA`7f46b802352d4e9858ce90fae730adc8655498a0dc62e461d49d1c6b77ea409d`；2110来源
+包含完整几何前置、原生模板／依赖和新生成器，前后目录及字节保持。
+
+网格只同步48个固定256字节descriptor名字区间，逐字逆还原到原几何；PAMI只改
+StaticMesh路径、PrimitiveName和三个纹理Value，其余XML树保持，UTF8无声明。
+原字段首NUL后实际有非零尾字节，首次dev在publication前早拒、未生成资产；修正
+“原字段填充全零”的错误假设后成功，不放宽原24文件的固定SHA。新名字整字段写入
+沿用已实测原木方式，逆还原保留全部原尾字节；旧候选和游戏资源未修改。
+
+Standard独立审查53来源保持（`build/steve-rigid-material-contract-20261008/standard-review.json`，
+SHA db2503a6…）；已证原木PAMI结构可复用，但BC3／last4=13不证明static Standard的
+透明裁剪，不能移植Skinned renderFlag。皮肤审查8来源／72面／288角保持（同目录
+`skin-alpha-review.json`，SHA5de514d0…）：基础六层面内1632像素全opaque；外层1632
+像素仅左右袖各16个opaque。保留全部12层，不直接删袖。独立PNG解码与原UV行方向
+闭合；若仅裁八条袖侧可见矩形，也只在固定皮肤及NEAREST／基础mip假设下成立，未实施。
+
+该候选没有prefab／meshinfo／HKX／包或安装manifest，materialBindingsAuthored=true；
+alphaBehaviorVerified、nativeMaterialLoaded、collisionless、nativeApplied、installed仍false。
+头部透明帽层包fc6a85…继续等待单独手动实测；完整人物、原装备禁止和MC动作／攻击未完成。
+
+主控正式生成器exit0，`py -3.12 -X utf8 -B tools/check_steve_rigid_material.py`
+**8/8通过／107.726秒／exit0**：39项库存、48名字字段逆还原、PAMI完整树保持、15个
+唯一依赖闭合、三DDS字节／分类保持；Pillow12.2.0独立对原PNG核基础mip alpha误差0、
+RGB最大误差4。原几何、2110来源及新进程重建逐字一致，覆写和源目录输出均拒绝。
+证据`build/steve-rigid-material-check-20261008/check-results.json`；未重跑未改的几何套件。
+后续只对已有固定meshinfo作声明到实际值的有限解析研究，不能把类型字段名当值偏移或
+删HKX猜无碰撞。已停止的通用bool容器路线不再扩展，game/native调用仍没有准入。
+
+## 2026-10-08 六组原生几何及布尔值记录身份
 
 新增`tools/prepare_steve_rigid_geometry.py`和`tools/check_steve_rigid_geometry.py`。
 固定蓝cube writer不能新增原始descriptor数量，因此六关节每组base／outer分别保存为

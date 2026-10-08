@@ -178,7 +178,16 @@ feet-frame；原生单位尚未实机校准，renderer蹲姿／世界偏移、ow
 位置max5.96e-9、UV误差0，完整records／indices／bbox及新进程重建一致，2080来源保持。
 报告SHA40407ce6…，检查证据`build/steve-rigid-geometry-check-20261008/check-results.json`。
 它只完成几何：没有材质、prefab、HKX或安装manifest，碰撞、对象组合、owner跟随均未证。
-下一项可独立核对固定Standard材质与MC内外层alpha合同；不新增原生函数扫描或安装此几何。
+后续静态材质候选已生成：`prepare_steve_rigid_material.py`输出
+`build/steve-rigid-material-1.21.1`，12PAMI／24网格／3原字节Steve DDS，共39文件；
+48个名字区间逆改逐字还原，PAMI仅五属性值改变。独立8/8通过（107.726秒），基础
+mip alpha误差0、RGB最大误差4，2110来源及新进程确定性、输出保护通过；报告
+SHA7f46b802…，证据`build/steve-rigid-material-check-20261008/check-results.json`。
+固定皮肤外层仅左右袖各16个像素可见，帽／夹克／裤层透明；全部12层保留。
+Standard的BC3透明处理仍未证，分类字节不能当alpha开关。没有prefab／meshinfo／HKX
+或安装manifest，不能直接安装；头部新会话反馈与owner采样仍待用户手动进入。
+下一步只考虑固定本地meshinfo类型声明到实际值的有界解码，补无碰撞前置；不重走已停止
+的VariantItem<bool>路径，不删HKX或猜布尔偏移，不再重复相同贴图／UV对照。
 
 无碰撞donor审计10项通过、27来源保持；同一蓝cube模板HKX实际含物理网格，prefab唯一
 MeshComponent不可只删碰撞，meshinfo字段仅声明、值／写偏移未证。报告

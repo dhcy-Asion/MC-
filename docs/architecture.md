@@ -61,6 +61,13 @@ PAM／PAMLOD，共24文件。固定蓝cube模板只支持原有descriptor数量�
 只输出几何与来源报告，没有PAMI、prefab、HKX、纹理或安装manifest；尚无角色部件组
 创建接口。保留packed着色字段不等于解释了法线／切线编码或验证了新UV下的切线。
 
+`prepare_steve_rigid_material.py`为上述12层增加固定Standard PAMI及已有Steve DDS三图。
+24网格仅替换48个固定256字节descriptor名字区间，其余逐字保持；PAMI仅改变网格路径、
+PrimitiveName和三个纹理Value，其他XML结构及属性保持，使用已实测的无XML声明格式。
+三个DDS连同原last4分类字节不变，不将SkinnedMeshStandard参数移植给Standard。
+这一步只建立39文件的离线引用关系，没有prefab／meshinfo／HKX／包或安装manifest；
+BC3能储存alpha不等于Standard会discard透明像素，nativeMaterialLoaded和nativeApplied仍false。
+
 当前蓝方块 prefab 只有一个明示 MeshComponent，唯一绘制资源为 PAMI；没有可单独
 删除的 collision 组件，PAMI 也没有显式总碰撞开关。该模板已有碰撞实测结果，不能据
 组件列表推断无碰撞，也不能靠删除伴随 HKX 文件猜测禁用。无碰撞载体仍须另行证明。

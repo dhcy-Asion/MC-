@@ -1372,3 +1372,28 @@ groupObjects、ownerFollow、nativeApplied、installed及installableResourcePack
 拒绝与任一来源父目录重叠。检查证据只能新建在build直接子目录，不能嵌套写入模型源。
 独立检查从原glTF accessor和中立关节计算预期位置／UV，直接解码u16及half，核对全部
 面覆盖、绕序、保留字节和两格式一致性；另以新Python进程验证确定性重建及输出拒绝。
+
+## 六组刚体的静态材质绑定候选（2026-10-08）
+
+```powershell
+py -3.12 -B tools/prepare_steve_rigid_material.py
+py -3.12 -B tools/check_steve_rigid_material.py --output build/steve-rigid-material-check-new
+```
+
+默认输出`build/steve-rigid-material-1.21.1`，39个本地文件：24网格、12份PAMI、3个
+已有Steve DDS。私有网格路径为`object/00_common/system/crimsonmc_steve_rigid_{sourceMesh}`，
+纹理继续使用原`character/texture/crimsonmc_steve_1_21_1`三路径，不重新编码或改分类。
+网格材质名字区间与PAMI PrimitiveName同步为Steve DDS basename；该做法复用已实测
+原木路线，不把basename相等推定为引擎的普遍规则。48处名字区间反替换后须与原几何
+逐字一致，不能假定原名字首NUL后的填充全为零。PAMI只允许五个属性值变化，逆改后
+完整XML树必须保持；不添加猜测alpha参数、shader permutation或Skinned renderFlag。
+
+固定官方64×64 Steve皮肤的六基础层共1632个面内像素全不透明；外层面内1632像素中，
+左右袖子各16个不透明，帽、夹克、裤层全透明。原始PNG解码、72面／288角UV已独立
+核对，不能直接删除全部外层。当前保留12层，Standard是否裁透明仍需实测；BC3 DXT5
+及last4=13仅证明编码和原生分类，不是alpha开关。固定DDS的基础mip保留原alpha，RGB
+有至多4级的BC压缩误差；后续mip是既有候选过滤策略，不宣称与MC renderer逐像素一致。
+
+候选明确materialBindingsAuthored=true，而alphaBehaviorVerified、nativeMaterialLoaded、
+collisionless、nativeApplied、installed和installableResourcePackage=false。没有生成prefab、
+meshinfo、HKX或安装manifest，现有临时包安装器不会将本候选当可安装角色。
