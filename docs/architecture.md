@@ -9,6 +9,15 @@
 独立第四身份仍是历史研究。完整角色装配、HP 行为桥接和
 具体物品用途仍未实现，不能根据本文推定这些功能已经存在。
 
+2026-10-16新增独立的动画管理器请求诊断：显式`--animation-observer`与旧`--motion-observer`
+互斥，默认构建关闭。固定EXE SHA／版本及入口32字节通过后，观察`0x2e91250`自然请求；
+六参数保留三个不透明指针及三个uint8_t，原函数仅调用一次，out、返回与原异常保持。
+只有旧／新两个正向行走PAA完整路径可以命中；共用一次600秒／3000000入口／128匹配的观察器，
+首末caller仅接收该固定PE SizeOfImage内地址，越界记0。GET `/api/prototype/animation-load-observation`
+只导出快照／instanceId，拒绝请求体和查询，不读取handler／payload或触发加载。
+固定动作预加载任务静态链支持选此诊断入口，尚不证明请求归属受控actor或片段已播放；
+详见[动画消费入口证据](steve-animation-consumer-20261016.md)。
+
 ## 最新动作、装备和攻击要求的实现边界
 
 2026-10-13新增离线动画资源视觉对照：`prepare_steve_motion_probe.py`只从固定69a的14资源／12报告组合

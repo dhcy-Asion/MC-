@@ -1,5 +1,32 @@
 # 当前交接状态
 
+## 2026-10-16 专用 PAA 请求入口已定位，独立诊断已安装待实采
+
+本节优先于下方“原插件已恢复”。用户要求继续实际MC动作；此前提前结束并无新的用户确认门槛。
+固定EXE静态代码将AnimationSetFromActionAsyncLoadingTask的前两组请求接到`0x2e91250`，
+第三组走另一虚调用；这是动作预加载请求链，不证明当前受控角色选择或播放。
+六参数低字节传递和path→holder→chars已有固定函数体证据，详见
+[动画消费入口报告](steve-animation-consumer-20261016.md)。没有改PAA或再次扩大旧角度。
+
+新增显式`--animation-observer`，与原`--motion-observer`互斥，默认关闭；只观察旧／新两个
+正向行走PAA的专用入口请求及首末调用来源，600秒／3000000入口／128匹配保持。
+完整EXE SHA、版本及实时入口32字节准入；caller限定固定PE SizeOfImage `0x173ab000`。
+新host 13/13、旧observer 17/17、真实MinHook六参数透传夹具、native resources 23项、character 13项通过。
+固定上游加维护补丁重建六文件按Git LF归一一致；最终补丁SHA `ad8f1df8…4389fc`。
+
+2026-10-16T09:43:25Z在进程0及A2门禁下新备份后实际安装exit0。
+当前诊断ASI `cbb62ec87276341e6dd019a29dbb78318009e2ad7cc648d7fd054f0bc086db09`，12776448B；
+会话 `build/steve-motion-consumer-20261016/observer-session.json` 为installed，SHA `042e833a…31d9fb4`。
+备份 `backups/steve-animation-observer-20261016T094325.910580Z`；原ASI／清单副本摘要独立核对保持。
+安装前后最新28＋8存档、MC世界19项、原点保持，savesRestored=false；主控另独立回读A2实际41项、
+收据83d8dd96…、诊断ASI和清单f4a15e69…匹配。详见本地`installed-readback.json`。
+
+已请用户从Steam进入同一存档，仅W约10秒后保持游戏运行。回复后运行同目录
+`capture_animation.py`：固定两个GET、同实例前后身份及41项保护，客户端不伪造人工动作证明。
+保存后请用户正常退出，进程结束再执行固定Python的`animation_session.py --restore`；
+该恢复只恢复ASI／清单，核对退出最新存档并保留，不回滚安装前存档。
+本轮尚未实采，不能把构建、静态链或请求诊断记为实际clip选择、MC六关节播放或攻击完成。
+
 ## 2026-10-16 六路径实采捕获父动作表请求；原插件已恢复
 
 本节优先于下方历史状态。当前游戏进程0；六路径实采已结束，原ASI `9d5cdc8e…` 和清单

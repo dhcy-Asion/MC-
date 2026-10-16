@@ -47,6 +47,7 @@ inline const char* StateName(State state) noexcept {
 struct PathSnapshot {
     uint64_t count = 0, firstMs = 0, lastMs = 0;
     uint32_t firstFlags = 0, lastFlags = 0, firstThread = 0, lastThread = 0;
+    uint32_t firstCallerRva = 0, lastCallerRva = 0;
 };
 
 struct Snapshot {
@@ -59,6 +60,12 @@ struct Snapshot {
 
 class Observer {
 public:
+    Observer() = default;
+    // Both diagnostic callers supply process-lifetime literal arrays only.
+    template<std::size_t N>
+    explicit Observer(const char* const (&paths)[N]) : paths_(paths), pathCount_(N) {
+        static_assert(N > 0 && N <= PATH_COUNT);
+    }
     // Control-thread operation, before the existing loader hook is enabled.
     // The process owns one capture; stopping never permits another Start.
     bool Start(uint64_t now) {
@@ -71,7 +78,7 @@ public:
 
     template<class Reader>
     void Observe(uint64_t now, uint32_t flags, uint32_t tid, uintptr_t path,
-                 bool contaminated, Reader read) noexcept {
+                 bool contaminated, Reader read, uint32_t callerRva = 0) noexcept {
         if (!Active()) return;
         if (contaminated) { Stop(State::Contaminated, now); return; }
         if (Expired(now)) { Stop(State::Expired, now); return; }
@@ -100,8 +107,8 @@ public:
                 ++totals_.invalidPaths;
             } else {
                 std::size_t index = 0;
-                while (index < PATH_COUNT && std::strcmp(text, PATHS[index])) ++index;
-                if (index == PATH_COUNT) {
+                while (index < pathCount_ && std::strcmp(text, paths_[index])) ++index;
+                if (index == pathCount_) {
                     ++totals_.unmatched;
                 } else {
                     auto& item = totals_.paths[index];
@@ -110,11 +117,13 @@ public:
                         item.firstMs = relative;
                         item.firstFlags = flags;
                         item.firstThread = tid;
+                        item.firstCallerRva = callerRva;
                     }
                     if (!item.count || relative >= item.lastMs) {
                         item.lastMs = relative;
                         item.lastFlags = flags;
                         item.lastThread = tid;
+                        item.lastCallerRva = callerRva;
                     }
                     ++item.count;
                     if (++totals_.matched == MAX_MATCHES) Stop(State::MatchLimit, now);
@@ -190,6 +199,8 @@ private:
         return n >= 4 && n < sizeof text - 1 && text[n] == 0 ? PathResult::Text : PathResult::Invalid;
     }
 
+    const char* const* paths_ = PATHS;
+    const std::size_t pathCount_ = PATH_COUNT;
     std::mutex mutex_;
     std::atomic<bool> started_{false};
     // Zero is active/unstarted; otherwise low byte is reason, high bits time.

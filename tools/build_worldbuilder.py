@@ -28,12 +28,17 @@ def run(args, cwd=SRC):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--motion-observer", action="store_true",
+    diagnostic = parser.add_mutually_exclusive_group()
+    diagnostic.add_argument("--motion-observer", action="store_true",
                         help="Build the bounded motion-load diagnostic in a separate directory")
+    diagnostic.add_argument("--animation-observer", action="store_true",
+                            help="Build the fixed animation-manager request diagnostic separately")
     args = parser.parse_args()
     global BUILD
     if args.motion_observer:
         BUILD = ROOT / "build/world-builder-motion-observer"
+    elif args.animation_observer:
+        BUILD = ROOT / "build/world-builder-animation-observer"
     BUILD.mkdir(parents=True, exist_ok=True)
     resource_dir = SRC / "build"
     resource_dir.mkdir(exist_ok=True)
@@ -65,6 +70,8 @@ def main():
              "-I" + str(im), "-I" + str(im / "backends")]
     if args.motion_observer:
         flags.append("-DCRIMSONMC_MOTION_OBSERVER=1")
+    elif args.animation_observer:
+        flags.append("-DCRIMSONMC_ANIMATION_OBSERVER=1")
     def compile_one(pair):
         i, source = pair
         obj = BUILD / f"{i:02d}_{source.stem}.o"
@@ -87,7 +94,7 @@ def main():
          "-o", output, *objects, BUILD / "resources.o", *["-l" + x for x in libraries.split()]])
     metadata = {"world_builder_commit": run(["git", "rev-parse", "HEAD"], UPSTREAM).strip(),
                 "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "bytes": output.stat().st_size,
-                "motion_observer": args.motion_observer}
+                "motion_observer": args.motion_observer, "animation_observer": args.animation_observer}
     (BUILD / "build.json").write_text(json.dumps(metadata, indent=2))
     print(json.dumps(metadata), flush=True)
 

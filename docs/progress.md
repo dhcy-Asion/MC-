@@ -1,5 +1,35 @@
 # 当前状态与分阶段计划
 
+## 2026-10-16 动作消费链定位与独立动画请求诊断
+
+用户追问停下原因后继续M4a／真实MC动作前置；前一轮收尾不是整个任务的完成。
+固定EXE的精确字符串／.pdata／RTTI证据连接AnimationSetFromActionAsyncLoadingTask与
+专用请求入口`0x2e91250`：前两组调用分别经`0x2cc9ee0`及直接调用，第三组是不同虚入口。
+完整函数体支持三不透明指针＋三个低字节参数，RAX返回原output地址；路径在子函数确认为两跳。
+未调用未知接口或解释PAAC完整图；详见[消费入口证据](steve-animation-consumer-20261016.md)。
+
+新增`mc_animation_observer.h`透传原函数一次，保留out／返回／原异常；仅精确两个PAA完整路径。
+共享有界观察器增加固定数组和首末caller RVA；旧六路径默认及预算保持。
+构建开关互斥、默认关闭，HTTP新GET端点不接参数／查询／请求体。
+启动线程核完整EXE SHA和版本后比较实时入口32字节；caller范围按该SHA的实际PE SizeOfImage限定，
+避免把邻近模块记成EXE来源。独立审阅没有阻塞缺陷；该来源只定位请求调用点，不识别actor。
+
+验证：固定Python312运行`tools/check_animation_observer.py` 13/13；旧`check_motion_observer.py`17/17；
+真实MinHook六参数高位字节、一次调用、独立返回/out和移除夹具exit0；
+`check_native_resources.py`23项、`check_character_probe.py`13项通过。
+`build_worldbuilder.py --animation-observer`最终exit0，ASI cbb62ec8…／12776448B；旧默认构建和发布artifact保持。
+维护补丁从固定上游重建六文件，按Git LF归一一致，反向准入通过；最终patch ad8f1df8…。
+早期关闭autocrlf的补丁引入无关换行差异，已改回Git规范补丁；保留的prepared-session不是最终patch依据，
+最终使用canonical-ready-check。安装事务相对已验证旧入口仅四处固定字面量修改，逆替换全文一致，
+模式门禁四组合通过；捕获客户端最后只更新最终ASI pin，语法通过。
+
+09:43:25Z进程0、A2／41项及固定EXE门禁通过，新备份后安装exit0；会话installed。
+安装前后最新36存档／MC19项／原点保持，savesRestored=false；主控独立回读实际41项／ASI／清单／收据及恢复副本通过。
+用户已收到同存档W10秒采集步骤，尚未实采；之后正常退出再恢复原ASI，不用旧存档覆盖最新进度。
+当前验收仍只到可重建诊断和安装；实际clip选择、MC走路与攻击均未完成。运行证据和游戏文件保持ignored。
+收尾检查：12份Python语法、11份JSON、103个文档相对链接、PowerShell解析、diff检查、补丁反向准入及最终ASI摘要通过；
+本轮仅临时诊断安装，不启动MC服务器、不消费材料，完整实采／恢复仍待用户本轮操作。
+
 ## 2026-10-16 动作路由接续：修复两跳路径读取，父PAAC请求实采命中并恢复
 
 范围仍为M4a／真实MC动作前置，用户“继续啊”后沿已知路径表示与父引用调查；未转向黑臂或修改PAA。
