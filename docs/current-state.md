@@ -1,11 +1,13 @@
 # 当前交接状态
 
-## 2026-10-16 路径误判已修复；六路径诊断已安装，等待本轮行走采集
+## 2026-10-16 六路径实采捕获父动作表请求；原插件已恢复
 
-本节优先于下方历史恢复状态。当前游戏进程0；本轮诊断ASI `62f56f40…` 已安装，
-会话 `build/steve-motion-paths-20261016/observer-session.json` 为installed，**尚未恢复原插件**。
-原ASI `9d5cdc8e…` 与清单备份位于 `backups/steve-motion-observer-20261016T090747.324632Z`。
-A2收据 `83d8dd96…`、实际41项、安装前最新存档、完整MC与原点均保持；没有改PAA。
+本节优先于下方历史状态。当前游戏进程0；六路径实采已结束，原ASI `9d5cdc8e…` 和清单
+`7fab3f5a…` 已恢复；会话 `build/steve-motion-paths-20261016/observer-session.json` 为restored，
+SHA `74846cc97b01e589569e9cd570572842d0063202efb4befec2bc7e196bebb773`。
+备份位于 `backups/steve-motion-observer-20261016T090747.324632Z`，没有回滚旧存档。
+A2收据 `83d8dd96…`、实际41项独立回读保持；恢复前后退出最新36存档、MC世界19项与原点保持，
+MC／原点从安装以来也保持；savesRestored=false。没有改PAA，诊断ASI不再安装。
 
 固定EXE证据确认loader路径为path→StringData holder→chars。旧启发式会把合法字符地址的
 `AAAA\0`字节误当路径；旧头实际回归复现漏报，新逻辑严格两跳、215字节／入口，17/17实际C++检查通过。
@@ -15,12 +17,16 @@ A2收据 `83d8dd96…`、实际41项、安装前最新存档、完整MC与原点
 独立诊断构建、补丁反向准入、维护头与vendor一致、character夹具13/13通过；默认构建／发布ASI保持。
 证据、摘要、命令与限制见[动作路由报告](steve-motion-routing-20261016.md)。
 
-已请求用户从Steam启动同一存档、安全位置W约10秒后保持游戏开启。收到反馈后主控执行
-`python -X utf8 -B build/steve-motion-paths-20261016/capture_observer.py`，同实例读取有限GET快照；
-不得把客户端记录当人工动作证明。随后需用户正常退出，确认进程0，再运行同目录
-`observer_session.py --restore`，保留退出最新存档，不回滚备份存档。
-hook仍在ResolveGame后启用，早期预加载／其他入口／缓存未排除；全局请求命中不等于actor或MC动作。
-本轮未完成实机采集、恢复及实际clip选择，MC走路仍未实现。
+用户反馈“已进入并走动”后执行本轮 `capture_observer.py` exit0：同一进程／两HTTP token匹配，
+128779入口、4164丢弃、5读取失败、124609未匹配、1匹配，state仍observing，inFlight=0。
+唯一命中为basic_lower.paac，观察起点后34062ms、请求flags4；其余5条均0。
+报告SHA `3a8bf328b4235a59ce6759abe78dd3f2331d15b2067c28bd4f5aed9271c74f05`。
+仅证明父动作表请求经过该入口并被严格两跳解码；未证明payload读取／解析、受控actor使用或W选择，
+且无W前快照，不能把34062ms请求归因于行走。请求flags4不等于归档存储flags。
+用户正常退出后 `observer_session.py --restore` exit0，主控独立复查实际41项／ASI／清单／收据通过。
+hook在ResolveGame后启用，早期预加载／其他入口／缓存未排除；丢弃不是随机样本，不能从0命中排除使用。
+下一项沿父PAAC请求后的解析／消费入口追明确的配置交接，不重复同六路径启动观察，不据此替换PAA。
+实际clip选择、MC六关节时序播放与真实攻击仍未完成。
 
 ## 2026-10-16 Local接续完成两配置提取与两次加载实采，原插件已恢复
 

@@ -80,7 +80,35 @@ decoded SHA `515926c857715df0657c57bc668e2ae1cf18d3b758c3118e35820e8950597ff7`�
 到独立本轮目录；新捕获客户端只更新候选ASI固定摘要，SHA
 `7984c45f2fc28d1295902077cfb4dbdc6d0d0c4447923da21ca8173d7ce1858a`。
 2026-10-16T09:07:47Z新备份后安装exit0，A2的41文件、最新存档、完整MC和原点保持；
-备份 `backups/steve-motion-observer-20261016T090747.324632Z`，本轮会话暂为installed，等待实采后恢复。
+备份 `backups/steve-motion-observer-20261016T090747.324632Z`，安装后会话为installed；实采／恢复终态见下文。
+
+### 六路径实采：父动作表首次命中，已退出恢复
+
+用户反馈“已进入并走动”后，主控实际执行本轮 `capture_observer.py` exit0。
+[行走后快照](../build/steve-motion-paths-20261016/natural-load-20261016T091220.604473Z.json) SHA
+`3a8bf328b4235a59ce6759abe78dd3f2331d15b2067c28bd4f5aed9271c74f05`。
+前后进程身份一致，pid66456／creationTime100ns134366153957657539，EXE固定摘要匹配，
+两HTTP响应instanceId匹配；A2的41项、收据、ASI及清单前后保持。
+
+hookInstalled=true、state=observing；128779入口、4164丢弃、5读取失败、0非法路径、
+124609未匹配、1匹配、inFlight=0，计数闭合。唯一命中为
+`actionchart/bin__/loweraction/1_pc/1_phm/basic_lower.paac`，相对观察起点34062ms，flags4／thread66528。
+另外三份motionblending、旧walk PAA、新basic_walk_ing PAA各0次。
+这证明修订后入口能捕获该父动作表请求；没有W前快照，不能把34062ms请求归因于W动作，
+也不能证明属于当前受控actor或实际选中的包字节。相同四条路径仍0命中，不能把此前零命中全部归因于指针误判。
+采集仍运行解决窗口早停问题；丢弃、早期预加载、缓存与其他入口仍未排除。
+
+请求flags4仅是入口参数，不等于PAAC索引的存储flags2。独立审阅只复核报告的计数、同实例与41项前后记录一致，
+未另读进程或实际游戏文件；丢弃不构成随机抽样，不能计算其余路径未使用的置信度。
+
+用户正常退出后，固定入口确认进程0再实际执行 `observer_session.py --restore`，exit0。
+会话现restored，SHA `74846cc97b01e589569e9cd570572842d0063202efb4befec2bc7e196bebb773`；
+原ASI `9d5cdc8eebbad47010f4d6e15e3afe74d630ace00332cd7032ac216c3494efe7` 与原清单
+`7fab3f5ad7601197369fa611d06e7d5954ad568531cef8efb435cca2deb5f65f` 恢复。
+A2收据／41项保持，恢复前后退出最新存档为28+8=36文件，MC世界19项与原点保持，
+MC／原点自安装以来也保持，savesRestored=false。主控另独立读取实际41游戏文件及ASI／清单／收据通过，
+游戏进程0；没有把随后核对会话中的存档摘要称为再读一次源存档。
+下一项只沿父动作表与混合配置的分流／引用入口继续静态核对，不重复同一六路径试验，也不据此改PAA。
 
 
 ## 2026-10-16 本机 Local 接续（先前中止记录保留在下文）
