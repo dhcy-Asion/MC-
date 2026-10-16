@@ -63,7 +63,7 @@ def load_plan(plan):
     if not isinstance(name, str) or not name.isascii() or not name.isdigit() or len(name) != 4 or not 36 <= int(name) <= 9999:
         raise ValueError("Unsafe Steve overlay directory")
     candidate_reports = report.get("candidateReports")
-    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+    if not isinstance(candidate_reports, dict) or len(candidate_reports) not in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         raise ValueError("Steve probe requires the exact reviewed candidate report set")
     required = {"steve-assembly-report.json", "steve-appearance-report.json"}
     with_head = required | {"steve-head-descriptor-report.json"}
@@ -76,7 +76,8 @@ def load_plan(plan):
     with_head_basecolor = with_body_material | {"steve-head-basecolor-report.json"}
     with_head_uv = with_head_basecolor | {"steve-head-uv-control-report.json"}
     with_visible_layer = with_head_uv | {"steve-head-visible-layer-report.json"}
-    allowed = with_native_head | with_visible_layer | {"steve-app-report.json"}
+    with_body_basecolor = with_visible_layer | {"steve-body-basecolor-report.json"}
+    allowed = with_native_head | with_body_basecolor | {"steve-app-report.json"}
     by_name = {}
     for path, digest in candidate_reports.items():
         file = build_path(path)
@@ -85,7 +86,7 @@ def load_plan(plan):
         by_name[file.name] = file
     if set(by_name) not in (required, with_head, with_table, with_table | {"steve-app-report.json"},
                            with_native_head, with_head_root, with_native_material, with_clothing, with_body_material,
-                           with_head_basecolor, with_head_uv, with_visible_layer):
+                           with_head_basecolor, with_head_uv, with_visible_layer, with_body_basecolor):
         raise ValueError("Unrecognized Steve candidate report names")
     for path, digest in candidate_reports.items():
         if native.file_hash(build_path(path)) != digest:
@@ -103,9 +104,10 @@ def load_plan(plan):
     head_basecolor = by_name.get("steve-head-basecolor-report.json")
     head_uv = by_name.get("steve-head-uv-control-report.json")
     head_visible_layer = by_name.get("steve-head-visible-layer-report.json")
+    body_basecolor = by_name.get("steve-body-basecolor-report.json")
     expected, inputs, snapshot = steve.candidates(models, appearance, head_descriptor, app, part_table, head_mesh_control,
                                                 head_root, head_native_material, clothing, body_native_material, head_basecolor, head_uv,
-                                                head_visible_layer)
+                                                head_visible_layer, body_basecolor)
     merge_read_snapshot(snapshot, {report_path: raw})
     if report.get("replacementPaths") != steve.replacement_paths(expected):
         raise ValueError("Steve probe exact replacement targets differ")
@@ -153,7 +155,11 @@ def load_plan(plan):
     overlay.audit_mounts(before["meta/0.papgt"], after["meta/0.papgt"], name, (package / "0.pamt").read_bytes())
     textures = {path: data for path, data in payloads.items() if expected[path]["row"]["kind"] == "texture"}
     overlay.audit_registry(before["meta/0.pathc"], after["meta/0.pathc"], textures)
-    if head_visible_layer is not None:
+    if body_basecolor is not None:
+        import prepare_steve_body_basecolor_overlay as control
+        incoming = control.validate_composition(report, package, before, after, payloads)
+        merge_read_snapshot(snapshot, incoming)
+    elif head_visible_layer is not None:
         import prepare_steve_head_visible_layer_overlay as control
         incoming = control.validate_composition(report, package, before, after, payloads)
         merge_read_snapshot(snapshot, incoming)
@@ -184,6 +190,9 @@ def load_plan(plan):
         variant = "steve-kliff-original-head-body-material-empty-armor-head-basecolor-head-uv-part-table-v2"
     if head_visible_layer:
         variant = "steve-kliff-original-head-body-material-empty-armor-head-basecolor-head-uv-visible-layer-part-table-v2"
+    if body_basecolor:
+        import prepare_steve_body_basecolor_overlay as body_control
+        variant = body_control.VARIANT
     if app:
         path, = [path for path, item in expected.items() if item["row"]["kind"] == "appearanceDefinition"]
         number = Path(path).name.removeprefix("cd_phm_macduff_").removesuffix(".app_xml")

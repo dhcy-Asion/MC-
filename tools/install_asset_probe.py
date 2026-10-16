@@ -23,6 +23,7 @@ import prepare_native_steve as native
 ROOT = native.ROOT
 OWNER = "CrimsonMC static oak-log asset probe v1"
 STEVE_OWNER = "CrimsonMC temporary Steve mesh-parameter probe v1"
+MOTION_OWNER = "CrimsonMC temporary Steve motion visual probe v1"
 RECEIPT = "runtime/asset-probe-active.json"
 MARKER = ".crimsonmc-asset-probe-owner.json"
 METADATA = ("meta/0.pathc", "meta/0.papgt")
@@ -35,6 +36,8 @@ def probe_owner(kind: str) -> str:
         return OWNER
     if kind == "steve-mesh-parameters":
         return STEVE_OWNER
+    if kind == "steve-motion-visual":
+        return MOTION_OWNER
     raise ValueError("Unsupported asset probe kind")
 
 
@@ -352,6 +355,9 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
         raise ValueError("An active probe receipt exists; restore or inspect it first")
     if probe_kind == "oak-log":
         prepared = load_plan(plan_path)
+    elif probe_kind == "steve-motion-visual":
+        from install_steve_motion_probe import load_plan as load_motion_plan
+        prepared = load_motion_plan(plan_path)
     else:
         from install_steve_probe import load_plan as load_steve_plan
         prepared = load_steve_plan(plan_path)
@@ -367,9 +373,14 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
     backup.mkdir(parents=True, exist_ok=False)
     marker_data = json_bytes({"owner": owner, "id": identity,
                               "planSha256": prepared["reportSha256"]})
-    package_files = {name + "/0.pamt": (prepared["package"] / "0.pamt").read_bytes(),
-                     name + "/0.paz": (prepared["package"] / "0.paz").read_bytes(),
-                     name + "/" + MARKER: marker_data}
+    if probe_kind == "steve-motion-visual":
+        package_files = {name + "/0.pamt": prepared["packageBytes"]["0.pamt"],
+                         name + "/0.paz": prepared["packageBytes"]["0.paz"],
+                         name + "/" + MARKER: marker_data}
+    else:
+        package_files = {name + "/0.pamt": (prepared["package"] / "0.pamt").read_bytes(),
+                         name + "/0.paz": (prepared["package"] / "0.paz").read_bytes(),
+                         name + "/" + MARKER: marker_data}
     backup_files = {}
     for path in METADATA:
         saved = target(backup, path)
@@ -406,6 +417,9 @@ def _install_unlocked(plan_path: Path, game: Path, *, state_root: Path = ROOT,
         for path in METADATA:
             if target(game, path).read_bytes() != prepared["before"][path]:
                 raise ValueError("Game metadata changed during backup")
+        if probe_kind == "steve-motion-visual":
+            from install_steve_motion_probe import verify_snapshot as verify_motion_snapshot
+            verify_motion_snapshot(prepared)
         directory = game / name
         directory.mkdir(exist_ok=False)
         directory_created = True
@@ -600,6 +614,9 @@ def install(plan_path: Path, game: Path, *, state_root: Path = ROOT,
             save_roots: list[Path] | None = None, running=game_running, _fault=None,
             probe_kind: str = "oak-log") -> dict:
     probe_owner(probe_kind)
+    if probe_kind == "steve-motion-visual":
+        from install_steve_motion_probe import verify_state_scope as verify_motion_state_scope
+        verify_motion_state_scope(game, state_root)
     require_closed(game, running)
     with state_lock(state_root):
         return _install_unlocked(plan_path, game, state_root=state_root,
@@ -609,6 +626,9 @@ def install(plan_path: Path, game: Path, *, state_root: Path = ROOT,
 def restore(game: Path | None = None, *, state_root: Path = ROOT,
             running=game_running, _fault=None, probe_kind: str = "oak-log") -> dict:
     probe_owner(probe_kind)
+    if probe_kind == "steve-motion-visual":
+        from install_steve_motion_probe import verify_state_scope as verify_motion_state_scope
+        verify_motion_state_scope(game, state_root)
     with state_lock(state_root):
         return _restore_unlocked(game, state_root=state_root, running=running, _fault=_fault, probe_kind=probe_kind)
 

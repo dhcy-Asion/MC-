@@ -11,6 +11,22 @@
 
 ## 最新动作、装备和攻击要求的实现边界
 
+2026-10-13新增离线动画资源视觉对照：`prepare_steve_motion_probe.py`只从固定69a的14资源／12报告组合
+原字节A或固定Y5 B，新增唯一walk PAA形成15资源／13报告；原14 encoded/flags/orig_size保持，沿已固定归档/LZ4，不调用PAAcodec。
+`install_steve_motion_probe.py`使用kind=steve-motion-visual，复用install_asset_probe同一active收据／锁／备份／恢复；
+严格准入快照直接提供packageBytes，备份后再次核对来源，custom state_root仅允许build内显式副本。
+`check_steve_motion_probe.py`以真实包和明确synthetic EXE／索引身份夹具执行A/B各22项，44/44通过，正常终态exit0。
+独立包拒绝13项与A1→B→A2事务后来均已完成；B人工反馈无明显动作变化且左臂发黑，
+当前已恢复原PAA的A2。可见动作影响及当前clip仍未证明，不能把事务成功当作MC动作完成。
+
+2026-10-16新增 `mc_motion_observer.h` 的有限自然加载请求观察，仅在显式
+`build_worldbuilder.py --motion-observer` 的独立诊断构建启用。它复用已有HookResLoad入口，
+只读三份固定motionblending和旧walk PAA的路径，不访问handler／worker或资源payload；
+一次600秒／3000000入口／128匹配，try_lock丢弃可见，出现既有I/O干预即停止。
+首轮100000额度在实机26.859秒耗尽，不能覆盖随后行走；仅据此扩大有界额度，未增加路径或重启采集接口。
+GET `/api/prototype/motion-load-observation` 仅返回采集快照、instanceId及hookInstalled，
+默认构建disabled；该接口不加载资源、不控制人物、不证明actor／clip／包优先级。
+
 复用当前红沙受控身份不再意味着继续使用红沙动作。最新要求包含 MC 的实际动作状态、
 时序、状态转换和六个刚性关节运动；待机、移动、蹲伏、挥击与物品使用需要分别与固定
 MC 来源比对，再验证在红沙中的实时控制。旧中立补偿、原生人物动画套用、重命名动作
@@ -133,6 +149,100 @@ MC权威使用36格SimpleInventory，新增独立四格人体护甲存储，没�
 原动作／攻击抑制及装备统一入口。MC 挥击显示、输入时序和实际命中效果分别验收。
 只有固定版本／类型／调用上下文验证后，才能形成单个敌人、一次MC攻击的实机闭环；
 网络不能阻塞渲染线程，超时／未知执行结果不能盲目重打。
+
+## 2026-10-12 当前已安装头身的资源映射边界
+
+固定f6169f/69a计划当前body PAC8f26d6…为四LOD各1008顶点/504面、局部palette189；实际13骨加权，
+每LOD752单骨与256双骨顶点。当前head PAC7c222d…为三LOD各48存储/24引用顶点/12面、palette192；
+全部记录slot0/255→PAB122 B_face_com，head207 PABC覆盖。body420 PABC覆盖全部加权骨。
+PAB447名字/hash/bind/inverse及4176顶点的权重字节已离线回核；旧assembly头93的警告只属旧头候选。
+两个private prefab仍保留空 `_skeletonFileName`，body descriptor显式SkeletonName，head descriptor
+仅在FacialBlendShapeSet给SkeletonPath；这些引用不证明实际parent继承、PAB/PABC选择或merge/scale顺序。
+
+既有Skinned资源任务将PAC/PAB属性的持有引用放到job+D0/+D8并登记回调；formal job class、
+callback ABI和执行线程未知。原入口精确.pdata准入失败；另立5B分类确认E9到144B目标和4B unwind元数据，
+分类检查点的目标正文尚未读取，仅有边界候选；后续144B实际结果见下一节。受控+1C0仍是未命名owner对象，
+44B共享缓存仍未证明骨姿态。没有新增运行时接口、probe读取偏移、默认接线或已安装hook。
+实时矩阵count/stride/row或column布局/空间/单位/epoch/寿命及bone producer/consumer均待独立证明。
+准备的单左臂合同只说明实际资源权重及后续采样门槛，不实现native动作，见[接续记录](steve-walk-20261012.md)。
+
+## 2026-10-12 资源回调终端的实现边界
+
+2DA6720已由独立5B E9分类连接到唯一144B区间2D8E760..2D8E7F0，随后该正文一次只读解码33指令。
+它读取未知receiver+D0作指针/byte比较，使用C8/E8及+19/+20/+28构造未知调用参数，最终向stack提供
+的指针写byte2；两个条件均前向到本区间内。三个调用均未读；两direct地址已算出，正式类型/ABI/副作用未解析。
+没有直接逐骨loop、PAC/PAB slot关系或矩阵运算。回调receiver/ABI及实际资源类型仍未知；byte6/2不作
+骨数量/姿态完成解释。不能从注册descriptor的RCX推定运行时callback参数。完整byte decode不证明完整
+逻辑函数或未展开调用行为；到此停止callee/global/vtable/第二跳，没有新runtime接口或已安装hook。
+
+既有Capstone实际模块声明5.0.7、distribution metadata5.0.9，native API5.0；用真实DLL和全65依赖摘要
+固定身份，不推断补丁版本。58包payload与RECORD匹配、BSD许可证保留，Python3.12 EXE固定。
+新的post-read异常/失稳路径保留raw及部分decode并撤销验收标志；这些是本地研究脚本，不接生产桥接。
+资源189/192局部palette和447 PAB仍只属于离线关系，runtime count/stride/矩阵空间/单位/同帧寿命与
+producer/consumer均未闭合；MC动作/nativeApplied仍未实现。当前事实见[接续记录](steve-walk-20261012.md)末节。
+
+## 2026-10-12 PAA离线资产路线的边界（历史准备检查点）
+
+本地已使用的归档reader固定CDMW787680f9/alpha.22及既有archive依赖，只负责PAZ读/解压。
+standalone tools/paa_motion reader/writer/test虽在该旧Git对象中，现LICENSE+cdmw提取包不含它们，
+当时尚未物化/import/execute；本次批准的固定三模块单次执行见下节。新增公开75e源码仍未执行。
+PAA原件头/归档flags不是库存/桥接API变化。
+
+固定普通walk_f原件41592B的PAA flags7非packed，声明70 skeletal+2root；其目录名不证明当前动作选择。
+PAA→PAB名字hash与骨局部bind delta可成为后续资产方案，不提供runtime palette/ABI/线程接口。
+逐字无改动重建、单轨rotation差分、实际action路由、引擎接受和可逆替换各自门禁；不复用未知header
+新建动画，不把GLB导出当动作导入。既有active收据/41文件/恢复路径仍适用，尚无PAA安装计划。
+具体版本、确认要求与证据见[资产接续](steve-paa-route-20261012.md)。MC动作应用仍false。
+
+## 2026-10-12 有界资产视觉实验与接口验收的范围
+
+最新授权允许以固定PAA替换和用户A–B–A验证实验假设，正式runtime bone API不作为本诊断前置。
+opaque ArchivePatchRequest按既有flags2非加密LZ4封装即可，PAA内部7不替代storage2；PA lookup3依赖
+PAZ→PAMT→PAPGT，PAA不新增PATHC项目。现通用/Steve白名单未包含motion，需literal路径/hash/flag/长度的窄入口。
+优先旧14资源encoded/flags/origsize保持的15资源/13报告单receipt；同构A原/B候选，标准restore再install。
+现有active不支持并存0042；绕state_root/改meta会破旧恢复合同。原source PAZ/索引保持，PATHC-after一致，最新存档不回滚。
+视觉可见差异与恢复只验特定resource影响，不证明正式clip/evaluator、旋转顺序或MC六刚体时序；负结果不排除使用。
+组合包/专用loader与隔离事务测试尚未实现，未安装。下一实现及集中用户步骤见[资产接续](steve-paa-route-20261012.md)。
+
+## 2026-10-12 自写Y5派生PAA的范围与实际摘要合同
+
+新授权只生成本地单肩Y5派生PAA，不调用codec或提供原生API。保存轨表channel.rawSha256精确覆盖
+valuesOffset..end，即track29 rotation970B键区间；不含前两字节count。count+keys总972B另核count97。
+初稿误关联摘要导致门禁停止，原失败保持；修订稿使用正确键范围，仍只允许97×8=776B half组件写入新文件。
+新41592B候选实际547B变化，其他全部字节保持；它是旧alpha22意图A下的离线Y5诊断，actualengine/currentclip
+及接受仍未知。来源/结果/两个attempt保留，生产存档/API/游戏安装不变。见[资产接续](steve-paa-route-20261012.md)。
+
+## 2026-10-12 旋转oracle与离线工具意图的层级
+
+自写Hamilton xyzw oracle验证rowR(a×b)=R(b)R(a)，两种bind-delta顺序在97保存肩keys均自洽而预测不同。
+仅凭未标记有效pose的PAA/PAB数据不能选择engine语义；既有old alpha.22 pose.py源码现已核到normalize(q_bind×q_delta)，
+它定义离线工具意图A，未被执行，也不提供native/renderer ABI。delta在A下右乘X作用于骨长轴，主要twist；
+Y5°仅横向诊断，不是MC挥臂合同。完整父链原阈值失败保持，以实际同帧父矩阵作相对oracle可避免猜测上级链，
+但该正式输出尚未知。actual clip、混合/IK、阶段/寿命与坐标单位独立门禁。
+新的自写raw-half writer只准备代码，待新的复制文件编辑许可，不调用codec；产物只准ignored build，
+游戏接受/安装恢复未准入。具体sourcepins/数值结果/请求见[资产接续](steve-paa-route-20261012.md)。生产API/存档不变。
+
+## 2026-10-12 保存PAA轨表到固定PAB的关系
+
+72个保存rawhash各唯一对应固定phm_01.pab的447骨；shoulder track29/hash0x9b5df434→101 LUpperArm，
+父链经71/40/24/16/13到0。固定7条原PAB记录尾部xyzw TRS在自有row-vector数学oracle中复原local；
+肩local×父global复原bind，误差9.659e-8。全链2e-6阈值有Spine16超限，不把局部检查提升native ABI。
+现身体实际weighted133/348/349在肩子树，101没有直接加权slot；若肩local变化会涉及继承，不能称独立MC刚体。
+这建立离线asset hash/parent关系，不建立actor的current clip/evaluator绑定或PAA delta乘法/世界轴/引擎时序。
+后续单肩方案采用既有97 half-quaternion分量字节白名单，不依赖已消费的外部codec；新编辑仍未许可，
+候选与任何action选择/可逆安装须分阶段验收，详见[资产接续](steve-paa-route-20261012.md)。生产API/存档不变。
+
+## 2026-10-12 单次PAA原件读写实现范围
+
+经人类确认，本地旧alpha.22的3固定模块在独立Python3.12 -I/-S/-B进程一次执行；源码字节和MIT保持，
+private内存package只解决相对import，不导入CLI/pose/新模块。自有profile按code identity限制parse/encode
+各1、read_tracks仅108/root f32一次、scan/rebuild0；foreign phase禁IO/网络/进程/native加载，输出由封装
+写ignored目录。marker消耗授权，异常/partial保留且不自动再进入main。生产桥接/存档/API没有变化。
+
+41592B原件输入输出逐字一致，证明该固定codec对这一标准nonpacked donor的无改动忠实性。
+72原轨/216通道的局部布局与根f32排他不等于当前角色PAB/renderer已选择；未做骨名字匹配、修改、
+重定时或动作播放。没有建立native palette/ABI接口，旧资源回调下游继续停止。下一准入独立核
+已保存hash与明确PAB，然后才准备单肩对照；实际MC六刚体运动另验，详见[资产接续](steve-paa-route-20261012.md)。
 
 ## 模块与数据流
 

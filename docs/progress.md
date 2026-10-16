@@ -1,8 +1,599 @@
 # 当前状态与分阶段计划
 
-更新日期：2026-10-08（Asia/Shanghai）。当前开发目录为桌面 `CrimsonMC`，仓库为
+## 2026-10-16 Local接续：配置字段已读，有限自然请求观察器已构建
+
+当前里程碑仍是M4a／真实MC动作前置：先确认实际资源路由，未把黑臂观察作为动作门槛。
+接续前核对Windows／cwd、A2收据和实际41项、既有分析输入与旧任务idle；修改前完成27项已有工作备份，
+另备份6份原生源码／构建入口，保留此前87／38项安全副本。没有向旧聊天发送执行消息。
+
+固定两配置提取正式授权后exit0；basic_move_walk／walk为16306／19833B，源区间及解压摘要独立复核。
+自写标准库字段解析确认23／66／4个动画条目，旧B在walk[3]；basic_move[13]与stride[0]是不同basic片段。
+首稿索引标量误判被拒绝，修订为声明uint32数组后通过；没有执行PAA codec、编辑动作或推定W选择。
+完整摘要和字段区间见[本轮路由证据](steve-motion-routing-20261016.md)。
+
+新增默认关闭、固定四路径的自然ResourceLoader.load请求观察器和无参数只读GET端点；
+既有loader调用／handler生命周期保持，不主动加载、不增加hook、不读payload。
+独立构建输出与默认构建／发布artifact分离。首次14项实际C++检查通过，诊断构建成功。
+固定安装／恢复入口8项隔离检查通过；首次安装前已启动游戏被门禁拒绝且未写，正常退出后才实际安装。
+用户入场W10秒后实采hookInstalled=true，但26.859秒已耗尽100000入口，0命中且4391丢弃，不能判路由。
+原ASI和安装清单已恢复，A2／退出最新存档／完整MC／原点保持；首轮会话restored。
+
+仅据此把入口上限改3000000，保留600秒／128匹配／四路径；新增超过旧上限仍可命中的回归，15/15通过。
+第二版诊断构建成功 `f3f0a3c4…`，补丁反向检查、头文件副本摘要一致、Python语法检查通过；
+`python -B tools/check_character_probe.py` 13/13通过。
+第二次安装使用独立会话目录和新备份；同一进程启动72790入口，用户反馈完成W10秒后134249入口，
+state仍observing／hookInstalled和ready为true。5031丢弃、2读取失败、0匹配，解决了早停却仍不能判路由。
+启动样本误带静态humanReport已保留原件并以旁注纠正；客户端不再自行声称人工动作完成。
+第二次正常退出后恢复exit0，两会话均restored；原ASI／清单恢复，A2实际41项独立复查通过，
+退出最新36存档、MC世界19项与原点保持，savesRestored=false，游戏／Python进程0。
+主控另回读ASI／清单／收据，补丁和diff检查通过；文档链接检查通过。
+下一项确认固定路径的加载入口／路径表示，必要时沿三配置明确父引用继续；不重复相同四路径采样或据零命中改动作。
+
+本轮未重跑此前44／13动作包事务检查，未触碰MC材料或修改PAA。真实clip选择、MC六关节时序播放及伤害／击退仍未完成。
+
+## 2026-10-16 动作路由优先，精确元数据与字段证据已补齐
+
+用户纠正“黑笔从来不是重点，重点是动作”，取消等待A2黑臂反馈；不以旧5°无检出认定资源无效。
+实际执行 `python -X utf8 -B build/steve-motion-routing-20261016/inspect_routing.py`：
+复用已固定自写PAMT纯解析函数，只匹配7个明确路径，当前35索引全SHA／末读保持，7/7命中。
+目标paa_metabin位于0010 record10970/raw402B，而旧过滤把character/motion前缀误套在元数据与混合配置上。
+索引报告SHA015afb4f…720875f；无PAA payload、codec或内存扫描。
+
+实际执行自写 `read_raw_metadata.py`：仅双读basic_stride_walk 2584B与目标metabin 402B，flags0，无解压或第三方模块。
+报告SHAd31baa72…d3beb728；原字节保存ignored build。独立子代理按固定prefab_binary.py源码规则只读检查，
+主控另按固定mask、type、u32计数／长度与前后字段复核，确认_animationFileNames[0..3]分别为basic的f_ing2、b/l/r_stride片段。
+字段报告SHAc6a78732…d98a77，粗字符串尾部分号已辨为下一个长度前缀，不进入路径。
+此为静态字段引用证据，尚未证明当前actor／装备／W输入的运行时选择或新目标可解码／可修改。
+
+准备 `read_compressed_configs.py`（SHAf83dc6ef…97b1f4c），语法通过；只读basic_move_walk和walk两项既有flags2区间，
+采用工程已有LZ4 4.4.5，不调用PAA codec、不改游戏。现有库目录／文件读取被沙箱Access denied，故使用正式require_escalated。
+首次库哈希授权调用原始结果aborted by user after591.9s；后续提取调用原始结果aborted by user after482.9s。
+父会话给出的旧manager:bc2ce9a3dffe4fee90070734d24d6366:3已结束。没有明确拒绝、成功stdout或exitCode。
+中断后复查compressed-configs不存在、无Python进程；不能宣称已解压，也不能断言脚本未做过任何读取。
+用户明确不是自己暂停，开启闪电后自行停止；区分其陈述与工具中止文本，不认作撤销任务、不推断闪电因果。
+随后收到两次明确继续／打开任务窗口的委托，各先核无产物及无游戏／Python进程，再为同一固定命令正式申请一次。
+两次分别返回 `aborted by user after 862.3s`、`aborted by user after 31.9s`，仍没有成功执行结果或已知待批请求。
+最新委托要求再次中断即报告、不反复申请，现停止重试。上述工具结果未见AbsolutePathBuf，不能把其他窗口报错当成本次调用结果。
+末次只读核验当前收据、实际41项和四份分析输入摘要保持，compressed-configs不存在；报告为
+[approval-interrupted-readback-20261016-r2.json](../build/steve-motion-routing-20261016/approval-interrupted-readback-20261016-r2.json)，
+SHA `1e37920155afbb83fbff348aad4bd83890682dee9616d8c8e4011bf6cc11c282`。独立子代理确认产物缺失和stride字段证据边界。
+
+独立现有HookResLoad源码审阅确认可设计固定有界自然加载旁路，但当前默认日志不带路径，iotrace会装额外worker hook并有写选项，
+不直接启用；主动resource-probe缺PAA别名且受16KiB限制，不能证明actor播放。没有修改／构建／安装native诊断。
+中断后A2 active83d8dd96及实际41全保持；仅本地脚本、证据和交接文档新增／更新，存档与MC未操作。
+完整路径、偏移、字段、原命令、审批边界和最小下一步见 [动作路由报告](steve-motion-routing-20261016.md)。
+当前不请求用户开游戏、录屏或黑臂反馈；下一步由主窗口确认授权卡是否出现及客户端错误，恢复受支持的权限交互前不再申请。
+JSON／自写脚本语法／相关链接与Git差异检查完成；不重跑44／13、不上传。
+
+## 2026-10-16 B黑臂异常：原动作A2实际恢复、独立26组回读通过
+
+用户原话“左手臂变黑了，无明显变化”。记录为B异常反馈，可见动作未验收；黑臂与PAA修改的因果未知。
+最初CrimsonDesert PID61248运行，保持B及其实际41文件；正常退出后复查进程0，没有强杀或运行中改游戏。
+按本轮授权完成既有A-B-A恢复，不新增候选，不回滚用户存档。
+
+仅新增ignored入口 `build/steve-paa-motion-pack-20261013/run_a2_install.py`，SHA
+`73ee9314c5970512f6092e95894fa7f40438cdbbb4482f3a7bd51c58d5489fe5`，以固定B入口398e110b…最小适配。
+固定旧081f／58b667收据与B353ec37f计划，目标原plan-a d2c6c10d…／variant A；新UUID排除A1及B。
+新增B安全备份87项和A1收据备份38项保护；既有保护保持，先复制并回读当前最新存档及MC世界。
+Python3.12语法解析、五个helper及完整失败分支AST与原B入口相等、唯一标准restore/install调用均通过；独立子代理静态复核无阻断项。
+纯语法分析使用可用默认Python；实际入口只由固定原生Python312执行，未替换解释器、复制运行时或修改ACL。
+
+向支持的 `require_escalated` 接口提交一次具体调用并实际成功执行：
+`C:\Users\ASUS\AppData\Local\Programs\Python\Python312\python.exe -I -S -X utf8 -B C:\Users\ASUS\Desktop\CrimsonMC\build\steve-paa-motion-pack-20261013\run_a2_install.py --install-a2`。
+执行attempt `20261016T035623.849463Z`，exit0，phase=a2-installed-awaiting-observation；不是仅有授权意图或未知执行结果。
+入口新备份→标准motion恢复B→核原38/noactive/no0041及B历史→原plan-a安装A2→核41/owner/保护组全部完成。
+新active为 `b35539f80bb1430eae80823a62ff988d`，receipt SHA
+`83d8dd966363a5a9d298c7c94ad4e6bb71721d7fa00cbee2ef47099b7abe4578`。
+run-state SHA `55b6c638b9dc1ea589b01f86959f0f41bb5040f38ece1c947ab4bd5b5f304053`；installed-a2 SHA
+`d8ed440e7b3bc095a0bfad884a8480e94a0818a9f0db7e98b893407d45a91eda`。
+新安全备份 `backups/steve-motion-a2-20261016T035623.849463Z` 87文件，新收据备份38文件，B包／日志及旧备份保持。
+
+主控恢复后另作26组本地回读，全通过；报告
+[a2-readback-20261016.json](../build/steve-paa-motion-pack-20261013/a2-readback-20261016.json)，SHA
+`fade0303605010e7fc64339bb0ff3460520ec21c466ec17242384dacd988f647`。
+覆盖实际41、当前收据与owner、B恢复历史、中间38证据、三次保护记录内容一致、新87／38及全部旧备份、
+MC world19／source2／build118、EXE／ASI／origin、HEAD与当时23项dirty原字节、Steam8源存档。
+固定原生事务核对全部36源存档前后保持；主控未再尝试已知受限的本地28源存档，其两份当前备份已独立逐字回读。
+恢复结束时游戏进程0；随后只更新这四份交接文档，未修改另外19项用户工作文件。savesRestored=false。
+
+有限离线异常复核：A/B各6文件、各13报告及manifest摘要与原独立review pins相符；15资源行只有PAA不同。
+直接读取两个41592字节PAA：547差异字节全部在97×8=776字节白名单内，97个四元数记录变化，帧号0..96及白名单外40816字节保持。
+旧13项复核与当前包摘要绑定，证明其余14资源编码、flags、原尺寸及解码内容保持；容器PAPGT/PAMT/PAZ变化不能误判为额外材质改动。
+固定肩骨映射输入摘要相符：track29／bone101同为0x9b5df434，Bip01 L UpperArm；72轨唯一映射，实际权重骨133/348/349在其子树。
+这仍不证明实机选中该clip、运行时palette绑定或q_bind/q_delta与Y轴含义。旧数学报告Spine16组合误差3.395e-6仍超2e-6门限，不能隐藏，也不是黑臂因果证据。
+对指定四文档的有限搜索无明确旧黑臂记录；不能把旧缺手或原材质颜色补作无黑臂基线。材质未改亦不排除运行时读取／渲染异常。
+
+当前停止点为A2实机观察：同一存档、装备、地点及近距左后视角，站立后仅W约10秒再停，口述黑色是否消失，无需录像。
+消失只加强B切换关联；持续则保留其他原因。两者都不构成MC步态验收。不要重装B、放大角度或无界扫描。
+未重跑44／13，未执行PAA codec或新增实验；MC动作／完整绑定／装备禁用／攻击／碰撞／镜头仍未完成。
+父窗口报AbsolutePathBuf消息提交错误，但本任务本地检查、正式恢复调用均未出现；不归因项目、不重复未知操作。
+相关JSON可解析，Python语法与文档差异检查通过；依当次要求不提交上传。
+
+## 2026-10-16 B已经实际安装：去重后只读核验
+
+用户授权本次正式执行申请，条件是B尚未安装且游戏关闭。主控先查发现已有成功B，故没有再次申请或执行安装。
+真实attempt为 `build/steve-paa-motion-pack-20261013/b-install-attempts/20261015T065716.762899Z`，
+finishedUtc=2026-10-15T06:59:23.163652Z，exit0／passed=true／b-installed-awaiting-observation。
+run-state SHA `b43f11709aa12f102ac5365444e304426b8c5082711e9925c4bb71683c050d03`，
+installed-b SHA `dab5d63d4a431527bdd91fdceecb5b6ede9830832a92fed1ab85ef0914f3a566`，
+before SHA `27a32d09ecd7bb6098258f851343221758ab312dfb854e10949eabb94465b508`。
+新收据081f1cfd9ed64a159f569b39ddfd1779，SHA58b6671401919cc492f8502001c268733955db90a6bf0eb16e13eddc02bd0f60，
+motion／0041／固定plan353ec37f…／variantB，实际41文件及owner匹配；旧A1收据930d已restored，history摘要与restored记录相符。
+
+只读核对20组通过：完整收据、实际41／owner、旧A1历史、新87项安全备份、B收据的当前36存档副本和原元数据、
+原930／f616／fc6各38备份、A1安全87／旧55、MC world19／source2／build118、Steam侧8源存档、EXE／ASI／origin及HEAD。
+本地28源存档再次读取PermissionError，不伪装缺失或通过；固定安装程序三阶段common逐项相同且savesRestored=false，
+该组安装前后保持来自该程序记录，两套副本已实际回读匹配。本轮不写或回滚任何源存档。
+新安全备份位于 `backups/steve-motion-b-20261015T065716.762899Z`，87=36存档+19世界+旧收据1+旧安装5+原元数据2+dirty23+manifest1。
+安装时23 dirty前后保持；本轮修改前当前仅三份后续权限文档不同（CHANGELOG/current-state/progress），其他20项及HEAD相同。
+主机ZMJJKK，游戏／Python进程0；未启动游戏、重跑44／13、backend或codec，未提交上传。
+独立保存证据复核子任务按用户新偏好使用gpt-6-astra ultra；本环境未确认小闪电设置，不声称已启用。
+
+下一步用户进入同一存档，以相同装备和相近视角仅W走约10秒，肉眼报告自身左肩／左上臂有变化、无明显变化或异常。
+不要求录像，A1口述基线仍有效；B仅5°诊断，未知原生旋转方向不预言。正常退出后按反馈安排A2，不自动进入下一阶段。
+尚无B实际游戏反馈，不能把文件事务成功当作引擎选中该clip、可见动作变化或MC完整步态已应用。
+
+## 2026-10-15 精准权限诊断，未再次尝试安装
+
+仅重读已有execution-blocked.json／startup-diagnosis.json／startup-diagnosis-r2.json及查询当前身份／文件属性／ACL，不重跑安装门禁或被拒绝的Python命令。
+上次实际命令为固定Python312 `-I -S -V`，PowerShell返回ResourceUnavailable，子进程启动失败／拒绝访问；该输出未记录原生错误号。
+两份10月13日诊断明确记录文件读取PermissionError(errno13, winerror5)，当时runtimeLaunchAttempted=false；不能用旧读取错误号冒充最新启动错误的完整异常。
+当前身份ZMJJKK\CodexSandboxOffline，PowerShell7.6.5／FullLanguage正常；Python312的EXE和目录Get-Item成功，Get-Acl均UnauthorizedAccess、HResult=-2147024891（0x80070005）。
+因此不是整个执行器不可用；能读元数据不证明能读ACL或启动子进程。仍不能确定具体NTFS规则、沙箱令牌或其他策略中的哪一项导致启动拒绝。
+当前工具合同为workspace-write，仅工程与Temp可写，E盘实际游戏安装不在可写根内；正式支持exec_command的require_escalated＋justification申请。
+历史审批记录只有aborted by user after132.5s，无请求ID，approvalGranted=false、explicitDenialReturned=false、pendingApprovalConfirmed=false；不能推断用户主动拒绝、已批准或仍待审批。
+旧记录中batchResultExists/planExists=false仅属历史时点，不是当前状态。独立代理复核以上判断一致。
+本次未再次发起审批、改ACL／安全设置、复制解释器、换shell执行拒绝命令或使用GUI绕行；B安装仍未确认，保持现状。
+
+## 2026-10-15 接受A1人工基线并准备现成B的单次切换
+
+用户最新明确“不用看录像了，就是跟原来一样”，并已确认正在走路；据此接受A1人工观察，取消录像等待和搜索。
+不是模型实际查看动态帧，不能证明精确walk_f_00 clip选择或MC动作完成。旧路径查找仅作为历史负结果保留。
+当前主机ZMJJKK，Get-Process游戏／python均0；active930d4da0…／SHA8d372eeb…、实际41游戏文件与owner仍匹配A1。
+固定Windows Python312的 `-I -S -V` 再次在工具端ResourceUnavailable／拒绝访问；没有以其他解释器运行安装、绕权限或改安全设置。
+
+仅从已成功的run_a1_install.py复制适配新ignored入口 `build/steve-paa-motion-pack-20261013/run_b_install.py`，
+SHA256 `398e110b80205fd5e49e032d48c7e4d9824d4b0bcf1cfca7b7de7cd97720793a`；原A1入口及helper固定摘要保持。
+旧身份改为930d／motion／原PAA A，目标固定现成B plan353ec37f…／variantB；恢复与安装均用install_steve_motion_probe公共入口。
+当前源存档／MC世界在restore前现读现复制新目录；保留dirty及各代备份，按固定A1收据拼出的38项备份map及固定before.json的87项安全备份独立校验。
+保留关闭游戏／固定EXE／源码pins、41→38无active无0041→新B41、原生两事务锁与失败诊断；不启动游戏、自动A2、回滚旧存档或执行codec。
+
+必要静态核对：Python3.12语法解析通过；5个未变helper函数及全部异常处理AST与实际成功A1入口相同；
+新restore/install各一个标准公共调用，无oldSteve／_unlocked／二次native.load_cdmw路径。实际A1备份map38和安全备份87回读匹配。
+原44／13证据、来源摘要及B包继续复用，未重跑大批检查；静态检查不代表B真实安装通过。
+当前仍A1 installed，最新备份／A1恢复／B安装尚未执行；用户需普通PowerShell执行文档中的单条 `--install-b` 命令。
+成功后先核对日志／新收据和实际文件，再肉眼观察角色自身左肩／左上臂的小幅角度或摆动差异；不要求视频，不预言未知原生旋转方向。
+有变化需A2返回对照；无明显变化保留诊断不确定，不能称MC步态应用失败。未提交上传。
+
+## 2026-10-15 A1人工走路反馈与录像路径负结果
+
+用户明确“在走路”“还是原来红沙的走路姿势”；当前安装A1保留原始PAA，这条反馈不能作为B无效结论。
+本执行环境 `[Environment]::MachineName` 返回ZMJJKK；cwd为 `C:\Users\ASUS\Desktop\CrimsonMC`。
+对指定 `C:\Users\kk\Videos\Captures` 执行Get-Item／Get-ChildItem前置查询，Get-Item返回ItemNotFoundException，目录不存在。
+没有搜索其他用户目录、转到其他机器或假称看过录像。动态帧尚未查看，需主窗口取得实际录像完整路径。
+
+主任务随后明确授权检查标准Videos/Captures和系统已配置位置，已执行只读查询。
+HKCU User Shell Folders的My Video为 `C:\Users\ASUS\Videos`；Captures GUID无用户重定向，HKLM定义为Videos下Captures；
+当前HKCU的GameDVR／GameBar键不存在。ASUS标准Captures目录非链接，含隐藏项共2文件、0子目录、0视频：一个.ini和一个.png。
+唯一Crimson游戏文件 `Crimson Desert 2026_5_14 20_45_31.png`，2,597,355字节，修改时间2026-05-14T20:45:31.2947006+08:00。
+通过view_image实际查看该PNG，画面为Steam覆盖层／游戏地图，没有可供评估的行走动态帧，不能认定为本次A1基线。
+没有扫描无关私人目录，没有可供选择的录像候选；仍需用户提供录像本身或完整路径。B未安装。
+
+Get-Process确认CrimsonDesert／python均0；实际active为930d4da034ee4086b8f65be5b055cf77、installed、motion-original-a-v1。
+receipt SHA8d372eebf3bebbfe197afe2563c282086500d6d72df3f24bd579907e91869618；实际41文件和owner逐项匹配。
+只读B计划manifest SHA353ec37f056a520b36fd19a229930b617756bc3f6607f61cd21bf4ee9381121f，6文件／13报告／15资源及原review38输入摘要均匹配。
+首次内联核对误将candidateReports项目相对路径接到plan下，触发FileNotFound；按安装器既有ROOT语义修正查询后全部匹配，未改任何计划文件。
+本轮未运行backend、44／13批次或第三方codec；未写游戏、未新建备份或安装脚本，保留A1供基线核验。
+待取得并保留录像后，使用install_steve_motion_probe的公共restore／install及已有custody最新备份逻辑进行A1→B，
+不使用仅接受steve-mesh-parameters的旧Steve恢复入口，不跳过最新存档／MC备份或关闭游戏门禁。B仍只是左肩5°诊断。
+本轮仅更新交接文档，未提交上传。
+
+## 2026-10-14 用户实际完成A1安装，主控只读核验终态
+
+用户执行固定Python312的 `run_a1_install.py --install-a1`，attempt `20261014T015529.714409Z`，
+01:57:09.898582Z结束，exit0／passed=true／a1-installed-awaiting-observation。主控未重复运行或干扰安装。
+run-state SHA `04da2a5cf2d69392d96af5bb8022cc7f19135e2de25f719663bfb9f03bf02616`；
+installed-a1 SHA `4db66126e919e01da1c40cca8be025c7c92a9547c6006c743dab7ded9e4e9bc3`。
+旧f616标准恢复返回restored／savesRestored=false；restored.json记录38原文件匹配、active及0041均缺席后才安装A1。
+新收据 `930d4da034ee4086b8f65be5b055cf77`，SHA `8d372eebf3bebbfe197afe2563c282086500d6d72df3f24bd579907e91869618`，
+kind=steve-motion-visual、0041、A计划d2c6c10d…，仍是15资源的原PAA基线。
+
+只读内联Python回读实际41游戏文件、active／旧history／owner、87项新安全备份、新收据的36存档及原元数据副本、
+MC source2／build118／world19、EXE／ASI／origin、23项原dirty和HEAD通过；Get-Process确认游戏及Python均0。
+独立子代理仅复核保存证据：安装前／恢复后／A1后三份common与before一致，日志无矛盾，41→38→41阶段关系成立。
+主控再次读取Steam侧8项源存档通过；本地28项源存档遇工具PermissionError，该组保持结论来自固定安装程序前后核验，
+不能扩大为独立源文件复读通过。两套当前存档副本均已独立核对；没有回滚最新存档。
+安全备份 `backups/steve-motion-a1-20261014T015529.714409Z`：87=36存档+19世界+旧收据1+旧安装5+原元数据2+dirty23+manifest1。
+全部原始证据在 `build/steve-paa-motion-pack-20261013/a1-install-attempts/20261014T015529.714409Z`。
+本轮未改安装器、重跑44／13、执行codec或增加测试框架，仅只读核验及更新交接；未提交上传。
+
+下一步正常进入最新存档，安全平地固定第三人称镜头和装备，录站2秒→仅W10秒→松开2秒，标注实际走路或慢跑，再正常退出。
+若闪退／明显变形停止并报告。完成A1观察后才准备B，每次换包须正常退出、核对最新存档和标准恢复。
+原PAA基线安装不等于MC走路完成，实际clip选择、资源可见影响、MC真实状态／时序与六关节原生应用仍未验证。
+
+## 2026-10-13 修正A1实际入口的Windows执行位误判
+
+用户实际attempt20261013T130514.562916Z失败exit1/phaseentry，错误在a1_custody._hash_once比较EXE路径lstat与句柄fstat，
+尚未backup／restore／install。Get-FileHash独立实际EXE仍57da440d…fde1e7，版本1.0.0.2976；实际41文件与f616完整匹配，
+active SHA5a4df832…352d5d，无新backup根。未把错误解释为Steam更新，也未跳过校验继续安装。
+
+CPython v3.12.10官方源码明确路径查询会按.exe等扩展名加mode0111，句柄查询不加；修复仅Windows跨API去掉这组合成位。
+原路径前后完整mode/ctime/attributes、dev/ino、类型／读写位、size/mtime、双SHA、reparse拒绝及固定EXE门禁保持。
+旧helper28ec／runnerc7c原样存入失败attempt的before-fix.py；现helper2da79f23…、runner4b83ac75…。
+针对性fixture7项重现旧误报，修后模拟该API差异通过，file id／读写位／size／mtime／类型变化仍拒绝；
+报告build/steve-paa-motion-pack-20261013/a1-custody-mode-fix-result.json。只运行此小回归，未重跑44／13或真实安装。
+由于失败旧日志没有双方tuple，不能声称所有其他字段已经实测相等；重试时仍保留完整拒绝和字段诊断。
+下一步保持游戏关闭后重试原A1入口一次，终态核验后才给站2秒／W10秒／停2秒的基线观察。
+这是诊断资产路径；真实MC步态仍需正常玩家输入tick的六关节姿态及已验证原生时序控制，不能以现有冲量32帧或5°资源替代。
+
+## 2026-10-13 独立13项实际通过；下一A1事务已具体化
+
+用户12:38:27Z启动run_next_review.py（dfb9c036…），12:43:05Z finished/exit0；13/13，failed=[]。
+review SHA ff8af6747cd36f4e4f73724350c5c8f2173f0ef4bdb7e7976d8b18568dab4230，四类负例先通过clone阳性控制再拒绝。
+同decoded重编码实际对象为partprefabtable.pappt；547变更字节均在776白名单内，原14 encoded/flags/orig_size保持。
+前快照5c009575…、后快照241156e2…；12保护组297摘要、22 dirty／HEAD完全相同，后续当前38输入pins也全部匹配。
+当前f616／0041仍installed，没有安装动作资源；保护快照成功不等于新备份已创建。
+
+用户随后明确授权最新备份→标准恢复旧f616→新收据安装A1，A1观察前不进B。
+新增ignored a1_custody.py（28ecad31…）和run_a1_install.py（c7c16fe1…）；不修改已通过44／13的冻结源码。
+helper检查脚本使用build内mock ROOT小夹具，21/21；覆盖正常复制、漂移、已有目标、越界、link/reparse、权限和数量大小门禁。
+entry真实失败处理器＋假动作7/7（a1-entry-failure-check-w7s1k9jz/result.json），保留安装返回后active状态及诊断权限错误，不假称已回滚；
+两项验证均不执行真实事务或backend。入口AST和独立静态合同审阅通过。
+
+新入口固定13／44证据、工具源码、A1 d2c6c10d与原B5PAA；在同进程使用固定bootstrap一次及标准public restore/install，
+新复制当前36存档／19世界及dirty／旧0041／元数据，复制末读通过后才恢复。恢复后必须原38匹配、无active／0041、
+旧history restored才安装A1；末验新41、marker、metadata、saveBackups和保护保持。固定原PAZ单区间双采样，不扫描／解码PAA。
+当前游戏进程0；固定Python仅-V普通工具启动仍拒绝访问，未运行入口；真实备份、恢复、安装尚未执行，普通PowerShell命令详见steve-motion-a1.md。
+异常即停，无B、无重试、无旧ID复活、无存档回滚；实际游戏效果另验。不提交／上传。
+
+## 2026-10-13 独立复核手动接续与真实文件读取边界
+
+新增ignored入口run_next_review.py和stdlib readonly_preflight.py；前者固定旧44项batch及四源码／五输入，
+读取前后保护快照并运行已有review_packages.py的13项（不重跑44项，不用PAAcodec，不安装）。两文件AST通过。
+前置脚本在工具环境实跑：游戏进程0、实际41游戏文件全部与f616收据SHA相符；current save目录WinError5，exit1。
+证据为build/steve-paa-motion-pack-20261013/readonly-preflight-20261013T054033.869703Z.json；
+早先053911版本用is_dir隐藏了权限错误，保留原报告并改stat/onerror，不能据“missing”认定存档丢失。
+EXE版本元数据1.0.0.2976可读，但完整EXE SHA、全部当前存档／MC／55备份fresh核对尚未完成。
+用户下一步仅在普通PowerShell运行新入口，日志写next-review-attempts/<UTC>；前置失败则不执行独立13项。
+标准restore本身不会新备份当前saves；因此正式A1前必须另做最新存档／MC新备份及核对，当前未触碰实际安装。
+独立13项仍未执行；A1/B/A2未安装或实测，5°Y只是资源可见影响对照。保持当前no-upload覆盖要求。
+
+## 2026-10-13 实际A/B构建与44/44隔离事务通过
+
+用户普通PowerShell已实际启动固定Python3.12.10，attempt20261013T045546.434257Z，runner b1309299…。
+console实录A/B分别Built and admitted，均15/13；manifest SHA d2c6c10d5b4ef76bdca748a9d56242c115df78868339f3fc15167db692322d54
+及353ec37f056a520b36fd19a229930b617756bc3f6607f61cd21bf4ee9381121f。
+独立stdlib只读复核12/12文件摘要、旧14资源行／12报告／34索引、before与PATHC-after保持；未执行独立13项动态脚本。
+05:26:51.840049Z终态exit0：A22/22耗时834.784秒，B22/22耗时830.634秒，均0失败0错误，batch passed=true。
+44项涵盖真实包decode、副本install/restore、新存档保留、安装／恢复各阶段故障与外部修改保护、锁与active互斥、
+版本／源索引门禁、motion来源／备份期间输入漂移及custom state_root拒绝。EXE与34索引使用明确的微型sentinel身份夹具，未访问正式游戏。
+batch-result.json SHA06deae6c2516205c13b6b4bbd488821a34112f544a1188185d5c6a009a7ebc2d；completion-readback七项末读通过。
+实际四源码及五保护输入前后摘要一致（原PAA／Y5／69a计划／已消费codec marker／旧Steve dirty安装器）；无PAAcodec模块导入。
+实际runtime收据只读仍登记f6169fc1/installed/0041/69a；本批不含真实41文件、最新存档／生产MC／55备份的fresh hash，后续实机门禁须重采。
+下一步独立13项包混搭／重编码拒绝复核尚未运行，再核实际版本和最新保护快照，标准恢复旧active后新单收据A–B–A。
+不直接叠加0042或改receipt；用户段间正常退出，保留最新save，最终原14 Steve模式以新有效收据恢复。MC走路和游戏接受性仍未验收。
+
+## 2026-10-13 启动失败的有界诊断和代码修复
+
+只读核到Python312 EXE/DLL及lz4缓存均WinError5，而固定LICENSE／69a报告／PAA可读；执行隔离与宿主ACL仍无法区分。
+旧提取记录固定_block.cp312-win_amd64.pyd，PATH为MinGW3.14；没有用其替代执行受阻batch。
+修复MotionChecks.setUpClass重复fresh-only load_cdmw；改用原有核固定来源/版本的bootstrap_backend，独立源码复核确认。
+run_offline最外层新增启动日志与异常状态，覆盖原main内try之前的失败。自写diagnose_startup仅AST提取logger、假action，
+八项检查通过，另修复断管不留日志和SystemExit(None)码；无归档backend导入或Python312启动。startup-diagnosis-r2.json保留最终错误与检查来源，首版保留。
+新增steve-motion-offline-run.md用户手动普通PowerShell选项及日志验收，不改权限／安全设置，不再重复升权。
+A/B包、44项完整隔离事务和13项独立包复核仍未执行，正式游戏和MC未操作，未上传。
+
+## 2026-10-13 固定动画A/B封装源码，待实际构建
+
+新增prepare/install/check_steve_motion_probe及共享安装器motion分支。15资源／13报告固定A/B，
+原14 encoded/flags/orig_size保持；采用admitted packageBytes与备份后snapshot末读，custom state_root仅允许build内fake game。
+四源码AST、installer九项stdlib guard及独立十一项静态合同通过；旧Steve dirty文件保持。
+run_offline.py、22×2隔离事务及独立13项包检查已准备，均未执行。固定Python3.12普通启动拒绝访问；
+三个升级权限调用终止，最新工具原文aborted by user after132.5s，未给approval ID或明确批准／拒绝。
+末读确认A/B manifest和batch-result不存在。按父任务要求停止重试，等待具体运行权限；不猜测中断责任。
+无正式游戏／存档／MC操作，无PAAcodec重跑，无提交或上传；MC走路及游戏内动画仍未验收。
+
+更新日期：2026-10-12（UTC）。当前开发目录为桌面 `CrimsonMC`，仓库为
 [dhcy-Asion/MC-](https://github.com/dhcy-Asion/MC-)。新聊天先读
 [../AGENTS.md](../AGENTS.md)、[architecture.md](architecture.md) 和本文件。
+
+## 2026-10-12 路线调整：可逆动画资产与视觉A–B–A
+
+用户明确：不依赖尚不存在的同帧骨API评估有界资源实验；clip未知可留作假设，不再以取得任意姿态API阻断资产路线。
+精确MC姿态/engine语义仍另验，本轮不安装/启动，不增加第三方工具执行、不盲写内存或扫描。
+`verify_installed_source.py`固定Python3.12 -I/-S/-B只读真实索引和一个PAZ片段：0009 PAMT19,583,922B/
+c561ae…，直接解20B record78421，不遍历654070条资源；虚拟路径固定walk_f_00，paz16 offset377952160，
+comp32444/orig41592/flags2。encoded EA067…双读64888B、stat/index/receipt末读稳定；没有新解压。
+首guard因baseline Windows分隔符key查询早停，未到record/PAZ；r1源及失败保留，规范化key后完成同范围核验，未扩大读取。
+资源源码审阅79静态断言：opaque ArchivePatchRequest支持既有非加密flags2 LZ4 block(store_size=False)，不需要PAAcodec；
+PAZ/PAMT/PAPGT使用已知PA lookup3 checksum，保持现inprocess override，不触发native accelerator。
+现通用crimsonmc_ basename/固定替换路径、SteveFLAGS/reportset/owner dispatch都不能直接安装PAA，禁止泛化放开。
+事务审阅确定优先严格合15/13报告：原69a计划14资源encoded/hash/flags/origsize保持，A=B5原片段/B=909Y5，
+同一sharedlock/active receipt；先标准恢复f6169f，不0042叠装、不重用旧UUID或state_root。
+现receipt有34 sourceIndexes，连installed0041共35当前PAMT；未来逻辑只增加一个motion文件，物理2meta+3owned文件。
+原0009/16.paz及34源索引不写；PATHC-after A/B与当前Steve保持。每次normal exit后先保护最新save/MC，restore不写旧saveBackup。
+视觉4项保存证据检查通过、实测0次：旧A预测Y5肘位移约骨長8.7%，可能数像素/被遮挡，不扩大5°；
+集中A1/B/A2各站2s/W10s/松2s，同Steve/装备/镜头/地面；段间全退出+新事务。可见影响/未检出/混淆/崩溃判据已具体化。
+正反馈仅特定resource影响此配置；boot无crash不证明片段读取，负反馈不能区分未使用/cache/metabin/blend/约束/投影/小幅度。
+normal异常可有限回滚；hard stop/tmp/外部meta/owner或版本变化则停止，保留收据/备份，不能强杀或盲覆盖。
+下一独立步骤：新增严格motionClip literal branch、15/13 owner/loader，并对A/B包和安装/恢复故障用隔离fixture验收。
+尚未实现入口/构建组合包，不宣称可立即安装；验收完成后父任务集中协调用户状态。本轮开始保护17/17，原17dirty/55备份保持。
+计划和三独立审阅见[资产接续](steve-paa-route-20261012.md)最新视觉实验节，无上传。
+
+## 2026-10-12 实际生成自写Y5单肩离线候选
+
+父任务新阶段明确授权自写标准库派生候选；覆盖前轮仅分析的自设编辑门禁，不续期第三方codec或扩游戏安装。
+WindowsPython3.12 SHA4d6f5f81…、源码fb0e/输入B5/轨表14c94856已在before-custody核定，17/17与前态相同。
+正式命令均为固定Python3.12 -I -S -X utf8 -B，附--approved-offline-y5；本轮实际自写writer调用2次，codec0。
+首命令运行old prepare_single_shoulder_candidate.py，exit1、无candidate，failure AssertionError；input/table末读True。
+诊断发现rawSha04d32fb2…实际指values[15752,16722)970B，原稿错误拿count+values[15750,16722)972B对比；
+两者实际SHA分别04d32fb2…与ad99ab59…，owned_layout源码digest(data[pos:end])证实范围。此前纯静态范围关联漏检记录保留。
+不改fb0e原稿或首attempt，prepare_corrected_writer.py仅另写1d170043修正源码：独立u16count97与970B键SHA，
+输出改到新owned candidate-r2；其余操作/776B白名单保持，准确诊断后完成同一授权目标，不盲重试或覆盖失败。
+修订命令运行build/steve-paa-y5-20261012/root-audit/prepare_single_shoulder_candidate_r2.py，exit0/约0.123秒。
+新41592B PAA SHA909dd356f6087862e23a37596f4a229b310d87dc8d11ef04e88c8524e554b675；实际547差异、
+776B允许集合之外0差异；97keys/frames0..96、header/root/count/unit/duration/scale/translation和其他字节保持。
+writer报告最大half量化角误差0.009823435°≤0.1°、norm误差0.000235124≤0.0005，hemisphere通过；
+result df80d2ab…保存全部97记录，input/table末读不变。独立仅读实际原件/候选、保存表与源字节复核另存
+build/steve-paa-y5-20261012/independent-candidate-review，不执行writer/codec/上游测试。独立9资源+2保护共11/11通过、无失败；除白名单外40816B逐字同原件，
+全部97帧/half组件及96对hemisphere一致，报告SHAea0d99ac…；这不是writer执行次数或引擎验收。
+候选只定义旧离线A意图下的Y5诊断，不证明actual clip/engine接受/renderer或MC动作；Spine与全链负结果仍保持。
+下一最小实机步骤先原片段正式同帧actor/有效clip/phase/101与71输出，当前出口未知；安装后无变化不能区分原因。
+只新增ignored候选/证据和5文档，不安装/启动、解码EXE代码或采样原生内存，不改变存档/MC/备份或上传。
+最终保护见after-custody；新授权及实际两命令、首失败/修正/候选均保留。详见[资产接续](steve-paa-route-20261012.md)最新Y5节。
+
+## 2026-10-12 补旋转语义oracle及最小可区分实验
+
+范围：只读现有源码/保存轨道值/固定骨表、自写数学分析；零codec调用、PAA/PAB原件读取、动作修改、安装。
+`python -X utf8 -B build/steve-paa-oracle-20261012/root-audit/rotation_oracle.py` exit0：4有限identity/noncommuting
+数学夹具，Hamilton xyzw的rowR(a×b)=R(b)R(a)与独立cross-vector oracle吻合；97keys误差<1e-12。
+两种bind-delta假设预测角差0.916519273°(26)..29.976519775°(7)，均能产生有效矩阵，因此保存原值无法判别实际engine。
+独立r2复算16/16通过；r1自身把已知“=1”矩阵差写成“>1”，首失败报告保留，不是root/codec重跑。
+肩→肘回101local=(.320711772,2.4216e-6,1.3504e-6)，+X偏0.000495344°；delta右乘X5°在A下肘位移
+2.41885e-7，在B下.025120655；Y5°对照为A .027978502/B .012375423（均未校准资产单位、rotation-only、父/scale/translation固定）。
+故X主要twist不能叫MCswing；Y仅准备的横向诊断。Spine16原3.395e-6及全链重组肩bind2.225e-6均超2e-6，
+不放宽阈值。直接肩/父相对数学仍可分析，绝对整链和安装升级不准入。
+`read_cached_pose_text.py`仅git cat-file已盘点old alpha.22 pose blob28b3c98，禁lazyfetch/locks/prompt；
+12577B、SHA66ff7fe2、内容GitOID均保持，源码AST/text确认compose normalize(bind.rotation×delta.rotation)。
+只复制为ignored .txt，不import/execute；这是旧离线实现意图A的新确认，不是引擎动作证据。
+实际walk_f_00仍未选中证据；最小鉴别优先原片段同epoch formal actor→有效clip/cursor→PAB/PAC/PABC/receipt，
+以及101/71已知空间旋转/有效delta、blend/IK/约束数据。frame7信号可区分但不能猜phase或新调用控制接口。
+formal出口未知，不请求开游戏/安装，不扩大144B/44B扫描。
+已写DORMANT自写stdlib单track Y5°writer源码及新的离线编辑批准请求，未运行，attemptdir不存在；
+固定41592B副本、97现存half四元数、最大776B白名单，其余逐字保持，严格量化/有限值/hemisphere/readback门禁。
+这是待批准离线诊断，非已证MC轴/动作。静态审阅首报告三态缺口保留源稿，修为not-observed/unavailable/null，不虚报保持。
+本轮开始保护16/16，与上次17dirty终态一致；最终保护另存after-custody，不提交上传。结果和请求见
+[资产接续](steve-paa-route-20261012.md)最新oracle节。
+
+## 2026-10-12 下一只读步骤：唯一肩骨与父链
+
+用户授权仅利用保存轨表/固定PAB、自写分析和实验方案；已消费的一次codec不重跑，不改动画/安装。
+`python -X utf8 -B build/steve-paa-shoulder-20261012/root-audit/map_shoulder.py` exit0：
+输入轨表14c94856…/骨表a1180fc7…/PAB9c8a96…固定，72/72hash唯一联接，447骨名字/hash唯一且父链有效无环。
+track29、record15728..16740→PAB101 LUpperArm；rotation count15750、values15752..16722，97keys/0..96。
+独立只读两JSON复核11合同+2身份=13/13通过，不读PAA或执行codec。
+父链101 UpperArm→71 LClavicle→40 Spine2→24 Spine1→16 Spine→13 Pelvis→0 Bip01→-1。
+当前身体slot51/82/92分别133 UpArmTwist、348 Hand、349 Forearm_sub，均为肩子孙且PABC覆盖；101不直接加权。
+自写stdlib仅读取本地固定PAB并核7条已知记录；尾部scale3/xyzw4/translation3复原第3局部矩阵，7/7在2e-6内。
+肩101 normalized TRS误差3.753e-8、local×parentGlobal误差9.659e-8；全链parent组合按原2e-6有Spine16
+3.395e-6超限，6/7通过（含root比较），保留测量与负结果，不用阈值放宽证明全链通过。
+实际clip/owner/evaluator没有正式读出口，PAA旋转delta乘法/世界单位/播放时序仍未知，不把公开新pose实现
+当成已运行旧codec或游戏合同。最小单肩方案只拟+X5°、97×8=776B分量白名单，保持帧/root/其他全部字节，
+先补delta oracle和新的自写patcher/编辑许可，之后游戏action选择与安装恢复另验；本次候选未生成。
+本轮开始保护16/16、原17dirty与上一终态一致；末读另存after-custody。不会启动游戏/MC、实采内存、上传。
+结果、独立审阅和具体方案见[资产接续](steve-paa-route-20261012.md)最新肩骨节。
+
+## 2026-10-12 用户确认后的单次PAA无改动读写
+
+用户对固定alpha.22缓存/三个模块/原件副本的一次离线测试明确“允许”，原提案SHAc6de39e…保持，
+授权新记录在build/steve-paa-noop-20261012/root-audit/before.json，不覆盖旧awaiting字段。
+13:54:19Zfresh game0/nativeMC unavailable，17dirty/12保护组与上一终态一致，最新55副本保持。
+
+独立source审计物化仅3原字节py+原MIT，manifest SHA4ab542e…；326逐项来源/AST/readback断言通过。
+首额外LICENSE Git LF vs批准CRLF门禁失败保留，r2只复制提案原1086B/e5ee37…，不改外国源码。
+执行器首预审拒绝e386…的stdlib预载、失败留存及歧义门禁缺口，原源/blocked report保存，codec调用0。
+修后aee71f2f…，独立r2 grant SHA f289d850…通过13静态+5纯fake，旧13profile fake只复用不执行codec。
+
+正式唯一命令（现有WindowsPython3.12，cwd工程）：
+`Python312/python.exe -I -S -X utf8 -B build/steve-paa-noop-20261012/root-audit/execute_once.py`。
+14:20:45Z exit0：parse_paa1、encode_paa1、read_tracks1(pos108/root_full=true)，scan0/rebuild0。
+41592B输入/输出完全相同、difference0、SHAb5b5d5ae…；结果SHAee78e6a…，failure=null/readbacks=[]。
+独立stdlib先校72×3通道/根f32与pad，root-half不能完整消费，hash无重复；三固定module只在内存执行。
+没有pose/retiming/四元数修改、下载/新增第三方依赖、游戏安装/VM操作或生产MC启动。
+marker原子消耗本次授权，不为拒绝覆盖测试再跑工具。角色诊断13/13通过，只有mock，不实采。
+保存字节独立复核12/12、身份与范围10/10通过，共22组，未执行codec或新路线；
+[复核报告](../build/steve-paa-noop-20261012/result-independent-review/review.json)。
+本轮保护回读18/18通过：原17dirty仅5文档变化，最新55备份、41游戏文件、36存档、生产MC及
+非本轮原改动保持；[回读记录](../build/steve-paa-noop-20261012/root-audit/after.json)。
+
+本次no-op不验收MC动作或实际walk路由；后续最小离线步骤是已保存72轨hash与明确447骨PAB的唯一
+肩骨名字/hash/父链核对，不再调用已消耗的一次codec。单肩rotation差分、保持flags/root/timing/rest的
+候选及可逆安装/实际接受须分别准备与准入，当前都未执行。证据、独立结果和保护见
+[资产接续](steve-paa-route-20261012.md)末次no-op节。保留原改动，不提交/上传。
+
+## 2026-10-12 PAA资产接续：旧缓存codec能力与一个walk原件
+
+按新委托优先资产路线，保持M4a未完成；144B与44B下游仍停止。根与两独立审阅分别只读工具来源、
+公开format/encode/pose/tests、固定元数据；第三审阅独立核PAMT候选。没有动画编辑/安装或MC走路应用。
+
+实际本地CDMW787680f9/alpha.22：1663py固定fingerprint4eae434…匹配；现ZIP1742entries仅LICENSE+cdmw，
+不含tools/docs/tests。完整Git树3581路径实际已有PAA codec，10明确blob禁lazy-fetch核OID/SHA/末读；
+format0a0d21af…/encode6f108053…/initializerfe961274…，不把裁剪范围写成整个commit无writer。
+11794逐文件断言不是功能测试；新版75e commit本地没有，公开审阅13/13只验证报告，不是上游测试执行。
+
+`index_walk_candidates.py`仅fixed35 PAMT；宽规则两次预算早停、第三有限诊断保留；不增预算，改精确已观测
+目录/normal-walk basename后完整得到9路径，均0009记录78418..78426。名字不证明current action selection。独立索引16/16通过（12元数据+2身份+2范围），零PAZ载荷/EXE读取。
+`extract_existing_archive_donor.py`只用已有固定归档reader/现LZ4，源区间双回读/stat/索引/source/module保持：
+walk_f原件41592B/SHAb5b5d5ae…，PAA2.3 flags7非packed。`prepare_next_gate.py`只header数学校验：
+70skeletal/2root，key40756与116+72*10+40756=41592一致，duration3.200000286；未parse channels/hash或encode。
+PAMT flags2与PAA flags7明确区分，无PAA standalone模块导入/执行。
+
+已将旧cached三模块、MIT、Python3.12、固定donor及风险写入codec-execution-proposal.json；依本次明确的
+新外部工具逐次确认要求，等待父向用户确认一次无改动parse→encode。下一肩候选PAB101/L UpperArm/
+hash9b5df434只来自已证447骨PAB，donor track membership仍false；no-op、严格表边界/无fallback/唯一hash
+先验。delta修改、当前walk路由、可逆安装门禁分别保留未做，不将原件导出算MC动作。
+
+`python -X utf8 -B tools/check_character_probe.py`：13/13通过/exit0；没有实采，MC/server未启动。
+13:17:45Zfresh游戏0/nativeMC timeout；起始before12保护组/16dirty/55最新副本与上一终态保持。
+首次状态输出名前缀门禁拒绝后，仅修文件名重做status，未发launch或input。相关命令、副作用、来源及
+最终保护15/15通过/exit0，17dirty仅本轮五文档变化；41游戏/最新36存档/MC2/118/19及55备份保持。
+证据见[动作资产接续](steve-paa-route-20261012.md)。不提交/上传。
+
+## 2026-10-12 连接恢复后的144B终端与最新保存保护
+
+恢复后确认原14dirty逐字保持；old-after-r2仅存档组不相同（13/14），三份断线间更新全部保留。
+最新36存档+19生产世界备份55份，源/副本末读一致；`resume_custody.py after` **15/15保持/exit0**。
+五份补录文档65相对链接/围栏、AST21/JSON26及逆还原检查通过，`git diff --check`通过。
+12:13Z游戏实际0进程、native/MC均超时；没有重启服务、安装/恢复或native实采。
+
+`capture_decoder_dependencies.py`固定既有65依赖/metadata文件，58包payload与RECORD逐项匹配。
+保留首轮空REQUESTED早停源码，修后成功。binding5.0.7/dist5.0.9/native API5.0分别记录，DLL SHA76958e18…、
+Python EXE SHA4d6f5f81…和BSD license SHA404bd0…；没有新增/下载依赖或修改许可证。
+
+`decode_resource_callback.py`首预审25/26，因post-read故障不留raw而拒绝，原源码/报告保持。
+修后预审30/30及纯fake11/11通过；完整解码唯一144B，exit0，33指令、两前向je/ret，三个未展开调用。
+target raw SHAb1684037…、结果SHA84ea16ed…，源/EXE/65依赖回读稳定；不解引用或读取任何调用目标。
+独立终端复核30/30通过：手工核对全部原始opcode/ModRM/SIB/REX与分支位移，无新增EXE/调用目标读取。
+只证明有界格式/静态数据流，formal palette/count/stride/矩阵空间/owner/同帧寿命/ABI/线程仍false。
+没有单肢捕获、runtime顶点重放或MC动作应用；本路线在此停止，不扩扫描或跟callee。
+后续需新的独立typed骨evaluator证据，不能把未知调用、byte6/2或离线neutral当姿态合同。
+准确读账、失败历史及最后保持检查见[接续记录](steve-walk-20261012.md)末节。
+
+## 2026-10-12 独立接续：实际头身资源与 typed palette 前置
+
+本轮优先级按委托限定在资源/骨palette关系，保留当前installed包与原未提交工作，不提交/上传。
+通过实际字节确认当前身体189局部palette、447 PAB、13加权骨及每LOD752单骨/256双骨；
+当前头192局部palette仅slot0→122 B_face_com，已被head207 PABC覆盖。旧head93结论仅属旧包。
+本地4176个顶点记录、完整骨/hash/bind/inverse偏移与body420/head207 PABC覆盖已留可复核证据；
+prefab空骨架字段的parent继承、实际renderer选择和同帧运行时矩阵均未闭合。
+另行独立stdlib复核34/34实质资源检查与5/5辅助门禁通过，39与逐记录断言数均不计人物功能验收。
+
+命令（本工程cwd；使用既有Python，无安装/服务器启动）：
+
+- `python -X utf8 -B build/steve-typed-palette-20261012/resource-audit/audit_resources.py`：实际本地资源审计通过。
+- `python -X utf8 -B build/steve-typed-palette-20261012/resource-audit/verify_audit.py`：不调用项目解析器的逐记录回读通过；4176条顶点一致，拒绝覆盖检查通过。
+- `python -X utf8 -B build/steve-typed-palette-20261012/native-audit/audit_existing.py`：固定EXE前后、56次旧窗口与6个resource-job来源片段保持；13记录只是地址/片段。
+- 固定Windows Python3.12执行 `build/steve-typed-palette-20261012/root-audit/admit_resource_callback.py`：15/15边界检查，callback2DA6720无精确/包含unwind条目，首次正文0B；不是callback功能通过。
+- 后续独立 `classify_resource_callback.py` 经23项静态预审，单次5B E9分类及4B unwind元数据、12项门禁通过；目标144B的正文仍0B，typed骨接口未验收。
+- `python -X utf8 -B tools/check_character_probe.py`：13/13通过；没有运行会消耗材料或修改世界的检查。
+
+停止范围：不继续44B/0x110下游、generic bool或+110capacity8，不因no.pdata扩大代码扫描或猜骨矩阵。
+实际骨producer/consumer、runtime资源等价、count/stride/单位/空间/同帧寿命仍未证；没有单肢实采、
+MC动作native应用、写入ABI或恢复实验。左臂240顶点及三加权slot的最小合同已准备，须先满足typed前置。
+10:03Z native ready是历史快照；12:13Z恢复后的fresh状态游戏0、native/MC超时，未启动服务。
+保护基线记录41游戏文件、36当前存档、MC源2/build118/world19、两代各38备份与receipt/plan/ASI/EXE/原点；
+补做old-after时13/14保持，断线间slot1两save和Steam remotecache三差异保留；旧证据不改成全通过。
+新resume-before备份最新36存档和19世界文件共55份，复制/末读一致，后续按此新基线保护。
+终态保持复核及独立审阅结果见[接续记录](steve-walk-20261012.md)，原始证据留ignored build/runtime。
+
+## 2026-10-12 身体静态反馈与 MC 步态接口优先
+
+用户确认当前身体躯干/四肢没有错位、头五官正常保持。f6169f/69a12报告包继续 installed，
+独立 custody18/18：41当前文件、新备份原2metadata+36退出最新存档及9既有工具保持。
+全身MC衣肤、头比例、背部原装备、动态刚体/MC动作与完整持续人物尚未验收。
+云端主任务确实看图，但背部遮挡及躯干/左右腿颜色仍未排清；本设备未取得Library像素，
+官方传输在Windows身份元数据失败，未绕过或把图注当看图。用户最新优先骨架和走路，不再扩皮肤。
+
+当前组合ready=false源于MC8766不可用；09:09Z固定新实例11208的native ready/buildOk=true。
+磁盘MC schema3/revision25不是新完整API验证。新body in-world recorder未执行，不借旧PID/旧门禁。
+本轮没有重启/强杀游戏或生产服务、发送E、native调用/写内存、覆盖存档；红沙可正常退出。
+
+最后有界native实验解决入口边界后定位结构化44B→stride0x110共享buffer更新：精确1372B完整解码，
+独立16/16审阅；无逐骨/pose合同，RCX current R10跨两helper保留未证，全部应用/ABI等flags仍false。
+原exact-unwind失败、独立E9分类和receiver修正分别保留，终端后停止下游追踪，不作不可行总断言。
+旧r3实际13函数，旧prose14已在新索引纠正，不修改旧哈希绑定证据。
+
+现身体分段混合权重，不能沿用早期六单骨刚体表。真实32→96原地回放全零locomotion，旧123 walk
+为给定模型相位；下一隔离位移/停步getter实验与旧冻结capture分开。正常connected/client时钟、
+native palette/单肢回放、写入线程/恢复分别验收，不能以公开API注入位移或离线模型替代红沙walk。
+准确证据和后续解锁条件见[current-state.md](current-state.md)最新段落。
+
+另一路单次隔离MC位移源已完成：11真实tick落地后16公开x=.04冲量+16零x停步，32帧实际前进.64；
+speed峰.15995486→停步尾4.5125016e-05。独立30/30全43tick/rawbits/前帧/自然年龄/.4平滑/三delta
+通过；正常stop/exit0，MC生产src/build/world及41游戏文件/9工具/receipt/plan六组保持。
+保留r1比较误判失败，r2赋值门禁修正及9允许比较/18拒绝mutation反例，不重跑服务器。
+当前只能验收未连接玩家冲量导致的非零LimbAnimator，不是正常walking输入或native走路。
+
+按主任务约1小时调查收束要求，原生终端后不扩扫描；新96六关节回放准备源码留存但未编译、
+执行或验收。null手的正式MAIN比较→LEFT合同单列，未注入swing；完整pose输出不存在。
+需要新上下文的问题、精确文件和下一独立路线见[本轮收束记录](steve-walk-20261012.md)。
+
+
+## 2026-10-12 身体候选实际安装准备完成
+
+用户确认已退出后fresh核0进程，取得标准操作锁，独立备份退出最新36存档/完整MC/当前12未提交文件，
+61复制文件与源末读匹配。标准撤fc6a85并恢复验收通过；38原文件、最新存档/完整MC/原点/ASI保持。
+随后实际安装固定69a58b25身体包，active=f6169fc1ce4846caab758d1acb6ef898，目录0041；标准installed
+核41文件/36当前存档/完整MC保持，两原metadata及36最新备份逐项核对。新、旧备份均保留。
+没有重启/强杀/按E、改安全设置或还原旧存档；身体显示/native接受/MC动作未验收。
+下一步一次正常启动并由用户进入同测试存档，再fresh门禁/in-world与真实身体反馈；当前无Windows GUI输入，
+自动菜单E流程仍未实测。实际阶段记录与精确恢复命令见current-state.md最新安装准备段落。
+
+## 2026-10-12 世界内头部五官验收与下一身体候选
+
+用户进入世界后ready=true，当前fc6a85/e86011报告帽层包取得直接反馈“**五官正确**”。
+已保存原话、当前固定实例/收据/计划及所有证据SHA。原in-world recorder通过；owner6项受控
+Skinned身份/回链在双样本中稳定，头PAMI实读匹配。未证明pose/palette/线程/ABI或renderer选择；
+五官依据为用户实际反馈，不能扩展为完整Steve、头比例、背装备或MC动作通过。
+前后保护7项全true，完整MC/41安装文件/保护源码保持；两红沙save正常更新记录保留，不覆盖。
+本轮实机读取完成，用户可正常退出，未重启/强杀/撤包。退出状态后续须重新核验。
+单新callee1570B审计只闭合父上下文/依赖绑定，未发现typed骨变换接口，按边界停止。
+身体独立12/12与整包隔离34/34（0跳过）通过，严格12报告/14资源整包已生成但未安装；
+onlyPAMI sixbaseColor delta及13encoded保持、新进程重建/CRC篡改拒绝/全部安装恢复故障等通过。
+首轮0测试setup早停的assembly PAC可选flags假设已修复，r1失败证据保留，r2才为通过记录。
+包SHA69a58b25…，candidate PAMI93bebbb4…，证据为body-basecolor及body-basecolor-overlay同日r2目录。
+新增session status/launch/wait-ready工具13mock检查通过，只实读一次原实例ready，没有launch/E。
+用户指引正确页面单次E后等待已记录，但无Windows CUA窗口/截图/输入；Library官方落盘因Windows
+无os.setxattr失败，本机PNG不存在，直接read也只返回图片引用，未看像素/自动进入未验收。
+已明确剩余检查离线、用户可正常退出；下一实机轮先标准撤帽层旧包，再装身体单变量包，保护最新存档。
+准确现场、文件名、恢复次序及未验证项见[current-state.md](current-state.md)。
+
+## 2026-10-12 第一阶段接续与可回滚基线
+
+续轮用户明确授权自动启动。现有缓存离线runServer实测成功（首次临时init作用域错误早停，
+改allprojects后成功，仅转发stdin；生产源码/安全设置/EULA不改），固定3.12桥接及Steam启动成功。
+fresh游戏25496:134362527049736759／SHA57da…匹配；实读MC schema3/revision25/selected1，保存内容保持。
+原生ready=false，owner有限一次实采在controlled actor边界停止，精确manager/user已可读，Skinned/pose未成立。
+当前CUA Windows窗口/输入/截图API全部缺失，未用其它技术绕过；实机截图不可取得。
+已将真实尝试、失败边界、保存核对及本地GUI进入现有存档的具体下一步写入current-state，
+证据runtime/steve-stage1-20261012-live-attempt.json；保持游戏/后台/原包运行，不在运行中restore。
+本次启动不算世界进入、模型或MC动作验收；不重复此前离线测试，不下载未知工具或改安全设置。
+
+
+用户重新授权分阶段继续，先实际完整Steve及MC动作；复用Desktop/CrimsonMC，不上传工程。
+已用app任务接口核对“明确并启动持续目标”为idle，未访问受限会话目录；本轮未取得
+可读memory_summary.md，依据现有AGENTS/交接文档/真实Git及文件继续。main HEAD为38a9ee6；
+唯一既有untracked是inspect_fixed_meshinfo.py（原SHA d9d5461b…），未覆盖其它用户修改。
+
+可核验结果与现场统一见[current-state.md](current-state.md)的2026-10-12段落：新基线8/8，
+独立68份复制文件/209 tracked tar核对通过，41安装文件、原2元数据及36旧备份匹配；
+当前36存档及19MC世界文件另行备份。游戏关闭；MC API当前不可连接，离线备份不代表服务验证。
+透明帽层fc6a85…仍installed；本轮没有实机显示、owner实采、重载、动作或碰撞验收。
+
+既有inspector真实CLI先复现KeyError: pythonTreeSha256。仅将其来源摘要键修为实际
+pythonSourceTreeSha256，保留原换行及其余字节；新SHA c0f3620b…，固定Python3.12 CLI exit0。
+原脚本备份与精确单处逆替换、固定asset/来源、blob边界、三token、两省略bool、false状态
+共10项针对核对通过；`tools/check_character_probe.py`13/13通过。证据保存在既有runtime下
+`steve-stage1-20261012-{baseline,meshinfo,meshinfo-check}.json`，完整错误/运行输出留本任务目录。
+这是诊断可运行性修复；没有人物替换或原生动作新增。无未知工具安装、原生函数调用或游戏写入。
+
+按模型/贴图、骨架、各动作、装备/碰撞/镜头逐项验收；原MC版本1.21.1及classic wide Steve
+有固定配置/来源，不另选版本。当前先关闭无碰撞载体与受控姿态应用合同的关键缺口。
+省略字段不等于false，不重复同blob解析或旧布尔容器路径。新的有界静态结果及下一精确文件
+已收束如下；后续实机/正常退出/标准恢复按current-state执行，禁止并发争用窗口。
+
+有界新实验只查两个碰撞字段精确ASCII/UTF16名称和直接附带窗口：NoCollision标签唯一，
+三LEA/unwind片段264/264/620字节；注册field-relative+4f及两个setter，直接295字节helper
+证明栈0读到metadata+f0。两metadata候选表未取得有效primary COL；160字节owner getter
+及唯一直接160字节getter不返回已证类名，正式owner仍未知。省略字段默认使用/物理消费者
+未闭合，按停止条件结束；world字段无标签不是不存在性证明。四报告/四脚本SHA绑定和AST通过，
+各次EXE前后摘要保持。证据`build/steve-collision-fields-20261012/RESULT.md`及runtime摘要；
+未调用native、安装工具、开进程、改游戏或生成候选，collisionless/nativeApplied=false。
+之后只在获得新typed省略值/物理消费者合同或必要fresh会话时推进，不能沿同getter继续无限试。
+
+终态证据`runtime/steve-stage1-20261012-final-verification.json`：9/9保持检查通过，
+41游戏文件/36存档/19MC世界/7保护文件未变，HEAD38a9ee6保持；仅3文档及既有inspector
+有本轮修改，30链接/围栏及AST通过，游戏仍关闭、收据installed；不提交、不上传。
 
 ## 2026-10-08 最新：六组静态材质绑定候选
 
@@ -200,8 +791,9 @@ canonical为`build/steve-player-pose-1.21.1`；pose416499字节SHA
 仅playerStateCaptured与officialModelReplayedFromPlayerState为true，renderer、完整连接／
 20Hz生命周期、native、combat和完整动画系统仍false。
 
-原生路线有界审查：固定CDMW的PAA parser只从候选表提取rotation预览，默认30fps未证，
-无完整writer／原字节no-op往返／人物播放派发，因此未生成或安装动画文件候选。已有
+原生路线有界审查：当时已准备的固定CDMW裁剪包只执行rotation预览，未准备/执行独立writer和no-op，原生30fps未证；
+2026-10-12完整旧Git树已证有PAA codec，纠正无writer的过宽表述。人物播放派发仍未证，
+因此当时未生成或安装动画文件候选。已有
 World Builder MoveMany(false)支持degree YXZ（qy*qx*qz）和统一scale，六刚体视觉路线可
 避免未知骨骼palette写入，但当前接口缺完整owner朝向／父绑定、collision-only关闭、六件
 固定帧完成回执及临时对象层；默认live重插可能闪烁，missing/hidden成员可跳过仍返回true。
@@ -497,7 +1089,7 @@ M4a 与 M6a 保持进行中，完整移植目标仍为 active。
 | M2 原生角色接口验证 | 实际受控身份、F1 名单、原生请求和创建生命周期 | 区分角色 ID／Actor UID／佣兵 No；确认 F1 实际路径；确认新增身份需要的名单、创建、状态及保存接口和调用约定 | 进行中，未完成 |
 | M3 独立第四角色 | 创建与注册、F1 选择、控制、生命周期 | 原版三人保留，第四独立身份可切入／切出；重载、死亡、骑乘及任务强制回切不串状态；有游戏内证据 | 未开始，依赖 M2 |
 | M4 Steve 模型和装备（旧独立身份方案） | 原独立第四角色及装备隔离设计 | 旧方案只保留研究，当前按 M4a 的 MC 装备及原装备禁用验收 | 旧方案未开始，不作为当前门槛 |
-| M4a 持续史蒂夫模式（最新优先） | 复用控制身份，启用完整持续Steve、MC动作系统、仅MC装备、禁用恢复及方块 | 身体／皮肤／MC动作／装备正确，无原部件混叠；全部红沙装备入口禁用；MC状态与阶段时序对应，重载保持、停用恢复 | 进行中；九格常驻/刷新/断线通过，F8点击待验收；头位置、默认服装消失、最新姿势左手／身体四肢对齐人工通过；MC五官未通过，背装备、头比例及全动作／装备限制未完成 |
+| M4a 持续史蒂夫模式（最新优先） | 复用控制身份，启用完整持续Steve、MC动作系统、仅MC装备、禁用恢复及方块 | 身体／皮肤／MC动作／装备正确，无原部件混叠；全部红沙装备入口禁用；MC状态与阶段时序对应，重载保持、停用恢复 | 进行中；九格常驻/刷新/断线通过，F8点击待验收；头位置、默认服装消失、最新姿势左手／身体四肢对齐人工通过；当前头五官及身体观测姿势对齐人工通过；全身衣肤、背装备、头比例及全动作／装备限制未完成 |
 | M5 真实心形血量 | 将真实 HP／最大 HP 显示为心形 | 与真实受伤、治疗、最大 HP 变化一致，切人物不串读数；不显示虚构饥饿／经验 | 未实现，须验证读取链和行为事件 |
 | M5a MC 攻击／击退（2026-10-08 新要求） | 原攻击抑制、MC 单击输入、实际敌人命中／伤害／击退、MC 装备规则 | 一次点击一次攻击，菜单不攻击；实际目标、遮挡／距离／间隔与击退方向正确；MC 装备效果及耐久一致，停用恢复 | 未实现；当前无原生目标／伤害／击退调用合同 |
 | M6a 独立背包 | 全物品目录、整组领取、36 格选择、消耗与现有方块放置 | 原版64/16/1、满背包与未知物品回滚、只扣所选格、耗尽不跨格替补、保存迁移、面板实测 | 保留进行中，本轮优先 M4a／HUD |

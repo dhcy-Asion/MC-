@@ -1,5 +1,5 @@
 diff --git a/asi/cdmodkit/cdmodkit.cpp b/asi/cdmodkit/cdmodkit.cpp
-index 99718d9..612aec4 100644
+index 99718d9..b4627ce 100644
 --- a/asi/cdmodkit/cdmodkit.cpp
 +++ b/asi/cdmodkit/cdmodkit.cpp
 @@ -7,6 +7,7 @@
@@ -10,7 +10,65 @@ index 99718d9..612aec4 100644
  #include <cstring>
  #include <fstream>
  #include <sstream>
-@@ -928,6 +929,70 @@ bool GameReadFileRange(const std::string& path, std::vector<uint8_t>& out, uint3
+@@ -20,6 +21,9 @@
+ #pragma comment(lib, "version.lib")
+ #include "core_internal.h"
+ #include "guard.h"
++#ifdef CRIMSONMC_MOTION_OBSERVER
++#include "mc_motion_observer.h"
++#endif
+ namespace cdk { thread_local FaultInfo t_fault;
+ #ifndef _MSC_VER
+ thread_local GuardFrame* t_guardTop = nullptr;
+@@ -821,7 +825,47 @@ static void __fastcall IoHookWorker(uintptr_t worker) {
+         else Log("[io] hooking worker slot %d failed", k ? 5 : 4);
+     }
+ }
++// CrimsonMC diagnostic: fixed natural requests only; no handler access or I/O.
++#ifdef CRIMSONMC_MOTION_OBSERVER
++static mc_motion_observer::Observer g_motionObserver;
++static std::atomic<bool> g_motionHookInstalled{false};
++#endif
++std::string MotionLoadObservation() {
++#ifdef CRIMSONMC_MOTION_OBSERVER
++    const auto s = g_motionObserver.GetSnapshot(GetTickCount64());
++    std::ostringstream out;
++    out << "{\"enabled\":true,\"schemaVersion\":1,\"evidence\":\"natural-load-request-only\","
++        "\"actualClipSelectionVerified\":false,\"nativeApplied\":false,\"state\":\""
++        << mc_motion_observer::StateName(s.state) << "\",\"hookInstalled\":"
++        << (g_motionHookInstalled.load() ? "true" : "false") << ",\"startedAtMs\":" << s.startedAtMs
++        << ",\"endedAtMs\":" << s.endedAtMs << ",\"entries\":" << s.entries
++        << ",\"dropped\":" << s.dropped << ",\"readFailures\":" << s.readFailures
++        << ",\"invalidPaths\":" << s.invalidPaths << ",\"unmatched\":" << s.unmatched
++        << ",\"matched\":" << s.matched << ",\"inFlight\":" << s.inFlight
++        << ",\"durationMs\":" << mc_motion_observer::DURATION_MS
++        << ",\"maxEntries\":" << mc_motion_observer::MAX_ENTRIES
++        << ",\"maxMatches\":" << mc_motion_observer::MAX_MATCHES << ",\"paths\":[";
++    for (size_t i = 0; i < mc_motion_observer::PATH_COUNT; ++i) {
++        const auto& p = s.paths[i];
++        if (i) out << ',';
++        out << "{\"path\":\"" << mc_motion_observer::Path(i) << "\",\"count\":" << p.count
++            << ",\"firstMs\":" << p.firstMs << ",\"lastMs\":" << p.lastMs
++            << ",\"firstFlags\":" << p.firstFlags << ",\"lastFlags\":" << p.lastFlags
++            << ",\"firstThread\":" << p.firstThread << ",\"lastThread\":" << p.lastThread << '}';
++    }
++    out << "]}";
++    return out.str();
++#else
++    return "{\"enabled\":false,\"schemaVersion\":1,\"state\":\"disabled\",\"actualClipSelectionVerified\":false,\"nativeApplied\":false}";
++#endif
++}
++// End CrimsonMC diagnostic.
+ static void* __fastcall HookResLoad(void* self, void** out, void* path, uint32_t flags) {
++#ifdef CRIMSONMC_MOTION_OBSERVER
++    g_motionObserver.Observe(GetTickCount64(), flags, GetCurrentThreadId(), (uintptr_t)path,
++        PlayModeActive() || g_ioFilter[0] || g_ioHeightDelta || g_origWRead[0] || g_origWRead[1],
++        [](uintptr_t address, void* bytes, size_t length) { return ReadBytes(address, bytes, length); });
++#endif
+     if (!g_resLoader && self) { g_resLoader = self; Log("resource loader captured %p (%s)", self, RttiName((uintptr_t)self) ? RttiName((uintptr_t)self) : "?"); }
+     // play mode: an isolated level is loaded from an empty level file, an override from another game file (playmode.cpp);
+     // a local-file override keeps the original path and is served from memory by the read below
+@@ -928,6 +972,70 @@ bool GameReadFileRange(const std::string& path, std::vector<uint8_t>& out, uint3
      return ok;
  }
  
@@ -81,7 +139,7 @@ index 99718d9..612aec4 100644
  // ---- game call tracing (reverse engineering aid, console "trace on|off"): logs the game's own setWorldTransform / setEnable calls
  // with the caller RVA, every object the game creates, and transform changes of the most recently created game object per tick.
  static SetWorldTransformFn g_origSetXf = nullptr; static SetEnableFn g_origSetEnable = nullptr;
-@@ -1812,6 +1877,60 @@ void AssignProject(int uid, int proj) {
+@@ -1812,6 +1920,60 @@ void AssignProject(int uid, int proj) {
      int i = IndexOfUidLocked(uid); if (i >= 0) g_reg[i].proj = proj;
  }
  
@@ -142,7 +200,7 @@ index 99718d9..612aec4 100644
  struct LibraryNameLess {
      bool operator()(const std::wstring& a, const std::wstring& b) const {
          return CompareStringOrdinal(a.data(), (int)a.size(), b.data(), (int)b.size(), TRUE) == CSTR_LESS_THAN;
-@@ -6392,7 +6511,8 @@ static DWORD WINAPI InitThread(LPVOID) {
+@@ -6392,7 +6554,8 @@ static DWORD WINAPI InitThread(LPVOID) {
      overlay::Install();          // first: must be in place before the game creates its swapchain
      LoadPrefabs();
      if (g_httpEnabled) httpapi::Start(g_httpPort);   // opt-in; before ResolveGame on purpose: /api/status reports a failed build, writes answer 503
@@ -152,11 +210,32 @@ index 99718d9..612aec4 100644
      g_buildOk = ResolveGame();
      if (!g_buildOk) { Log("signature resolution failed; game functions will NOT be hooked or called"); return 0; }
      ReleaseHookGap();
+@@ -6402,7 +6565,12 @@ static DWORD WINAPI InitThread(LPVOID) {
+     }
+     if (kRva_ResLoad) {   // capture the resource loader instance from the game's own load calls
+         void* t = (void*)(g_base + kRva_ResLoad);
++#ifdef CRIMSONMC_MOTION_OBSERVER
++        if (!strcmp(GameVersion(), "1.0.0.2976")) g_motionObserver.Start(GetTickCount64());
++        g_motionHookInstalled.store(HookFn(t, (void*)HookResLoad, (void**)&g_origResLoad, "ResourceLoader.load"));
++#else
+         HookFn(t, (void*)HookResLoad, (void**)&g_origResLoad, "ResourceLoader.load");
++#endif
+     }
+     {   // tracing hooks (inactive unless "trace on"); our own calls pass through them as well
+         void* t1 = (void*)(g_base + kRva_SetWorldTransform); void* t2 = (void*)(g_base + kRva_SetEnable);
 diff --git a/asi/cdmodkit/core.h b/asi/cdmodkit/core.h
-index b3d08df..b9b1e41 100644
+index b3d08df..b5e5b13 100644
 --- a/asi/cdmodkit/core.h
 +++ b/asi/cdmodkit/core.h
-@@ -342,6 +342,11 @@ namespace core {
+@@ -304,6 +304,7 @@ namespace core {
+     void SetTrace(bool on); bool Trace();       // log the game's own setWorldTransform/setEnable calls (reverse engineering aid)
+     bool GameReadAvailable();                   // the game's resource loader can be used (instance captured, functions resolved)
+     bool GameReadFile(const std::string& packPath, std::vector<uint8_t>& out, bool* notFound = nullptr);   // read a pack file through the game's loader; notFound: no entry (false = the read itself failed)
++    std::string MotionLoadObservation(); // bounded natural requests, never proof of actor playback
+     // length > 0: only [offset, offset+length) of the entry as stored (partial textures keep their LZ4 blocks); storedTotal = its full stored size
+     bool GameReadFileRange(const std::string& packPath, std::vector<uint8_t>& out, uint32_t offset, uint32_t length, uint32_t* storedTotal = nullptr, bool* notFound = nullptr);
+ 
+@@ -342,6 +343,11 @@ namespace core {
      int  ProjectObjectCount(int id);               // visible objects + visible managed NPCs + terrain strokes (upstream scene-count semantics); 0 = new/unassigned
      bool ProjectDirty(int id);                     // an entity/metadata item changed since the last load/save
      void AssignProject(int uid, int proj);
@@ -209,7 +288,7 @@ index 6daa16e..0913c0f 100644
          ImGuiIO& io = ImGui::GetIO();
          io.MouseDrawCursor = !g_playMode;
 diff --git a/asi/cdmodkit/http_api.cpp b/asi/cdmodkit/http_api.cpp
-index 93f9853..50de6c8 100644
+index 93f9853..6ada6fb 100644
 --- a/asi/cdmodkit/http_api.cpp
 +++ b/asi/cdmodkit/http_api.cpp
 @@ -38,6 +38,38 @@ static std::string Num(double x) { char b[64]; snprintf(b, sizeof b, "%.9g", x);
@@ -251,7 +330,7 @@ index 93f9853..50de6c8 100644
  static void Space(const std::string& s, size_t& p) { while (p < s.size() && (s[p] == ' ' || s[p] == '\r' || s[p] == '\n' || s[p] == '\t')) ++p; }
  static bool Hex(char c, unsigned& n) {
      if (c >= '0' && c <= '9') n = c - '0';
-@@ -162,17 +194,135 @@ static bool Ready(int& status, std::string& out) {
+@@ -162,17 +194,141 @@ static bool Ready(int& status, std::string& out) {
      if (core::HooksReady() && core::GameThreadReady()) return true;
      status = 503; out = Error("game thread is not ready"); return false;
  }
@@ -316,6 +395,12 @@ index 93f9853..50de6c8 100644
 +}
  static std::string Handle(const std::string& method, const std::string& path, const Fields& arg, int& status) {
      status = 200;
++    if (method == "GET" && path == "/api/prototype/motion-load-observation") {
++        if (!arg.empty()) { status = 400; return Error("no arguments accepted"); }
++        std::string observation = core::MotionLoadObservation();
++        observation.insert(1, "\"instanceId\":" + Quote(InstanceId()) + ",");
++        return observation;
++    }
 +    if (method == "POST" && path == "/api/prototype/resource-probe") {
 +        auto resource = arg.find("resource");
 +        if (arg.size() != 1 || resource == arg.end()) { status = 400; return Error("one resource string required"); }
@@ -387,7 +472,7 @@ index 93f9853..50de6c8 100644
      if (method == "GET" && path == "/api/camera") {
          // pos + axis of the camera object; the axis sign is ambiguous, so "view" is the horizontal direction from the camera
          // towards the player (the third-person camera always looks over the character), which is what callers want
-@@ -442,9 +592,11 @@ static std::string Handle(const std::string& method, const std::string& path, co
+@@ -442,9 +598,11 @@ static std::string Handle(const std::string& method, const std::string& path, co
          std::string tail = path.substr(13); size_t slash = tail.find('/');
          std::string idText = tail.substr(0, slash); int uid = 0;
          Fields idField{ { "id", idText } }; if (!Integer(idField, "id", uid, true) || uid <= 0) { status = 400; return Error("invalid uid"); }
@@ -400,7 +485,7 @@ index 93f9853..50de6c8 100644
          if (method == "GET" && action.empty()) return ObjectJson(o);
          std::string out; if (!Ready(status, out)) return out;
          if (method == "PATCH" && action.empty()) {
-@@ -511,7 +663,8 @@ static bool SendAll(SOCKET s, const std::string& data) {
+@@ -511,7 +669,8 @@ static bool SendAll(SOCKET s, const std::string& data) {
  }
  static void Reply(SOCKET s, int status, const std::string& body) {
      const char* reason = status == 200 ? "OK" : status == 202 ? "Accepted" : status == 400 ? "Bad Request" :
@@ -410,7 +495,7 @@ index 93f9853..50de6c8 100644
      std::string head = "HTTP/1.1 " + Int(status) + " " + reason + "\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: " +
          Int((int)body.size()) + "\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n";
      SendAll(s, head + body);
-@@ -529,7 +682,8 @@ static void Client(SOCKET s, int port) {
+@@ -529,7 +688,8 @@ static void Client(SOCKET s, int port) {
      if (a == std::string::npos || b == std::string::npos || line.substr(b + 1).rfind("HTTP/1.", 0) != 0) { Reply(s, 400, Error("invalid request line")); return; }
      std::string method = line.substr(0, a), target = line.substr(a + 1, b - a - 1);
      if (method != "GET" && method != "POST" && method != "PATCH" && method != "DELETE") { Reply(s, 400, Error("unsupported method")); return; }
@@ -420,7 +505,7 @@ index 93f9853..50de6c8 100644
      for (size_t p = lineEnd + 2; p < end;) {
          size_t q = request.find("\r\n", p); if (q == std::string::npos || q > end) break;
          std::string h = request.substr(p, q - p); p = q + 2;
-@@ -546,6 +700,13 @@ static void Client(SOCKET s, int port) {
+@@ -546,6 +706,13 @@ static void Client(SOCKET s, int port) {
          }
          if (key == "origin") { Reply(s, 400, Error("browser origin requests are unsupported")); return; }
          if (key == "transfer-encoding") { Reply(s, 400, Error("transfer encoding is unsupported")); return; }
@@ -434,7 +519,7 @@ index 93f9853..50de6c8 100644
          if (key == "content-length") {
              if (seenLength) { Reply(s, 400, Error("duplicate content length")); return; }
              seenLength = true; std::string val = h.substr(colon + 1); char* stop = nullptr; unsigned long n = strtoul(val.c_str(), &stop, 10);
-@@ -560,8 +721,30 @@ static void Client(SOCKET s, int port) {
+@@ -560,8 +727,34 @@ static void Client(SOCKET s, int port) {
      while (body.size() < length) { int n = recv(s, buf, (int)(std::min)(sizeof buf, length - body.size()), 0); if (n <= 0) return; body.append(buf, n); }
      size_t qm = target.find('?'); std::string path = target.substr(0, qm);
      if (path.empty() || path[0] != '/' || path.find('%') != std::string::npos) { Reply(s, 400, Error("invalid path")); return; }
@@ -443,6 +528,10 @@ index 93f9853..50de6c8 100644
 +        Reply(s, sessionStatus, sessionFailure); return;
 +    }
 +    // Validate the raw request before generic scalar flattening/query decoding.
++    if (path == "/api/prototype/motion-load-observation" &&
++        (method != "GET" || length || qm != std::string::npos)) {
++        Reply(s, 400, Error("GET without query or body required")); return;
++    }
 +    if (method == "POST" && path == "/api/prototype/resource-probe") {
 +        std::string resource;
 +        if (qm != std::string::npos || !mc_resource_probe::ParseBody(body, resource)) {

@@ -5,6 +5,7 @@ requiring Python packages; it uses the upstream resource format unchanged.
 """
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import argparse
 import hashlib
 import json
 import struct
@@ -26,6 +27,13 @@ def run(args, cwd=SRC):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--motion-observer", action="store_true",
+                        help="Build the bounded motion-load diagnostic in a separate directory")
+    args = parser.parse_args()
+    global BUILD
+    if args.motion_observer:
+        BUILD = ROOT / "build/world-builder-motion-observer"
     BUILD.mkdir(parents=True, exist_ok=True)
     resource_dir = SRC / "build"
     resource_dir.mkdir(exist_ok=True)
@@ -55,6 +63,8 @@ def main():
              "-DIMGUI_DISABLE_OBSOLETE_FUNCTIONS=0", '-DIMGUI_USER_CONFIG="cd_imconfig.h"',
              "-I" + str(SRC), "-I" + str(mh / "include"), "-I" + str(mh / "src"),
              "-I" + str(im), "-I" + str(im / "backends")]
+    if args.motion_observer:
+        flags.append("-DCRIMSONMC_MOTION_OBSERVER=1")
     def compile_one(pair):
         i, source = pair
         obj = BUILD / f"{i:02d}_{source.stem}.o"
@@ -76,7 +86,8 @@ def main():
     run([TC / "g++.exe", "-shared", "-static", "-static-libgcc", "-static-libstdc++", "-s",
          "-o", output, *objects, BUILD / "resources.o", *["-l" + x for x in libraries.split()]])
     metadata = {"world_builder_commit": run(["git", "rev-parse", "HEAD"], UPSTREAM).strip(),
-                "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "bytes": output.stat().st_size}
+                "sha256": hashlib.sha256(output.read_bytes()).hexdigest(), "bytes": output.stat().st_size,
+                "motion_observer": args.motion_observer}
     (BUILD / "build.json").write_text(json.dumps(metadata, indent=2))
     print(json.dumps(metadata), flush=True)
 
