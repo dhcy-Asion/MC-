@@ -11,7 +11,7 @@
 // not evidence of file reads, selected archive bytes, actor use or playback.
 namespace mc_motion_observer {
 
-inline constexpr std::size_t PATH_COUNT = 4;
+inline constexpr std::size_t PATH_COUNT = 6;
 inline constexpr uint64_t DURATION_MS = 600000;
 inline constexpr uint64_t MAX_ENTRIES = 3000000;
 inline constexpr uint64_t MAX_MATCHES = 128;
@@ -20,6 +20,8 @@ inline constexpr const char* PATHS[PATH_COUNT] = {
     "character/binary/motionblending/phm_locomotion/basic_move_walk.motionblending",
     "character/binary/motionblending/phm_locomotion/basic_stride_walk.motionblending",
     "character/motion/1_pc/1_phm/cd_phm_00_00_nor_move_walk_f_00.paa",
+    "actionchart/bin__/loweraction/1_pc/1_phm/basic_lower.paac",
+    "character/motion/1_pc/1_phm/cd_phm_basic_00_00_nor_move_walk_ing_00.paa",
 };
 
 inline const char* Path(std::size_t index) noexcept {
@@ -171,26 +173,21 @@ private:
     }
     template<class Reader>
     static PathResult ReadPath(uintptr_t path, char (&text)[200], Reader& read) noexcept {
-        uintptr_t data = 0;
-        if (!Pointer(path) || !Read(read, path, &data, sizeof data) || !Pointer(data))
+        // Fixed 1.0.0.2976 EXE SHA256 57da440d72f4db974f25fef047cf84c4dadd999a88cb2a3c5af4c9bd67fde1e7:
+        // loader RVA 0x12d00b0 consumes [[original R8]] at 0x12d020e/0x12d0211;
+        // PathNormalizeCtor 0x12c6a80 stores the StringData holder at 0x12c6baa.
+        // Read only path -> holder -> chars (8 + 8 + 199 bytes). The holder's
+        // pointer bytes can resemble short ASCII; they are never path text.
+        // This fixed layout does not establish actor use or clip playback.
+        uintptr_t holder = 0, chars = 0;
+        if (!Pointer(path) || !Read(read, path, &holder, sizeof holder) || !Pointer(holder) ||
+            !Read(read, holder, &chars, sizeof chars) || !Pointer(chars) ||
+            !Read(read, chars, text, sizeof text - 1))
             return PathResult::ReadFailed;
-        bool failed = false;
-        for (int hop = 0; hop < 2; ++hop) {
-            if (Read(read, data, text, sizeof text - 1)) {
-                std::size_t n = 0;
-                while (n < sizeof text - 1 && text[n] >= 0x20 && text[n] < 0x7f) ++n;
-                // text[199] is local padding, never evidence of a native NUL.
-                if (n >= 4 && n < sizeof text - 1 && text[n] == 0) return PathResult::Text;
-            } else {
-                failed = true;
-            }
-            if (hop == 1) break;
-            uintptr_t next = 0;
-            if (!Read(read, data, &next, sizeof next)) { failed = true; break; }
-            if (!Pointer(next)) break;
-            data = next;
-        }
-        return failed ? PathResult::ReadFailed : PathResult::Invalid;
+        std::size_t n = 0;
+        while (n < sizeof text - 1 && text[n] >= 0x20 && text[n] < 0x7f) ++n;
+        // text[199] is local padding, never evidence of a native NUL.
+        return n >= 4 && n < sizeof text - 1 && text[n] == 0 ? PathResult::Text : PathResult::Invalid;
     }
 
     std::mutex mutex_;

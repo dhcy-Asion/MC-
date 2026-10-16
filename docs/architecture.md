@@ -20,12 +20,23 @@
 当前已恢复原PAA的A2。可见动作影响及当前clip仍未证明，不能把事务成功当作MC动作完成。
 
 2026-10-16新增 `mc_motion_observer.h` 的有限自然加载请求观察，仅在显式
-`build_worldbuilder.py --motion-observer` 的独立诊断构建启用。它复用已有HookResLoad入口，
-只读三份固定motionblending和旧walk PAA的路径，不访问handler／worker或资源payload；
+`build_worldbuilder.py --motion-observer` 的独立诊断构建启用。白名单现为六条：原三份
+`walk.motionblending`／`basic_move_walk.motionblending`／`basic_stride_walk.motionblending`、旧
+`cd_phm_00_00_nor_move_walk_f_00.paa`，以及父
+`actionchart/bin__/loweraction/1_pc/1_phm/basic_lower.paac` 和新
+`character/motion/1_pc/1_phm/cd_phm_basic_00_00_nor_move_walk_ing_00.paa`；均按完整路径精确匹配。
+父配置记录与PAA字段只提供静态引用依据，不代表已解析运行时选择图。
+它在ResolveGame成功后启动并安装已有HookResLoad入口，不覆盖更早请求；
+不访问handler／worker或资源payload，不主动加载资源或新增hook。
+固定1.0.0.2976 EXE的loader代码窗`0x12d020e/0x12d0211`和PathNormalizeCtor
+`0x12c6baa`支持严格`path → StringData holder → chars`合同，每入口最多读取8＋8＋199＝215字节。
+旧启发式会把holder内像短ASCII的指针字节提前当作路径；备份旧头的独立夹具已复现漏报，
+新头采用固定两跳并通过17项host检查，包含一跳拒绝与AAAA指针歧义回归。
+该缺陷不能直接认定为先前实机零命中的原因，离线通过也不代表六路径实机验收通过。
 一次600秒／3000000入口／128匹配，try_lock丢弃可见，出现既有I/O干预即停止。
-首轮100000额度在实机26.859秒耗尽，不能覆盖随后行走；仅据此扩大有界额度，未增加路径或重启采集接口。
+首轮100000额度在实机26.859秒耗尽，不能覆盖随后行走；当时仅扩大有界额度，未增加路径或重启采集接口。
 GET `/api/prototype/motion-load-observation` 仅返回采集快照、instanceId及hookInstalled，
-默认构建disabled；该接口不加载资源、不控制人物、不证明actor／clip／包优先级。
+默认构建disabled；命中只证明全局加载请求，不证明受控actor使用、clip播放或包优先级。
 
 复用当前红沙受控身份不再意味着继续使用红沙动作。最新要求包含 MC 的实际动作状态、
 时序、状态转换和六个刚性关节运动；待机、移动、蹲伏、挥击与物品使用需要分别与固定

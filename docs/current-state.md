@@ -1,5 +1,27 @@
 # 当前交接状态
 
+## 2026-10-16 路径误判已修复；六路径诊断已安装，等待本轮行走采集
+
+本节优先于下方历史恢复状态。当前游戏进程0；本轮诊断ASI `62f56f40…` 已安装，
+会话 `build/steve-motion-paths-20261016/observer-session.json` 为installed，**尚未恢复原插件**。
+原ASI `9d5cdc8e…` 与清单备份位于 `backups/steve-motion-observer-20261016T090747.324632Z`。
+A2收据 `83d8dd96…`、实际41项、安装前最新存档、完整MC与原点均保持；没有改PAA。
+
+固定EXE证据确认loader路径为path→StringData holder→chars。旧启发式会把合法字符地址的
+`AAAA\0`字节误当路径；旧头实际回归复现漏报，新逻辑严格两跳、215字节／入口，17/17实际C++检查通过。
+旧实机零命中的根因仍未确定。父basic_lower.paac中已核对basic_move_walk完整字符串引用；
+后者第13个动画的完整PAA在0009索引唯一匹配。静态引用不证明受控角色正在播放。
+观察器保持旧四路径，新增父PAAC及该新PAA，共六条；600秒／3000000入口／128匹配保持。
+独立诊断构建、补丁反向准入、维护头与vendor一致、character夹具13/13通过；默认构建／发布ASI保持。
+证据、摘要、命令与限制见[动作路由报告](steve-motion-routing-20261016.md)。
+
+已请求用户从Steam启动同一存档、安全位置W约10秒后保持游戏开启。收到反馈后主控执行
+`python -X utf8 -B build/steve-motion-paths-20261016/capture_observer.py`，同实例读取有限GET快照；
+不得把客户端记录当人工动作证明。随后需用户正常退出，确认进程0，再运行同目录
+`observer_session.py --restore`，保留退出最新存档，不回滚备份存档。
+hook仍在ResolveGame后启用，早期预加载／其他入口／缓存未排除；全局请求命中不等于actor或MC动作。
+本轮未完成实机采集、恢复及实际clip选择，MC走路仍未实现。
+
 ## 2026-10-16 Local接续完成两配置提取与两次加载实采，原插件已恢复
 
 最新实际状态：游戏／Python进程0；A2 active仍b35539f8／receipt83d8dd96，实际41文件独立核对通过。

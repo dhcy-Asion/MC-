@@ -1,5 +1,29 @@
 # 当前状态与分阶段计划
 
+## 2026-10-16 动作路由接续：修复两跳路径读取，六路径诊断待实采
+
+范围仍为M4a／真实MC动作前置，用户“继续啊”后沿已知路径表示与父引用调查；未转向黑臂或修改PAA。
+开始时进程0，原ASI／A2收据／实际41项保持；7份修改前文件备份至steve-motion-paths-20261016-before。
+固定EXE实际.pdata代码窗确认path→holder→chars；旧头以ASCII-looking字符地址夹具复现漏报
+（matched0／unmatched1／reads2，预期exit42），新严格两跳215B／入口与两个新增回归合计17/17通过。
+该缺陷存在不证明此前全部0命中由其导致；后缀字符串交叉引用也未证明加载入口。
+
+固定35份PAMT只读扫描定位basic_lower.paac，单一80283B区间双读／固定LZ4解压520618B，
+模块导入前后摘要与来源末读保持；32条长度／NUL完整PHM locomotion字符串中含basic_move_walk。
+只确认静态引用，未解析完整动作图；lv2／lv3不解释为W或速度。
+已解析basic_move_walk[13]的完整PAA经35索引精确查询唯一命中0009 record81242，未读取其PAZ／codec。
+证据摘要、范围及失败解释见[路由报告](steve-motion-routing-20261016.md)。
+
+观察器保留旧四路径、增加父PAAC和新PAA；时间／入口／匹配预算保持，ResolveGame之后的启用点保持。
+`python -X utf8 -B tools/check_motion_observer.py` 17/17；`tools/build_worldbuilder.py --motion-observer`
+成功，ASI SHA62f56f40…／12773888B；头文件副本一致、补丁反向准入通过，character夹具13/13通过。
+旧8项已验事务入口逐字复用，新独立会话不覆盖历史；2026-10-16T09:07:47Z备份后安装exit0，
+A2实际41项／最新存档／完整MC／原点保持。原ASI与清单可从本轮backup恢复，不回滚存档。
+六路径诊断当前installed，已请求用户启动入场W10秒；实采及正常退出后恢复尚待完成。
+没有把新构建或静态链标为动作完成，发布artifact和默认构建保持，未运行MC世界或消费材料。
+收尾检查：10份自写Python语法、10份本轮JSON、107个文档相对链接和git diff --check通过；
+后续收到用户行走反馈后继续本轮会话，不重复安装或重新开始计时。
+
 ## 2026-10-16 Local接续：配置字段已读，有限自然请求观察器已构建
 
 当前里程碑仍是M4a／真实MC动作前置：先确认实际资源路由，未把黑臂观察作为动作门槛。

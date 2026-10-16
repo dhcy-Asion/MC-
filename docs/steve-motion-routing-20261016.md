@@ -1,4 +1,87 @@
-# Steve 动作路由：2026-10-16 配置字段与两次自然加载实采
+# Steve 动作路由：2026-10-16 配置字段、路径修复与自然加载实采
+
+## 路径表示修复与父动作表（本次接续）
+
+接续开始时游戏进程为0，原ASI `9d5cdc8e…`、A2收据 `83d8dd96…` 与实际41文件保持。
+修改前7份源码／文档备份并回读至 `backups/steve-motion-paths-20261016-before`。
+本次继续M4a动作前置，不编辑PAA、不扩大旧5°候选，也不把黑臂观察作为动作验收。
+
+### 固定EXE路径合同及可复现的漏报
+
+只读磁盘EXE，版本1.0.0.2976，SHA256
+`57da440d72f4db974f25fef047cf84c4dadd999a88cb2a3c5af4c9bd67fde1e7`；不访问运行中进程。
+在PE的实际.pdata边界内反汇编已知函数，并末读核对来源：
+
+- ResourceLoader.load `[0x12d00b0,0x12d02c3)`：原R8保存在R14；
+  `0x12d020e/0x12d0211` 连续取 `[r14]`、`[rax]`，得到字符地址。
+- PathNormalizeCtor `[0x12c6a80,0x12c6c62)`：StringData holder写入目标，holder首项存字符指针。
+- 其已知直接调用child `[0x1328050,0x13280f8)` 可见反斜杠转斜杠、大写转小写、重复斜杠折叠；
+  未检查两个下级callee，不声称已经证明完整规范化／前缀规则。
+
+[两函数报告](../build/steve-motion-paths-20261016/loader-static.json) SHA
+`f979666aa31b60347ec780957338373be980f0ff6b0ea5c2acd35e255787ed9c`；
+[直接child报告](../build/steve-motion-paths-20261016/loader-normalize-static.json) SHA
+`12bf8535fdddf89d76ee2908f8bc32ce8ddab57038bc0c98142563350c3032f0`。
+
+旧观察器先尝试把holder内容当ASCII；字符地址 `0x0000010041414141` 的小端字节以 `AAAA\0` 开头，
+会被提前接受为未匹配字符串，遗漏真正的第二跳路径。固定旧头文件实际C++回归输出
+`matched=0 unmatched=1 reads=2`、预期exit42；证明存在该漏报，不证明此前实机零命中都由此造成。
+新逻辑只接受 `path → holder → chars`，单入口最多8+8+199=215字节，真实NUL／ASCII／指针范围门禁保持；
+新增直接一跳拒绝、ASCII指针回归，最终17/17实际C++检查通过。
+
+另外只读查找固定EXE的 `.motionblending` 字面量，唯一已确认完整NUL字符串在RVA0x55cf020，
+引用0xae154a所在片段 `[0xae1030,0xae1792)` 仅支持尾部比较候选；没有直接调用上述loader或ctor。
+另一原始字节命中没有确认完整NUL字符串，不提升为加载证据。
+[字面量报告](../build/steve-motion-paths-20261016/literal-xrefs.json) SHA
+`76d6c80963ebaf4864dcd450e5459b23cf690d0f2fc6563795c8a2c43ea7a0b5`。
+
+### 上级PAAC与新PAA完整路径
+
+固定A2的35份PAMT（共68152692字节）只读解析／完整末读：actionchart/bin__下共558项PAAC，
+其中PHM目录96项（lower37、upper59），未超过128记录预算。
+[索引报告](../build/steve-motion-paths-20261016/paac-index.json) SHA
+`93638e3c3eb257b91da86f2b297afdd96fd542333a8a57c3aeac9a68a793c50e`。
+
+只提取 `actionchart/bin__/loweraction/1_pc/1_phm/basic_lower.paac`：0010/0.pamt record280241，
+PAZ0区间 `[150403024,150483307)`，flags2，stored80283／decoded520618字节。
+索引／收据／压缩区间双读、固定LZ4 4.4.5三个模块导入前后摘要及来源末读均保持。
+stored SHA `e3fc67820adb7b7928d5bc59f0efbbbb758d55cf639c3586213bb9c90c16ebe2`，
+decoded SHA `515926c857715df0657c57bc668e2ae1cf18d3b758c3118e35820e8950597ff7`；
+[提取报告](../build/steve-motion-paths-20261016/basic-lower/readback.json) SHA
+`b83a3b3839e8ff6903856f9f676bb02f57f891712db409bcdc08f76eb7444058`。
+
+在固定decoded中复核32条PHM locomotion完整路径，均核对前置u8长度和尾NUL。
+`basic_move_walk.motionblending`位于 `[288891,288968)`，相对路径是同一字符串的后缀，不算第二处引用；
+旧walk、basic_stride_walk完整名均无匹配。lv2／lv3及其他邻接字符串不被解释成W输入或速度状态。
+只证明字符串引用，未解析完整动作图或受控角色的图选择。
+[引用报告](../build/steve-motion-paths-20261016/basic-lower-references.json) SHA
+`64294db651207a9921492c11e7c174174ecb408061808f6917f75f3be464f0db`。
+
+新PAA完整路径由已解析basic_move_walk的 `_animationFileNames[13]`（原始字节 `[2345,2399)`）
+及固定CDMW路径规则得到，再用35索引精确全名查询确认唯一记录：
+`character/motion/1_pc/1_phm/cd_phm_basic_00_00_nor_move_walk_ing_00.paa`，
+0009/0.pamt record81242／PAZ16／offset475714496／stored21425／decoded25710／flags2。
+[单路径索引报告](../build/steve-motion-paths-20261016/index-basic-walk-paa.json) SHA
+`c0d6663c52ad4fa3d954ec7d5731e47d08c08af159c270e95acb1a0442483f69`。
+没有读取这个PAA的PAZ payload、运行PAA codec或生成动作修改。
+
+### 修复后六路径诊断会话
+
+保留原四条路径并加入上述父PAAC和新PAA，不添加任意路径或重启接口；
+600秒／3000000入口／128匹配硬预算保持，最坏语义读取总量降为645000000字节。
+严格两跳修复与路径扩展同时发生，新旧样本差异不能全部归因于其中一个修改。
+入口仍在ResolveGame成功后启用，不能覆盖更早预加载；未移动hook或新增原生调用。
+任何命中仅证明这个全局入口收到了请求，不能证明受控actor使用、包字节被选取或MC播放。
+
+`python -X utf8 -B tools/check_motion_observer.py` 17/17通过；独立诊断构建成功，ASI SHA
+`62f56f40c47c761586294c3b2bfc5fc3383d047f112d29bc9a5bf667218c0c0c`、12773888字节。
+维护头文件与vendor副本一致，默认构建和发布artifact未替换。
+逐字复用已验8项安装／恢复事务入口（SHA `3778687179f628d6d93ac1047d344cd86e35903b808d0d8415d33d0491330df9`）
+到独立本轮目录；新捕获客户端只更新候选ASI固定摘要，SHA
+`7984c45f2fc28d1295902077cfb4dbdc6d0d0c4447923da21ca8173d7ce1858a`。
+2026-10-16T09:07:47Z新备份后安装exit0，A2的41文件、最新存档、完整MC和原点保持；
+备份 `backups/steve-motion-observer-20261016T090747.324632Z`，本轮会话暂为installed，等待实采后恢复。
+
 
 ## 2026-10-16 本机 Local 接续（先前中止记录保留在下文）
 
